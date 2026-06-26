@@ -1,0 +1,1011 @@
+substitutions:
+  name: "esphome-hems"
+  friendly_name: "ESPHome HEMS"
+  device_name: "ESPHome HEMS"
+  # S0-Wasserzähler: Standardwert Liter pro Impuls (wird durch HA-Number überschrieben)
+  water_liters_per_pulse_default: "1.0"
+  # Fronius Gen24 Plus 8.0 – Modbus TCP
+  fronius_ip: !secret fronius_ip
+  fronius_port: "502"
+  # BYD HVS/HVM max. Entladeleistung (W) – für Prozentberechnung
+  battery_max_discharge_w: "18176"
+  # EEBUS Bridge (eebus-ha-bridge Docker) – gRPC Endpunkt
+  eebus_bridge_ip: !secret eebus_bridge_ip
+  eebus_bridge_port: "50051"
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  comment: "Waveshare ESP32-S3-POE-ETH-8DI-8RO – Xemex CSMB Modbus Server + §14a EnWG"
+  name_add_mac_suffix: false
+  project:
+    name: "ESPHome.HEMS"
+    version: "2"
+
+esp32:
+  board: esp32s3box
+  variant: ESP32S3
+  flash_size: 16MB
+  framework:
+    type: arduino   # Benötigt für externes modbus_server-Komponent
+
+# PSRAM konfigurieren – ESP32-S3-WROOM-1U-N16R8 hat 8 MB Octal PSRAM.
+# Ohne diese Konfiguration können DMA-Puffer für den W5500-SPI-Ethernet-Chip
+# fehlerhaft im PSRAM platziert werden, was den Ethernet-Link verhindert.
+psram:
+  mode: octal
+  speed: 80MHz
+
+logger:
+  id: app_logger
+  level: DEBUG  # Compile-Level muss höchstes sein, Runtime-Filter per Select
+
+select:
+  - platform: template
+    name: "${device_name} Log Level"
+    id: log_level_select
+    web_server:
+      sorting_group_id: sg_system
+      sorting_weight: 2
+    options:
+      - "ERROR"
+      - "WARN"
+      - "INFO"
+      - "DEBUG"
+      - "VERBOSE"
+    initial_option: "WARN"
+    optimistic: true
+    restore_value: true
+    on_value:
+      then:
+        - lambda: |-
+            int level = ESPHOME_LOG_LEVEL_WARN;
+            if (x == "ERROR") level = ESPHOME_LOG_LEVEL_ERROR;
+            else if (x == "WARN") level = ESPHOME_LOG_LEVEL_WARN;
+            else if (x == "INFO") level = ESPHOME_LOG_LEVEL_INFO;
+            else if (x == "DEBUG") level = ESPHOME_LOG_LEVEL_DEBUG;
+            else if (x == "VERBOSE") level = ESPHOME_LOG_LEVEL_VERBOSE;
+            id(app_logger).set_log_level(level);
+            esp_log_level_set("*", (esp_log_level_t)level);
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+# W5500 SPI Ethernet (PoE) – Waveshare ESP32-S3-POE-ETH-8DI-8RO Pins
+ethernet:
+  type: W5500
+  clk_pin: GPIO15
+  mosi_pin: GPIO13
+  miso_pin: GPIO14
+  cs_pin: GPIO16
+  interrupt_pin: GPIO12
+  # Optionale statische IP – auskommentieren für DHCP:
+  # manual_ip:
+  #   static_ip: 192.168.1.100
+  #   gateway: 192.168.1.1
+  #   subnet: 255.255.255.0
+
+web_server:
+  port: 80
+  local: true
+  version: 3
+  sorting_groups:
+    - id: sg_fronius
+      name: "Fronius"
+      sorting_weight: 1
+    - id: sg_wallbox
+      name: "Wallbox"
+      sorting_weight: 2
+    - id: sg_wasser
+      name: "Wasser"
+      sorting_weight: 3
+    - id: sg_dido
+      name: "DI/DO"
+      sorting_weight: 4
+    - id: sg_eebus
+      name: "EEBUS"
+      sorting_weight: 5
+    - id: sg_system
+      name: "System"
+      sorting_weight: 6
+
+mqtt:
+  broker: !secret mqtt_broker
+  port: 1883
+  discovery: true
+  topic_prefix: esphome/modbus-server-xemex
+
+time:
+  - platform: homeassistant
+
+# Externes Modbus-Server-Komponent (Xemex CSMB Simulation)
+# Persistente Variablen (überleben Neustart, konfigurierbar aus HA)
+globals:
+  - id: water_liter_per_pulse
+    type: float
+    restore_value: true
+    initial_value: "${water_liters_per_pulse_default}"
+  # Fronius Batterie-Entladesteuerung
+  - id: include_meter_ev
+    type: bool
+    restore_value: true
+    initial_value: "true"
+  - id: include_meter_hp
+    type: bool
+    restore_value: true
+    initial_value: "true"
+  - id: include_meter_house
+    type: bool
+    restore_value: true
+    initial_value: "true"
+  - id: battery_dirty
+    type: bool
+    restore_value: true
+    initial_value: "false"
+  - id: battery_charging
+    type: bool
+    restore_value: true
+    initial_value: "false"
+  # Scale Factors (werden alle 5s vom Device gelesen, kein restore nötig)
+  - id: sf_ac_power
+    type: int
+    initial_value: "-1"
+  - id: sf_solar_power
+    type: int
+    initial_value: "-1"
+  - id: sf_grid_power
+    type: int
+    initial_value: "-1"
+  - id: sf_ev_power
+    type: int
+    initial_value: "-1"
+  - id: sf_hp_power
+    type: int
+    initial_value: "-1"
+  - id: sf_grid_current
+    type: int
+    initial_value: "-1"
+  - id: sf_battery_power
+    type: int
+    initial_value: "-1"
+  - id: sf_battery_soc
+    type: int
+    initial_value: "-1"
+  - id: sf_outwrte
+    type: int
+    initial_value: "-2"
+
+external_components:
+  - source: github://thomase1234/esphome-fake-xemex-csmb@master
+    refresh: 60s
+    components:
+      - modbus_server
+  # Lokale Kopie mit Fix: handle_message routet Antworten per Unit-ID
+  # statt Broadcast an alle Controller (behebt falsche Meter-Werte)
+  - source:
+      type: local
+      path: custom_components
+    components:
+      - modbustcp
+      - eebus_lpc
+  - source: github://creepystefan/esphome_modbus_tcp
+    refresh: never
+    components:
+      - modbustcp_controller
+
+# I²C Bus für TCA9554 (Relais-Expander)
+i2c:
+  id: i2c_bus
+  sda: GPIO42
+  scl: GPIO41
+  scan: true
+  frequency: 400kHz
+
+# TCA9554 I/O-Expander (Adresse 0x20) – steuert die 8 Relais
+pca9554:
+  - id: relay_expander
+    address: 0x20
+    i2c_id: i2c_bus
+
+# RS485 UART für Modbus-Server (Xemex CSMB: 9600 8E1)
+# TX=GPIO17 (DE/DI zum RS485-Chip), RX=GPIO18 (RO vom RS485-Chip)
+uart:
+  - id: intmodbus
+    tx_pin: GPIO17
+    rx_pin: GPIO18
+    baud_rate: 9600
+    stop_bits: 1
+    data_bits: 8
+    parity: EVEN
+
+# ── Xemex CSMB Modbus-Server ─────────────────────────────────────────────────
+modbus_server:
+  - id: modbusserver
+    uart_id: intmodbus
+    address: 1
+    holding_registers:
+      - start_address: 0x4000   # Serial Number Part 1 "MX"
+        default: 0x4D58
+        number: 1
+
+      - start_address: 0x4001   # Serial Number Part 2
+        default: 0x5C6F
+        number: 1
+
+      - start_address: 0x4002   # Device Code
+        default: 20802
+        number: 1
+
+      - start_address: 0x4003   # Device Address
+        default: 0x1
+        number: 1
+
+      - start_address: 0x4004   # RS485 Baudrate Low
+        default: 9600
+        number: 1
+
+      - start_address: 0x4005   # Protocol Version (FLOAT Hi)
+        default: 0x3f80
+        number: 1
+
+      - start_address: 0x4006   # Protocol Version (FLOAT Lo)
+        default: 0x0000
+        number: 1
+
+      - start_address: 0x4007   # Software Version 2.5 (FLOAT Hi)
+        default: 0x4020
+        number: 1
+
+      - start_address: 0x4008   # Software Version 2.5 (FLOAT Lo)
+        default: 0x0000
+        number: 1
+
+      - start_address: 0x4009   # Hardware Version 1.0 (FLOAT Hi)
+        default: 0x3F80
+        number: 1
+
+      - start_address: 0x400A   # Hardware Version 1.0 (FLOAT Lo)
+        default: 0x0000
+        number: 1
+
+      - start_address: 0x400B   # Meter Amps
+        default: 80
+        number: 1
+
+      - start_address: 0x400C   # CT Ratio
+        default: 2000
+        number: 1
+
+      - start_address: 0x400D   # RS485 Line Settings
+        default: 36
+        number: 1
+
+      - start_address: 0x400E   # RS485 Line Termination
+        default: 1
+        number: 1
+
+      - start_address: 0x400F   # RS485 Baudrate High
+        default: 0
+        number: 1
+
+      - start_address: 0x500C   # RMS Current CT1 (FLOAT Hi)
+        default: 0x0000
+        number: 1
+
+      - start_address: 0x500D   # RMS Current CT1 (FLOAT Lo)
+        default: 0x0000
+        number: 1
+
+      - start_address: 0x500E   # RMS Current CT2 (FLOAT Hi)
+        default: 0x3E73
+        number: 1
+
+      - start_address: 0x500F   # RMS Current CT2 (FLOAT Lo)
+        default: 0x4333
+        number: 1
+
+      - start_address: 0x5010   # RMS Current CT3 (FLOAT Hi)
+        default: 0x3E09
+        number: 1
+
+      - start_address: 0x5011   # RMS Current CT3 (FLOAT Lo)
+        default: 0x399A
+        number: 1
+
+# ── 8 Relais-Ausgänge (über TCA9554) ────────────────────────────────────────
+switch:
+  - platform: gpio
+    name: "Relay 1"
+    id: relay_1
+    icon: mdi:electric-switch
+    web_server:
+      sorting_group_id: sg_dido
+      sorting_weight: 1
+    pin:
+      pca9554: relay_expander
+      number: 0
+      mode:
+        output: true
+      inverted: false
+
+  - platform: gpio
+    name: "Relay 2"
+    id: relay_2
+    icon: mdi:electric-switch
+    web_server:
+      sorting_group_id: sg_dido
+      sorting_weight: 2
+    pin:
+      pca9554: relay_expander
+      number: 1
+      mode:
+        output: true
+      inverted: false
+
+  - platform: gpio
+    name: "Relay 3"
+    id: relay_3
+    icon: mdi:electric-switch
+    web_server:
+      sorting_group_id: sg_dido
+      sorting_weight: 3
+    pin:
+      pca9554: relay_expander
+      number: 2
+      mode:
+        output: true
+      inverted: false
+
+  - platform: gpio
+    name: "Relay 4"
+    id: relay_4
+    icon: mdi:electric-switch
+    web_server:
+      sorting_group_id: sg_dido
+      sorting_weight: 4
+    pin:
+      pca9554: relay_expander
+      number: 3
+      mode:
+        output: true
+      inverted: false
+
+  - platform: gpio
+    name: "Relay 5"
+    id: relay_5
+    icon: mdi:electric-switch
+    web_server:
+      sorting_group_id: sg_dido
+      sorting_weight: 5
+    pin:
+      pca9554: relay_expander
+      number: 4
+      mode:
+        output: true
+      inverted: false
+
+  - platform: gpio
+    name: "Relay 6"
+    id: relay_6
+    icon: mdi:electric-switch
+    web_server:
+      sorting_group_id: sg_dido
+      sorting_weight: 6
+    pin:
+      pca9554: relay_expander
+      number: 5
+      mode:
+        output: true
+      inverted: false
+
+  - platform: gpio
+    name: "Relay 7"
+    id: relay_7
+    icon: mdi:electric-switch
+    web_server:
+      sorting_group_id: sg_dido
+      sorting_weight: 7
+    pin:
+      pca9554: relay_expander
+      number: 6
+      mode:
+        output: true
+      inverted: false
+
+  - platform: gpio
+    name: "Relay 8"
+    id: relay_8
+    icon: mdi:electric-switch
+    web_server:
+      sorting_group_id: sg_dido
+      sorting_weight: 8
+    pin:
+      pca9554: relay_expander
+      number: 7
+      mode:
+        output: true
+      inverted: false
+
+  - platform: template
+    name: "${device_name} - Manual §14a Test"
+    id: manual_enwg_test
+    icon: "mdi:test-tube"
+    web_server:
+      sorting_group_id: sg_wallbox
+      sorting_weight: 10
+    optimistic: true
+    turn_on_action:
+      - logger.log: "Manual §14a Test: Aktiviere Leistungsbegrenzung"
+      - number.set:
+          id: ct1addon
+          value: 45.0
+      - number.set:
+          id: ct2addon
+          value: 45.0
+      - number.set:
+          id: ct3addon
+          value: 45.0
+      - number.set:
+          id: lpc_limit_set
+          value: 4200
+      - switch.turn_on:
+          id: lpc_active_toggle
+      - logger.log: "Manual §14a Test: COMPLETE"
+    turn_off_action:
+      - logger.log: "Manual §14a Test: Deaktiviere Leistungsbegrenzung"
+      - number.set:
+          id: ct1addon
+          value: 1.0
+      - number.set:
+          id: ct2addon
+          value: 1.0
+      - number.set:
+          id: ct3addon
+          value: 1.0
+      - switch.turn_off:
+          id: lpc_active_toggle
+      - logger.log: "Manual §14a Test: Deactivation COMPLETE"
+
+# ── Digitale Eingänge (opto-isoliert, active-low) ────────────────────────────
+binary_sensor:
+  # DI1 = §14a Steuereingang des Netzbetreibers (GPIO4)
+  - platform: gpio
+    name: "DI1 (§14a Grid Provider Switch)"
+    id: grid_provider_switch
+    device_class: power
+    icon: mdi:transmission-tower
+    web_server:
+      sorting_group_id: sg_wallbox
+      sorting_weight: 11
+    pin:
+      number: GPIO4
+      mode:
+        input: true
+        pullup: true
+      inverted: true  # Opto-Isolator: active-low
+    filters:
+      - delayed_on: 100ms
+      - delayed_off: 100ms
+    on_press:
+      then:
+        - logger.log: "§14a EnWG: Netzbetreiber aktiviert Leistungsbegrenzung"
+        - lambda: |-
+            static int event_count = 0;
+            event_count++;
+            id(power_limit_events).publish_state(event_count);
+            ESP_LOGI("enwg", "Power limitation event #%d triggered", event_count);
+        - number.set:
+            id: ct1addon
+            value: 45.0
+        - number.set:
+            id: ct2addon
+            value: 45.0
+        - number.set:
+            id: ct3addon
+            value: 45.0
+        - light.turn_on:
+            id: status_led
+            effect: "§14a Warning Flash"
+        # EEBUS LPC: Bosch Wärmepumpe auf 4.2kW begrenzen
+        - number.set:
+            id: lpc_limit_set
+            value: 4200
+        - switch.turn_on:
+            id: lpc_active_toggle
+        - logger.log: "§14a EnWG: Leistungsbegrenzung aktiv (inkl. EEBUS WP-Limit 4200W)"
+    on_release:
+      then:
+        - logger.log: "§14a EnWG: Netzbetreiber deaktiviert Leistungsbegrenzung"
+        - number.set:
+            id: ct1addon
+            value: 1.0
+        - number.set:
+            id: ct2addon
+            value: 1.0
+        - number.set:
+            id: ct3addon
+            value: 1.0
+        # EEBUS LPC: Wärmepumpe freigeben
+        - switch.turn_off:
+            id: lpc_active_toggle
+        - light.turn_off:
+            id: status_led
+        - logger.log: "§14a EnWG: Normalbetrieb wiederhergestellt"
+
+  - platform: gpio
+    name: "Digital Input 3"
+    id: di_3
+    icon: mdi:electric-switch-closed
+    web_server:
+      sorting_group_id: sg_dido
+      sorting_weight: 13
+    pin:
+      number: GPIO6
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+
+  - platform: gpio
+    name: "Digital Input 4"
+    id: di_4
+    icon: mdi:electric-switch-closed
+    web_server:
+      sorting_group_id: sg_dido
+      sorting_weight: 14
+    pin:
+      number: GPIO7
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+
+  - platform: gpio
+    name: "Digital Input 5"
+    id: di_5
+    icon: mdi:electric-switch-closed
+    web_server:
+      sorting_group_id: sg_dido
+      sorting_weight: 15
+    pin:
+      number: GPIO8
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+
+  - platform: gpio
+    name: "Digital Input 6"
+    id: di_6
+    icon: mdi:electric-switch-closed
+    web_server:
+      sorting_group_id: sg_dido
+      sorting_weight: 16
+    pin:
+      number: GPIO9
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+
+  - platform: gpio
+    name: "Digital Input 7"
+    id: di_7
+    icon: mdi:electric-switch-closed
+    web_server:
+      sorting_group_id: sg_dido
+      sorting_weight: 17
+    pin:
+      number: GPIO10
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+
+  - platform: gpio
+    name: "Digital Input 8"
+    id: di_8
+    icon: mdi:electric-switch-closed
+    web_server:
+      sorting_group_id: sg_dido
+      sorting_weight: 18
+    pin:
+      number: GPIO11
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+
+# ── WS2812 Onboard RGB-LED (GPIO38) – §14a Statusanzeige + Normalbetrieb ────
+# esp32_rmt_led_strip verwendet den neuen RMT-Treiber (driver_ng), kompatibel
+# mit Arduino ESP32 Core 3.x – vermeidet den Legacy-RMT-Konflikt.
+light:
+  - platform: esp32_rmt_led_strip
+    rgb_order: GRB
+    pin: GPIO38
+    num_leds: 1
+    chipset: WS2812
+    name: "Status LED"
+    id: status_led
+    web_server:
+      sorting_group_id: sg_system
+      sorting_weight: 3
+    restore_mode: ALWAYS_OFF
+    effects:
+      - strobe:
+          name: "§14a Warning Flash"
+          colors:
+            - state: true
+              brightness: 100%
+              red: 100%
+              green: 0%
+              blue: 0%
+              duration: 500ms
+            - state: false
+              brightness: 0%
+              duration: 500ms
+
+# ── CT-Strom-Regler (Xemex Modbus-Register) ──────────────────────────────────
+number:
+  - platform: template
+    name: ct1current
+    id: ct1current
+    web_server:
+      sorting_group_id: sg_wallbox
+      sorting_weight: 1
+    optimistic: false
+    update_interval: 2s
+    min_value: 0
+    max_value: 80
+    step: 0.1
+    unit_of_measurement: A
+    set_action:
+      then:
+        - lambda: |-
+            ESP_LOGI("modbus-server-xemex", "CT1 Current set to: %f A", x);
+            union { uint16_t x_int[2]; float x_f; } u;
+            u.x_f = x;
+            if (modbusserver != nullptr) {
+              modbusserver->write_holding_register(0x500C, u.x_int[1]);
+              modbusserver->write_holding_register(0x500D, u.x_int[0]);
+              ESP_LOGI("modbus-server-xemex", "CT1 updated: 0x500C=0x%04x, 0x500D=0x%04x", u.x_int[1], u.x_int[0]);
+            } else {
+              ESP_LOGE("modbus-server-xemex", "CT1 ERROR: modbus server is null!");
+            }
+            id(ct1current).publish_state(x);
+
+  - platform: template
+    name: ct2current
+    id: ct2current
+    web_server:
+      sorting_group_id: sg_wallbox
+      sorting_weight: 2
+    optimistic: false
+    update_interval: 2s
+    min_value: 0
+    max_value: 80
+    step: 0.1
+    unit_of_measurement: A
+    set_action:
+      then:
+        - lambda: |-
+            ESP_LOGI("modbus-server-xemex", "CT2 Current set to: %f A", x);
+            union { uint16_t x_int[2]; float x_f; } u;
+            u.x_f = x;
+            if (modbusserver != nullptr) {
+              modbusserver->write_holding_register(0x500E, u.x_int[1]);
+              modbusserver->write_holding_register(0x500F, u.x_int[0]);
+              ESP_LOGI("modbus-server-xemex", "CT2 updated: 0x500E=0x%04x, 0x500F=0x%04x", u.x_int[1], u.x_int[0]);
+            } else {
+              ESP_LOGE("modbus-server-xemex", "CT2 ERROR: modbus server is null!");
+            }
+            id(ct2current).publish_state(x);
+
+  - platform: template
+    name: ct3current
+    id: ct3current
+    web_server:
+      sorting_group_id: sg_wallbox
+      sorting_weight: 3
+    optimistic: false
+    update_interval: 2s
+    min_value: 0
+    max_value: 80
+    step: 0.1
+    unit_of_measurement: A
+    set_action:
+      then:
+        - lambda: |-
+            ESP_LOGI("modbus-server-xemex", "CT3 Current set to: %f A", x);
+            union { uint16_t x_int[2]; float x_f; } u;
+            u.x_f = x;
+            if (modbusserver != nullptr) {
+              modbusserver->write_holding_register(0x5010, u.x_int[1]);
+              modbusserver->write_holding_register(0x5011, u.x_int[0]);
+              ESP_LOGI("modbus-server-xemex", "CT3 updated: 0x5010=0x%04x, 0x5011=0x%04x", u.x_int[1], u.x_int[0]);
+            } else {
+              ESP_LOGE("modbus-server-xemex", "CT3 ERROR: modbus server is null!");
+            }
+            id(ct3current).publish_state(x);
+
+  - platform: template
+    name: "Water Liters per Pulse"
+    id: water_lpr_number
+    icon: mdi:water-opacity
+    web_server:
+      sorting_group_id: sg_wasser
+      sorting_weight: 3
+    unit_of_measurement: "L/pulse"
+    min_value: 0.1
+    max_value: 100.0
+    step: 0.1
+    optimistic: true
+    restore_value: true
+    initial_value: "${water_liters_per_pulse_default}"
+    set_action:
+      - globals.set:
+          id: water_liter_per_pulse
+          value: !lambda "return x;"
+      - logger.log:
+          format: "Water meter: %.1f L/pulse"
+          args: ["x"]
+
+  - platform: template
+    name: "CT1 Addon"
+    id: ct1addon
+    web_server:
+      sorting_group_id: sg_wallbox
+      sorting_weight: 4
+    min_value: 0
+    max_value: 50
+    step: 0.1
+    optimistic: true
+    unit_of_measurement: A
+    initial_value: 0
+    set_action:
+      then:
+        - number.set:
+            id: ct1current
+            value: !lambda "return std::max(0.0f, id(fronius_grid_current_a).state) + x;"
+
+  - platform: template
+    name: "CT2 Addon"
+    id: ct2addon
+    web_server:
+      sorting_group_id: sg_wallbox
+      sorting_weight: 5
+    min_value: 0
+    max_value: 50
+    step: 0.1
+    optimistic: true
+    unit_of_measurement: A
+    initial_value: 0
+    set_action:
+      then:
+        - number.set:
+            id: ct2current
+            value: !lambda "return std::max(0.0f, id(fronius_grid_current_b).state) + x;"
+
+  - platform: template
+    name: "CT3 Addon"
+    id: ct3addon
+    web_server:
+      sorting_group_id: sg_wallbox
+      sorting_weight: 6
+    min_value: 0
+    max_value: 50
+    step: 0.1
+    optimistic: true
+    unit_of_measurement: A
+    initial_value: 0
+    set_action:
+      then:
+        - number.set:
+            id: ct3current
+            value: !lambda "return std::max(0.0f, id(fronius_grid_current_c).state) + x;"
+
+# ── Sensoren ──────────────────────────────────────────────────────────────────
+sensor:
+  # ── S0-Wasserzähler DI2 (GPIO5) ───────────────────────────────────────────
+  # Liter-pro-Impuls über HA-Number konfigurierbar, Wert wird im Flash gespeichert
+  - platform: pulse_meter
+    name: "Water Flow Rate"
+    id: water_flow_rate
+    icon: mdi:water-pump
+    web_server:
+      sorting_group_id: sg_wasser
+      sorting_weight: 1
+    unit_of_measurement: "L/min"
+    device_class: water
+    state_class: measurement
+    accuracy_decimals: 2
+    internal_filter: 10ms
+    timeout: 10s
+    pin:
+      number: GPIO5
+      mode:
+        input: true
+        pullup: true
+      inverted: true              # S0 active-low
+    filters:
+      - lambda: return x * id(water_liter_per_pulse);  # Impulse → L/min
+    total:
+      name: "Water Total"
+      id: water_total
+      icon: mdi:water
+      web_server:
+        sorting_group_id: sg_wasser
+        sorting_weight: 2
+      unit_of_measurement: "m³"
+      device_class: water
+      state_class: total_increasing
+      accuracy_decimals: 3
+      filters:
+        - lambda: return x * id(water_liter_per_pulse) * 0.001;  # Impulse → m³
+
+  # ── CT-Ströme + Power-Events ──────────────────────────────────────────────
+  - platform: template
+    name: "${device_name} - Power Limitation Events"
+    id: power_limit_events
+    icon: "mdi:counter"
+    web_server:
+      sorting_group_id: sg_wallbox
+      sorting_weight: 12
+    unit_of_measurement: "events"
+    state_class: "total_increasing"
+    accuracy_decimals: 0
+
+  # CT-Ströme werden jetzt direkt vom Fronius Grid Meter gelesen (fronius-gen24.yaml)
+  # Die alten MQTT-Sensoren (wallbox/shellrecharge/1/ct*current) wurden entfernt.
+
+# ── Text-Sensoren ─────────────────────────────────────────────────────────────
+text_sensor:
+  - platform: version
+    name: "${device_name} - ESPHome Version"
+    web_server:
+      sorting_group_id: sg_system
+      sorting_weight: 1
+    hide_timestamp: true
+
+  - platform: template
+    name: "${device_name} - §14a Status"
+    id: enwg_status
+    icon: "mdi:transmission-tower"
+    web_server:
+      sorting_group_id: sg_wallbox
+      sorting_weight: 13
+    update_interval: 2s
+    lambda: |-
+      if (id(grid_provider_switch).state) {
+        return {"Active - Power Limited (<= 4.2kW)"};
+      } else {
+        return {"Inactive - Normal Operation"};
+      }
+
+# ── Fronius Gen24 Plus 8.0: Modbus TCP Batterie-Entladesteuerung ──────────────
+# Ausgelagert in separate Datei für saubere Struktur (vermeidet YAML-Key-Duplikate)
+packages:
+  fronius: !include fronius-gen24.yaml
+
+# ══════════════════════════════════════════════════════════════════════════════
+# EEBUS LPC Bridge – Bosch Wärmepumpe via eebus-ha-bridge (gRPC)
+# Steuert die Leistungsaufnahme der WP gemäß §14a EnWG / EEBUS LPC
+# ══════════════════════════════════════════════════════════════════════════════
+eebus_lpc:
+  id: eebus_bridge
+  bridge_host: ${eebus_bridge_ip}
+  bridge_port: ${eebus_bridge_port}
+  device_ski: !secret eebus_device_ski
+  poll_interval: 10s
+
+  power_sensor:
+    name: "${device_name} WP Leistungsaufnahme"
+    id: wp_power
+    web_server:
+      sorting_group_id: sg_eebus
+      sorting_weight: 1
+    device_class: power
+    unit_of_measurement: W
+    accuracy_decimals: 0
+    state_class: measurement
+
+  limit_sensor:
+    name: "${device_name} EEBUS LPC Limit"
+    id: eebus_limit_readback
+    web_server:
+      sorting_group_id: sg_eebus
+      sorting_weight: 2
+    entity_category: diagnostic
+    icon: "mdi:speedometer"
+
+  connected_sensor:
+    name: "${device_name} EEBUS Verbunden"
+    id: eebus_connected
+    web_server:
+      sorting_group_id: sg_eebus
+      sorting_weight: 5
+    device_class: connectivity
+
+  lpc_active_sensor:
+    name: "${device_name} LPC aktiv"
+    id: eebus_lpc_active_status
+    web_server:
+      sorting_group_id: sg_eebus
+      sorting_weight: 6
+    entity_category: diagnostic
+    icon: "mdi:shield-check"
+
+  heartbeat_sensor:
+    name: "${device_name} EEBUS Heartbeat"
+    id: eebus_heartbeat
+    web_server:
+      sorting_group_id: sg_eebus
+      sorting_weight: 7
+    entity_category: diagnostic
+    icon: "mdi:heart-pulse"
+
+  lpc_limit_number:
+    name: "${device_name} LPC Leistungslimit"
+    id: lpc_limit_set
+    web_server:
+      sorting_group_id: sg_eebus
+      sorting_weight: 3
+    min_value: 0
+    max_value: 25000
+    step: 100
+    unit_of_measurement: W
+    icon: "mdi:flash-triangle"
+    mode: box
+
+  lpc_active_switch:
+    name: "${device_name} LPC Aktivieren"
+    id: lpc_active_toggle
+    web_server:
+      sorting_group_id: sg_eebus
+      sorting_weight: 4
+    icon: "mdi:transmission-tower-import"
+
+  failsafe_limit_sensor:
+    name: "${device_name} EEBUS Failsafe Limit"
+    web_server:
+      sorting_group_id: sg_eebus
+      sorting_weight: 8
+    entity_category: diagnostic
+    icon: "mdi:shield-alert"
+
+  failsafe_duration_sensor:
+    name: "${device_name} EEBUS Failsafe Dauer"
+    web_server:
+      sorting_group_id: sg_eebus
+      sorting_weight: 9
+    entity_category: diagnostic
+    icon: "mdi:timer-alert"
+
+  brand_sensor:
+    name: "${device_name} EEBUS Hersteller"
+    web_server:
+      sorting_group_id: sg_eebus
+      sorting_weight: 10
+    entity_category: diagnostic
+    icon: "mdi:domain"
+
+  model_sensor:
+    name: "${device_name} EEBUS Modell"
+    web_server:
+      sorting_group_id: sg_eebus
+      sorting_weight: 11
+    entity_category: diagnostic
+    icon: "mdi:heat-pump"
+
+  serial_sensor:
+    name: "${device_name} EEBUS Seriennummer"
+    web_server:
+      sorting_group_id: sg_eebus
+      sorting_weight: 12
+    entity_category: diagnostic
+    icon: "mdi:identifier"

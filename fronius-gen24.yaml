@@ -1,0 +1,738 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# Fronius Symo Gen24 Plus 8.0 – Modbus TCP Batterie-Entladesteuerung
+# ══════════════════════════════════════════════════════════════════════════════
+# Externe Komponente: github://creepystefan/esphome_modbus_tcp
+# Verwendet modbustcp / modbustcp_controller (eigene YAML-Keys).
+#
+# Fronius IP: ${fronius_ip}, Port: ${fronius_port}
+# Unit-IDs: 1 (Inverter), 200 (Grid Meter), 201 (EV Meter), 202 (HP Meter)
+#
+# WICHTIG: Register-Adressen sind firmware-abhängig!
+# Prüfe im Fronius Web-UI unter: Kommunikation → Modbus → Register-Map
+# SunSpec-Registerbasis kann bei unterschiedlicher FW abweichen.
+#
+# Batterie: BYD HVS/HVM, max. Entladeleistung: ${battery_max_discharge_w} W
+# ══════════════════════════════════════════════════════════════════════════════
+
+http_request:
+  useragent: "ESPHome"
+  timeout: 10s
+
+modbustcp:
+  - id: fronius_modbus_tcp
+    host: ${fronius_ip}
+    port: ${fronius_port}
+    send_wait_time: 200ms
+
+modbustcp_controller:
+  - id: fronius_inverter
+    modbustcp_id: fronius_modbus_tcp
+    address: 0x01
+    update_interval: 2s
+    command_throttle: 100ms
+  - id: fronius_meter_grid
+    modbustcp_id: fronius_modbus_tcp
+    address: 0xF0
+    update_interval: 2s
+    command_throttle: 100ms
+  - id: fronius_meter_ev
+    modbustcp_id: fronius_modbus_tcp
+    address: 0xF2
+    update_interval: 2s
+    command_throttle: 100ms
+  - id: fronius_meter_hp
+    modbustcp_id: fronius_modbus_tcp
+    address: 0xF1
+    update_interval: 2s
+    command_throttle: 100ms
+
+# ── Fronius Sensoren ──────────────────────────────────────────────────────────
+sensor:
+  # ── Wechselrichter: AC-Leistung (SunSpec Model 113) ─────────────────────────
+  - platform: modbustcp_controller
+    modbustcp_controller_id: fronius_inverter
+    name: "${device_name} Fronius AC Power"
+    id: fronius_ac_power
+    web_server:
+      sorting_group_id: sg_fronius
+      sorting_weight: 1
+    register_type: holding
+    address: 40083
+    value_type: S_WORD
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    accuracy_decimals: 0
+    filters:
+      - lambda: |-
+          return x * pow(10, id(sf_ac_power));
+
+  - platform: modbustcp_controller
+    modbustcp_controller_id: fronius_inverter
+    name: "${device_name} Fronius AC Power SF"
+    id: fronius_ac_power_sf
+    register_type: holding
+    address: 40084
+    value_type: S_WORD
+    internal: true
+    on_value:
+      then:
+        - lambda: 'if ((int)x >= -4 && (int)x <= 4) id(sf_ac_power) = (int)x;'
+
+  # ── Wechselrichter: DC/Solar-Leistung (MPPT1 + MPPT2) ──────────────────────
+  # Register 40274 = MPPT1_DCW, Register 40294 = MPPT2_DCW, SF at 40257
+  - platform: modbustcp_controller
+    modbustcp_controller_id: fronius_inverter
+    id: fronius_mppt1_power
+    register_type: holding
+    address: 40274
+    value_type: U_WORD
+    internal: true
+    filters:
+      - lambda: |-
+          return x * pow(10, id(sf_solar_power));
+
+  - platform: modbustcp_controller
+    modbustcp_controller_id: fronius_inverter
+    id: fronius_mppt2_power
+    register_type: holding
+    address: 40294
+    value_type: U_WORD
+    internal: true
+    filters:
+      - lambda: |-
+          return x * pow(10, id(sf_solar_power));
+
+  - platform: template
+    name: "${device_name} Fronius Solar Power"
+    id: fronius_solar_power
+    web_server:
+      sorting_group_id: sg_fronius
+      sorting_weight: 2
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    accuracy_decimals: 0
+    lambda: |-
+      return id(fronius_mppt1_power).state + id(fronius_mppt2_power).state;
+    update_interval: 2s
+
+  - platform: modbustcp_controller
+    modbustcp_controller_id: fronius_inverter
+    name: "${device_name} Fronius Solar Power SF"
+    id: fronius_solar_power_sf
+    register_type: holding
+    address: 40257
+    value_type: S_WORD
+    internal: true
+    on_value:
+      then:
+        - lambda: 'if ((int)x >= -4 && (int)x <= 4) id(sf_solar_power) = (int)x;'
+
+  # ── Smart Meter Grid (Unit 240): Gesamtleistung ─────────────────────────────
+  # Register 40087 = W (Total Real Power), 40091 = W_SF (Scale Factor)
+  - platform: modbustcp_controller
+    modbustcp_controller_id: fronius_meter_grid
+    name: "${device_name} Fronius Grid Power"
+    id: fronius_grid_power
+    web_server:
+      sorting_group_id: sg_fronius
+      sorting_weight: 3
+    register_type: holding
+    address: 40087
+    value_type: S_WORD
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    accuracy_decimals: 0
+    filters:
+      - lambda: |-
+          return x * pow(10, id(sf_grid_power));
+
+  - platform: modbustcp_controller
+    modbustcp_controller_id: fronius_meter_grid
+    name: "${device_name} Fronius Grid Power SF"
+    id: fronius_grid_power_sf
+    register_type: holding
+    address: 40091
+    value_type: S_WORD
+    internal: true
+    on_value:
+      then:
+        - lambda: 'if ((int)x >= -4 && (int)x <= 4) id(sf_grid_power) = (int)x;'
+
+  # ── Smart Meter Grid: Phasenleistungen (SunSpec Model 203, Unit 240) ────────
+  # Register 40088-40090 = WphA/B/C (signed), SF = 40091 (= sf_grid_power)
+  # Dienen zur Vorzeichenbestimmung der Phasenströme (Strom-Register sind unsigned)
+  - platform: modbustcp_controller
+    modbustcp_controller_id: fronius_meter_grid
+    id: fronius_grid_power_a
+    register_type: holding
+    address: 40088
+    value_type: S_WORD
+    internal: true
+    filters:
+      - lambda: |-
+          return x * pow(10, id(sf_grid_power));
+
+  - platform: modbustcp_controller
+    modbustcp_controller_id: fronius_meter_grid
+    id: fronius_grid_power_b
+    register_type: holding
+    address: 40089
+    value_type: S_WORD
+    internal: true
+    filters:
+      - lambda: |-
+          return x * pow(10, id(sf_grid_power));
+
+  - platform: modbustcp_controller
+    modbustcp_controller_id: fronius_meter_grid
+    id: fronius_grid_power_c
+    register_type: holding
+    address: 40090
+    value_type: S_WORD
+    internal: true
+    filters:
+      - lambda: |-
+          return x * pow(10, id(sf_grid_power));
+
+  # ── Smart Meter Grid: Phasenströme (SunSpec Model 201, Unit 240) ────────────
+  # Register 40072-40074 = AphA/B/C (unsigned!), 40075 = A_SF
+  # Vorzeichen wird von WphA/B/C (40088-40090) übernommen: positiv=Bezug, negativ=Einspeisung
+  - platform: modbustcp_controller
+    modbustcp_controller_id: fronius_meter_grid
+    name: "${device_name} Fronius Grid Current A"
+    id: fronius_grid_current_a
+    web_server:
+      sorting_group_id: sg_wallbox
+      sorting_weight: 7
+    register_type: holding
+    address: 40072
+    value_type: S_WORD
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 1
+    filters:
+      - lambda: |-
+          float current = x * pow(10, id(sf_grid_current));
+          float power = id(fronius_grid_power_a).state;
+          if (!std::isnan(power) && power < 0) current = -current;
+          return current;
+    on_value:
+      then:
+        - number.set:
+            id: ct1current
+            value: !lambda "return std::max(0.0f, x) + id(ct1addon).state;"
+
+  - platform: modbustcp_controller
+    modbustcp_controller_id: fronius_meter_grid
+    name: "${device_name} Fronius Grid Current B"
+    id: fronius_grid_current_b
+    web_server:
+      sorting_group_id: sg_wallbox
+      sorting_weight: 8
+    register_type: holding
+    address: 40073
+    value_type: S_WORD
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 1
+    filters:
+      - lambda: |-
+          float current = x * pow(10, id(sf_grid_current));
+          float power = id(fronius_grid_power_b).state;
+          if (!std::isnan(power) && power < 0) current = -current;
+          return current;
+    on_value:
+      then:
+        - number.set:
+            id: ct2current
+            value: !lambda "return std::max(0.0f, x) + id(ct2addon).state;"
+
+  - platform: modbustcp_controller
+    modbustcp_controller_id: fronius_meter_grid
+    name: "${device_name} Fronius Grid Current C"
+    id: fronius_grid_current_c
+    web_server:
+      sorting_group_id: sg_wallbox
+      sorting_weight: 9
+    register_type: holding
+    address: 40074
+    value_type: S_WORD
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 1
+    filters:
+      - lambda: |-
+          float current = x * pow(10, id(sf_grid_current));
+          float power = id(fronius_grid_power_c).state;
+          if (!std::isnan(power) && power < 0) current = -current;
+          return current;
+    on_value:
+      then:
+        - number.set:
+            id: ct3current
+            value: !lambda "return std::max(0.0f, x) + id(ct3addon).state;"
+
+  - platform: modbustcp_controller
+    modbustcp_controller_id: fronius_meter_grid
+    name: "${device_name} Fronius Grid Current SF"
+    id: fronius_grid_current_sf
+    register_type: holding
+    address: 40075
+    value_type: S_WORD
+    internal: true
+    on_value:
+      then:
+        - lambda: 'if ((int)x >= -4 && (int)x <= 4) id(sf_grid_current) = (int)x;'
+
+  # ── Smart Meter EV/Wallbox (Unit 241): Leistung ─────────────────────────────
+  # Gleiche Register wie Grid Meter, aber andere Unit-ID
+  - platform: modbustcp_controller
+    modbustcp_controller_id: fronius_meter_ev
+    name: "${device_name} Fronius EV Power"
+    id: fronius_ev_power
+    web_server:
+      sorting_group_id: sg_fronius
+      sorting_weight: 4
+    register_type: holding
+    address: 40087
+    value_type: S_WORD
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    accuracy_decimals: 0
+    filters:
+      - lambda: |-
+          return -x * pow(10, id(sf_ev_power));
+
+  - platform: modbustcp_controller
+    modbustcp_controller_id: fronius_meter_ev
+    name: "${device_name} Fronius EV Power SF"
+    id: fronius_ev_power_sf
+    register_type: holding
+    address: 40091
+    value_type: S_WORD
+    internal: true
+    on_value:
+      then:
+        - lambda: 'if ((int)x >= -4 && (int)x <= 4) id(sf_ev_power) = (int)x;'
+
+  # ── Smart Meter Wärmepumpe (Unit 242): Leistung ─────────────────────────────
+  # Gleiche Register wie Grid Meter, aber andere Unit-ID
+  - platform: modbustcp_controller
+    modbustcp_controller_id: fronius_meter_hp
+    name: "${device_name} Fronius HP Power"
+    id: fronius_hp_power
+    web_server:
+      sorting_group_id: sg_fronius
+      sorting_weight: 5
+    register_type: holding
+    address: 40087
+    value_type: S_WORD
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    accuracy_decimals: 0
+    filters:
+      - lambda: |-
+          return -x * pow(10, id(sf_hp_power));
+
+  - platform: modbustcp_controller
+    modbustcp_controller_id: fronius_meter_hp
+    name: "${device_name} Fronius HP Power SF"
+    id: fronius_hp_power_sf
+    register_type: holding
+    address: 40091
+    value_type: S_WORD
+    internal: true
+    on_value:
+      then:
+        - lambda: 'if ((int)x >= -4 && (int)x <= 4) id(sf_hp_power) = (int)x;'
+
+  # ── Template: Haus-Leistung (Verbrauch ohne EV/HP/Ohmpilot) ───────────────────
+  # house = ac + grid - ev - hp - ohm
+  # AC Power beinhaltet bereits Solar + Battery (Inverter DC→AC)
+  # Alle Werte folgen Konvention: positiv=Bezug/Verbrauch/Entladung
+  - platform: template
+    name: "${device_name} Fronius House Power"
+    id: fronius_house_power
+    web_server:
+      sorting_group_id: sg_fronius
+      sorting_weight: 6
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    accuracy_decimals: 0
+    update_interval: 2s
+    lambda: |-
+      float ac = id(fronius_ac_power).state;
+      float grid = id(fronius_grid_power).state;
+      float ev = id(fronius_ev_power).state;
+      float hp = id(fronius_hp_power).state;
+      float ohm = id(fronius_ohmpilot_power).state;
+      if (std::isnan(ac)) ac = 0;
+      if (std::isnan(grid)) grid = 0;
+      if (std::isnan(ev)) ev = 0;
+      if (std::isnan(hp)) hp = 0;
+      if (std::isnan(ohm)) ohm = 0;
+      return ac + grid - ev - hp - ohm;
+
+  # ── Template: Schaltbare Leistungssumme ─────────────────────────────────────
+  # Summe der aktivierten Verbraucher (House, EV, HP)
+  - platform: template
+    name: "${device_name} Fronius Switchable Power"
+    id: fronius_power_sum
+    web_server:
+      sorting_group_id: sg_fronius
+      sorting_weight: 7
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    accuracy_decimals: 0
+    update_interval: 2s
+    lambda: |-
+      float sum = 0;
+      float house = id(fronius_house_power).state;
+      float ev = id(fronius_ev_power).state;
+      float hp = id(fronius_hp_power).state;
+      if (id(include_meter_house) && !std::isnan(house) && !std::isinf(house)) sum += house;
+      if (id(include_meter_ev) && !std::isnan(ev) && !std::isinf(ev)) sum += ev;
+      if (id(include_meter_hp) && !std::isnan(hp) && !std::isinf(hp)) sum += hp;
+      return sum;
+
+  # ── Ohmpilot: Leistung (via Fronius Solar API) ──────────────────────────────
+  # Wird NICHT in die Discharge-Limit-Berechnung einbezogen,
+  # da der Ohmpilot ausschließlich mit Überschuss arbeitet.
+  - platform: template
+    name: "${device_name} Fronius Ohmpilot Power"
+    id: fronius_ohmpilot_power
+    web_server:
+      sorting_group_id: sg_fronius
+      sorting_weight: 9
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    accuracy_decimals: 0
+    update_interval: never
+
+  - platform: template
+    name: "${device_name} Fronius Ohmpilot Temperature"
+    id: fronius_ohmpilot_temp
+    web_server:
+      sorting_group_id: sg_fronius
+      sorting_weight: 9
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: never
+
+  # ── Template: Batterie-Entladebegrenzung (%) ────────────────────────────────
+  # Neue Logik: deficit = Summe(aktivierte Verbraucher) - solar
+  # Wenn deficit > 0 → Batterie muss liefern → OutWRte = deficit / max * 100
+  # Wenn deficit <= 0 → Solar reicht → OutWRte = 0 (keine Entladung nötig)
+  # Nicht aktiv wenn keine Verbraucher eingeschaltet oder Batterie lädt
+  - platform: template
+    name: "${device_name} Fronius Discharge Limit"
+    id: fronius_discharge_limit
+    web_server:
+      sorting_group_id: sg_fronius
+      sorting_weight: 8
+    unit_of_measurement: "%"
+    icon: "mdi:battery-arrow-down"
+    accuracy_decimals: 1
+    update_interval: 2s
+    lambda: |-
+      float solar = id(fronius_solar_power).state;
+      if (std::isnan(solar)) solar = 0;
+      float house = id(fronius_house_power).state;
+      if (std::isnan(house)) house = 0;
+      float ev = id(fronius_ev_power).state;
+      if (std::isnan(ev)) ev = 0;
+      float hp = id(fronius_hp_power).state;
+      if (std::isnan(hp)) hp = 0;
+
+      // Prüfe ob ein AUS-geschalteter Verbraucher >30W zieht
+      bool limit_needed = false;
+      if (!id(include_meter_house) && house > 30) limit_needed = true;
+      if (!id(include_meter_ev) && ev > 30) limit_needed = true;
+      if (!id(include_meter_hp) && hp > 30) limit_needed = true;
+
+      // Keine Begrenzung nötig oder Batterie lädt
+      if (!limit_needed || id(battery_charging)) {
+        return 100.0f;
+      }
+
+      // Summe der aktivierten Verbraucher
+      float consumers = 0;
+      if (id(include_meter_house)) consumers += house;
+      if (id(include_meter_ev)) consumers += ev;
+      if (id(include_meter_hp)) consumers += hp;
+
+      // deficit = Verbrauch(aktive) - Solar
+      float deficit = consumers - solar;
+
+      if (deficit <= 0) {
+        return 0.0f;  // Solar deckt alles → keine Entladung nötig
+      }
+
+      float percentage = deficit / ${battery_max_discharge_w} * 100.0f;
+      return std::min(100.0f, percentage);
+  # ── Wechselrichter: Batterie DC-Leistung ────────────────────────────────────
+  # Register 40314 = DC Power Charge (U_WORD), SF at 40257
+  # Register 40334 = DC Power Discharge (U_WORD), SF at 40257
+  # Kombiniert: positiv = Entladung, negativ = Ladung
+  - platform: modbustcp_controller
+    modbustcp_controller_id: fronius_inverter
+    id: fronius_battery_charge_raw
+    register_type: holding
+    address: 40314
+    value_type: U_WORD
+    internal: true
+    filters:
+      - lambda: |-
+          return x * pow(10, id(sf_battery_power));
+
+  - platform: modbustcp_controller
+    modbustcp_controller_id: fronius_inverter
+    id: fronius_battery_discharge_raw
+    register_type: holding
+    address: 40334
+    value_type: U_WORD
+    internal: true
+    filters:
+      - lambda: |-
+          return x * pow(10, id(sf_battery_power));
+
+  - platform: template
+    name: "${device_name} Fronius Battery Power"
+    id: fronius_battery_power
+    web_server:
+      sorting_group_id: sg_fronius
+      sorting_weight: 8
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    accuracy_decimals: 0
+    lambda: |-
+      return id(fronius_battery_discharge_raw).state - id(fronius_battery_charge_raw).state;
+    update_interval: 2s
+
+  - platform: modbustcp_controller
+    modbustcp_controller_id: fronius_inverter
+    name: "${device_name} Fronius Battery Power SF"
+    id: fronius_battery_power_sf
+    register_type: holding
+    address: 40257
+    value_type: S_WORD
+    internal: true
+    on_value:
+      then:
+        - lambda: 'if ((int)x >= -4 && (int)x <= 4) id(sf_battery_power) = (int)x;'
+
+  # ── Wechselrichter: Battery SOC (SunSpec Storage) ────────────────────────
+  # Register 40351 = ChaState (%), SF at 40365
+  - platform: modbustcp_controller
+    modbustcp_controller_id: fronius_inverter
+    name: "${device_name} Fronius Battery SOC"
+    id: fronius_battery_soc
+    web_server:
+      sorting_group_id: sg_fronius
+      sorting_weight: 9
+    register_type: holding
+    address: 40351
+    value_type: U_WORD
+    unit_of_measurement: "%"
+    device_class: battery
+    state_class: measurement
+    accuracy_decimals: 0
+    filters:
+      - lambda: |-
+          return x * pow(10, id(sf_battery_soc));
+
+  - platform: modbustcp_controller
+    modbustcp_controller_id: fronius_inverter
+    name: "${device_name} Fronius Battery SOC SF"
+    id: fronius_battery_soc_sf
+    register_type: holding
+    address: 40365
+    value_type: S_WORD
+    internal: true
+    on_value:
+      then:
+        - lambda: 'if ((int)x >= -4 && (int)x <= 4) id(sf_battery_soc) = (int)x;'
+
+  # ── InOutWRte Scale Factor (Register 40368) ───────────────────────────────
+  - platform: modbustcp_controller
+    modbustcp_controller_id: fronius_inverter
+    name: "${device_name} Fronius OutWRte SF"
+    id: fronius_outwrte_sf
+    register_type: holding
+    address: 40368
+    value_type: S_WORD
+    internal: true
+    on_value:
+      then:
+        - lambda: 'if ((int)x >= -4 && (int)x <= 4) id(sf_outwrte) = (int)x;'
+
+# ── Storage Control: OutWRte schreiben (jede 5 Sekunden) ─────────────────
+# Verifizierte Register aus ioBroker:
+# 40348 = StorCtl_Mod (Storage Control Mode, Bit 1 = Discharge Limit aktiv)
+# 40355 = OutWRte (Percent of max discharge rate, S16, in %)
+# 40368 = InOutWRte_SF (Scale Factor für OutWRte/InWRte)
+interval:
+  - interval: 5s
+    then:
+      - lambda: |-
+          float pct = id(fronius_discharge_limit).state;
+          if (std::isnan(pct)) pct = 100.0f;
+
+          // OutWRte: Registerwert = pct / 10^SF (SF ist typisch -2 bei Fronius)
+          int16_t outwrte_val = (int16_t)(pct / pow(10, id(sf_outwrte)));
+
+          modbustcp_controller::ModbusTCPController *controller = id(fronius_inverter);
+
+          if (pct < 100.0f) {
+            // Entladebegrenzung aktiv: StorCtl_Mod Bit 1 setzen (= 2)
+            std::vector<uint16_t> stor_cmd = {2};
+            auto cmd1 = modbustcp_controller::ModbusCommandItem::create_write_multiple_command(
+              controller, 40348, 1, stor_cmd);
+            controller->queue_command(cmd1);
+
+            // OutWRte schreiben (Register 40355)
+            std::vector<uint16_t> out_cmd = {(uint16_t)outwrte_val};
+            auto cmd2 = modbustcp_controller::ModbusCommandItem::create_write_multiple_command(
+              controller, 40355, 1, out_cmd);
+            controller->queue_command(cmd2);
+          } else {
+            // Keine Begrenzung: StorCtl_Mod = 0
+            std::vector<uint16_t> stor_cmd = {0};
+            auto cmd = modbustcp_controller::ModbusCommandItem::create_write_multiple_command(
+              controller, 40348, 1, stor_cmd);
+            controller->queue_command(cmd);
+          }
+
+  # ── Ohmpilot: HTTP-Poll der Fronius Solar API ────────────────────────────────
+  - interval: 10s
+    then:
+      - http_request.get:
+          url: "http://${fronius_ip}/solar_api/v1/GetOhmPilotRealtimeData.cgi"
+          capture_response: true
+          max_response_buffer_size: 1024
+          on_response:
+            then:
+              - lambda: |-
+                  if (response->status_code == 200) {
+                    json::parse_json(body, [](JsonObject root) -> bool {
+                      JsonObject data = root["Body"]["Data"]["0"];
+                      float power = data["PowerReal_PAC_Sum"] | 0.0f;
+                      float temp = data["Temperature_Channel_1"] | NAN;
+                      id(fronius_ohmpilot_power).publish_state(power);
+                      if (!std::isnan(temp)) {
+                        id(fronius_ohmpilot_temp).publish_state(temp);
+                      }
+                      return true;
+                    });
+                  }
+
+# ── Schalter für Fronius Steuerung ────────────────────────────────────────────
+switch:
+  - platform: template
+    name: "${device_name} Include EV Meter"
+    id: sw_include_ev
+    web_server:
+      sorting_group_id: sg_fronius
+      sorting_weight: 10
+    icon: "mdi:ev-station"
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    turn_on_action:
+      - globals.set:
+          id: include_meter_ev
+          value: "true"
+    turn_off_action:
+      - globals.set:
+          id: include_meter_ev
+          value: "false"
+    lambda: return id(include_meter_ev);
+
+  - platform: template
+    name: "${device_name} Include HP Meter"
+    id: sw_include_hp
+    web_server:
+      sorting_group_id: sg_fronius
+      sorting_weight: 11
+    icon: "mdi:heat-pump"
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    turn_on_action:
+      - globals.set:
+          id: include_meter_hp
+          value: "true"
+    turn_off_action:
+      - globals.set:
+          id: include_meter_hp
+          value: "false"
+    lambda: return id(include_meter_hp);
+
+  - platform: template
+    name: "${device_name} Include House Meter"
+    id: sw_include_house
+    web_server:
+      sorting_group_id: sg_fronius
+      sorting_weight: 12
+    icon: "mdi:home-lightning-bolt"
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    turn_on_action:
+      - globals.set:
+          id: include_meter_house
+          value: "true"
+    turn_off_action:
+      - globals.set:
+          id: include_meter_house
+          value: "false"
+    lambda: return id(include_meter_house);
+
+  - platform: template
+    name: "${device_name} Battery Dirty"
+    id: sw_battery_dirty
+    web_server:
+      sorting_group_id: sg_fronius
+      sorting_weight: 13
+    icon: "mdi:battery-alert"
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+    turn_on_action:
+      - globals.set:
+          id: battery_dirty
+          value: "true"
+    turn_off_action:
+      - globals.set:
+          id: battery_dirty
+          value: "false"
+    lambda: return id(battery_dirty);
+
+  - platform: template
+    name: "${device_name} Battery Charging"
+    id: sw_battery_charging
+    web_server:
+      sorting_group_id: sg_fronius
+      sorting_weight: 14
+    icon: "mdi:battery-charging"
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+    turn_on_action:
+      - globals.set:
+          id: battery_charging
+          value: "true"
+    turn_off_action:
+      - globals.set:
+          id: battery_charging
+          value: "false"
+    lambda: return id(battery_charging);

@@ -1,0 +1,14 @@
+# ESPHome local state and secrets
+/.esphome/
+/secrets.yaml
+
+# Python local environment and generated files
+/.venv/
+__pycache__/
+*.py[cod]
+
+# Local/private project material that is not part of the OSS release
+/private/
+
+# Editor/workspace files
+*.code-workspace
