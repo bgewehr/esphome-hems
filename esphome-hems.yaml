@@ -32,12 +32,14 @@ esp32:
     type: esp-idf   # Benoetigt fuer native OpenEEBUS SHIP/SPINE-Komponenten
     sdkconfig_options:
       # Stack Overflow Fix: loopTask braucht mehr Stack bei vielen Komponenten
-      # (EEBUS TLS/Certificate-Setup benötigt deutlich mehr)
-      CONFIG_ESP_MAIN_TASK_STACK_SIZE: "32768"
+      # (EEBUS TLS/Certificate-Setup allokiert ~10 KB auf dem Stack pro Instanz)
+      CONFIG_ESP_MAIN_TASK_STACK_SIZE: "65536"
       # Cache-Crash Fix: Code/Rodata nach PSRAM kopieren, damit NVS-Writes
       # (restore_value) nicht crashen wenn Flash-Cache deaktiviert wird
       CONFIG_SPIRAM_FETCH_INSTRUCTIONS: "y"
       CONFIG_SPIRAM_RODATA: "y"
+      # EEBUS SHIP braucht 4 extra Sockets (2× HTTPS-Server à 2 Sockets)
+      CONFIG_LWIP_MAX_SOCKETS: "20"
 
 # PSRAM konfigurieren – ESP32-S3-WROOM-1U-N16R8 hat 8 MB Octal PSRAM.
 # Ohne diese Konfiguration können DMA-Puffer für den W5500-SPI-Ethernet-Chip
