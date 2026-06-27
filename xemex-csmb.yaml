@@ -1,0 +1,3 @@
+# Xemex CSMB Modbus RTU server emulation.
+# Provides the RS485 UART and holding-register map used by the CT current controls.
+# RS485 UART für Modbus-Server (Xemex CSMB: 9600 8E1)

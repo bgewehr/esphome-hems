@@ -9,15 +9,17 @@ substitutions:
   fronius_port: "502"
   # BYD HVS/HVM max. Entladeleistung (W) – für Prozentberechnung
   battery_max_discharge_w: "18176"
-  # EEBUS Bridge (eebus-ha-bridge Docker) – gRPC Endpunkt
-  eebus_bridge_ip: !secret eebus_bridge_ip
-  eebus_bridge_port: "50051"
-
+  # Native EEBUS SHIP/SPINE ports
+  eebus_lpc_ship_port: "4712"
+  eebus_wp_ship_port: "4713"
+  eebus_failsafe_limit_w: "4200.0"
+  eebus_failsafe_duration_s: "7200"
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
-  comment: "Waveshare ESP32-S3-POE-ETH-8DI-8RO – Xemex CSMB Modbus Server + §14a EnWG"
+  comment: "ESPHome-HEMS – Xemex CSMB Modbus Server + §14a EnWG"
   name_add_mac_suffix: false
+  build_path: "c:/temp/esphome-hems"
   project:
     name: "ESPHome.HEMS"
     version: "2"
@@ -27,7 +29,15 @@ esp32:
   variant: ESP32S3
   flash_size: 16MB
   framework:
-    type: arduino   # Benötigt für externes modbus_server-Komponent
+    type: esp-idf   # Benoetigt fuer native OpenEEBUS SHIP/SPINE-Komponenten
+    sdkconfig_options:
+      # Stack Overflow Fix: loopTask braucht mehr Stack bei vielen Komponenten
+      # (EEBUS TLS/Certificate-Setup benötigt deutlich mehr)
+      CONFIG_ESP_MAIN_TASK_STACK_SIZE: "32768"
+      # Cache-Crash Fix: Code/Rodata nach PSRAM kopieren, damit NVS-Writes
+      # (restore_value) nicht crashen wenn Flash-Cache deaktiviert wird
+      CONFIG_SPIRAM_FETCH_INSTRUCTIONS: "y"
+      CONFIG_SPIRAM_RODATA: "y"
 
 # PSRAM konfigurieren – ESP32-S3-WROOM-1U-N16R8 hat 8 MB Octal PSRAM.
 # Ohne diese Konfiguration können DMA-Puffer für den W5500-SPI-Ethernet-Chip
@@ -181,18 +191,20 @@ globals:
     initial_value: "-2"
 
 external_components:
-  - source: github://thomase1234/esphome-fake-xemex-csmb@master
-    refresh: 60s
-    components:
-      - modbus_server
-  # Lokale Kopie mit Fix: handle_message routet Antworten per Unit-ID
-  # statt Broadcast an alle Controller (behebt falsche Meter-Werte)
+  # Lokale native Implementierungen (ESP-IDF-kompatibel, kein Arduino-Lib):
+  #   modbus_server: ersetzt thomase1234/esphome-fake-xemex-csmb (Arduino-only)
+  #   modbustcp:     lokale Kopie mit Unit-ID-Fix
   - source:
       type: local
-      path: custom_components
+      path: components
     components:
+      - modbus_server
       - modbustcp
+  - source: github://bgewehr/openeebus-esphome@main
+    refresh: 1d
+    components:
       - eebus_lpc
+      - eebus_wp
   - source: github://creepystefan/esphome_modbus_tcp
     refresh: never
     components:
@@ -212,7 +224,6 @@ pca9554:
     address: 0x20
     i2c_id: i2c_bus
 
-# RS485 UART für Modbus-Server (Xemex CSMB: 9600 8E1)
 # TX=GPIO17 (DE/DI zum RS485-Chip), RX=GPIO18 (RO vom RS485-Chip)
 uart:
   - id: intmodbus
@@ -450,11 +461,8 @@ switch:
       - number.set:
           id: ct3addon
           value: 45.0
-      - number.set:
-          id: lpc_limit_set
-          value: 4200
-      - switch.turn_on:
-          id: lpc_active_toggle
+      - lambda: |-
+          id(hems_wp).set_limit(4200.0f);
       - logger.log: "Manual §14a Test: COMPLETE"
     turn_off_action:
       - logger.log: "Manual §14a Test: Deaktiviere Leistungsbegrenzung"
@@ -467,8 +475,8 @@ switch:
       - number.set:
           id: ct3addon
           value: 1.0
-      - switch.turn_off:
-          id: lpc_active_toggle
+      - lambda: |-
+          id(hems_wp).clear_limit();
       - logger.log: "Manual §14a Test: Deactivation COMPLETE"
 
 # ── Digitale Eingänge (opto-isoliert, active-low) ────────────────────────────
@@ -510,13 +518,10 @@ binary_sensor:
             value: 45.0
         - light.turn_on:
             id: status_led
-            effect: "§14a Warning Flash"
+            effect: "Paragraph14a Warning Flash"
         # EEBUS LPC: Bosch Wärmepumpe auf 4.2kW begrenzen
-        - number.set:
-            id: lpc_limit_set
-            value: 4200
-        - switch.turn_on:
-            id: lpc_active_toggle
+        - lambda: |-
+            id(hems_wp).set_limit(4200.0f);
         - logger.log: "§14a EnWG: Leistungsbegrenzung aktiv (inkl. EEBUS WP-Limit 4200W)"
     on_release:
       then:
@@ -531,8 +536,8 @@ binary_sensor:
             id: ct3addon
             value: 1.0
         # EEBUS LPC: Wärmepumpe freigeben
-        - switch.turn_off:
-            id: lpc_active_toggle
+        - lambda: |-
+            id(hems_wp).clear_limit();
         - light.turn_off:
             id: status_led
         - logger.log: "§14a EnWG: Normalbetrieb wiederhergestellt"
@@ -638,7 +643,7 @@ light:
     restore_mode: ALWAYS_OFF
     effects:
       - strobe:
-          name: "§14a Warning Flash"
+          name: "Paragraph14a Warning Flash"
           colors:
             - state: true
               brightness: 100%
@@ -890,122 +895,8 @@ text_sensor:
 # ── Fronius Gen24 Plus 8.0: Modbus TCP Batterie-Entladesteuerung ──────────────
 # Ausgelagert in separate Datei für saubere Struktur (vermeidet YAML-Key-Duplikate)
 packages:
+  xemex_csmb: !include xemex-csmb.yaml
   fronius: !include fronius-gen24.yaml
+  eebus: !include eebus-openeebus.yaml
 
 # ══════════════════════════════════════════════════════════════════════════════
-# EEBUS LPC Bridge – Bosch Wärmepumpe via eebus-ha-bridge (gRPC)
-# Steuert die Leistungsaufnahme der WP gemäß §14a EnWG / EEBUS LPC
-# ══════════════════════════════════════════════════════════════════════════════
-eebus_lpc:
-  id: eebus_bridge
-  bridge_host: ${eebus_bridge_ip}
-  bridge_port: ${eebus_bridge_port}
-  device_ski: !secret eebus_device_ski
-  poll_interval: 10s
-
-  power_sensor:
-    name: "${device_name} WP Leistungsaufnahme"
-    id: wp_power
-    web_server:
-      sorting_group_id: sg_eebus
-      sorting_weight: 1
-    device_class: power
-    unit_of_measurement: W
-    accuracy_decimals: 0
-    state_class: measurement
-
-  limit_sensor:
-    name: "${device_name} EEBUS LPC Limit"
-    id: eebus_limit_readback
-    web_server:
-      sorting_group_id: sg_eebus
-      sorting_weight: 2
-    entity_category: diagnostic
-    icon: "mdi:speedometer"
-
-  connected_sensor:
-    name: "${device_name} EEBUS Verbunden"
-    id: eebus_connected
-    web_server:
-      sorting_group_id: sg_eebus
-      sorting_weight: 5
-    device_class: connectivity
-
-  lpc_active_sensor:
-    name: "${device_name} LPC aktiv"
-    id: eebus_lpc_active_status
-    web_server:
-      sorting_group_id: sg_eebus
-      sorting_weight: 6
-    entity_category: diagnostic
-    icon: "mdi:shield-check"
-
-  heartbeat_sensor:
-    name: "${device_name} EEBUS Heartbeat"
-    id: eebus_heartbeat
-    web_server:
-      sorting_group_id: sg_eebus
-      sorting_weight: 7
-    entity_category: diagnostic
-    icon: "mdi:heart-pulse"
-
-  lpc_limit_number:
-    name: "${device_name} LPC Leistungslimit"
-    id: lpc_limit_set
-    web_server:
-      sorting_group_id: sg_eebus
-      sorting_weight: 3
-    min_value: 0
-    max_value: 25000
-    step: 100
-    unit_of_measurement: W
-    icon: "mdi:flash-triangle"
-    mode: box
-
-  lpc_active_switch:
-    name: "${device_name} LPC Aktivieren"
-    id: lpc_active_toggle
-    web_server:
-      sorting_group_id: sg_eebus
-      sorting_weight: 4
-    icon: "mdi:transmission-tower-import"
-
-  failsafe_limit_sensor:
-    name: "${device_name} EEBUS Failsafe Limit"
-    web_server:
-      sorting_group_id: sg_eebus
-      sorting_weight: 8
-    entity_category: diagnostic
-    icon: "mdi:shield-alert"
-
-  failsafe_duration_sensor:
-    name: "${device_name} EEBUS Failsafe Dauer"
-    web_server:
-      sorting_group_id: sg_eebus
-      sorting_weight: 9
-    entity_category: diagnostic
-    icon: "mdi:timer-alert"
-
-  brand_sensor:
-    name: "${device_name} EEBUS Hersteller"
-    web_server:
-      sorting_group_id: sg_eebus
-      sorting_weight: 10
-    entity_category: diagnostic
-    icon: "mdi:domain"
-
-  model_sensor:
-    name: "${device_name} EEBUS Modell"
-    web_server:
-      sorting_group_id: sg_eebus
-      sorting_weight: 11
-    entity_category: diagnostic
-    icon: "mdi:heat-pump"
-
-  serial_sensor:
-    name: "${device_name} EEBUS Seriennummer"
-    web_server:
-      sorting_group_id: sg_eebus
-      sorting_weight: 12
-    entity_category: diagnostic
-    icon: "mdi:identifier"

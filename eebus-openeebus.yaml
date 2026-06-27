@@ -1,0 +1,283 @@
+# Native OpenEEBUS SHIP/SPINE integration.
+# Provides the CLS-Steuerbox LPC receiver and Bosch K40RF heat-pump control.
+
+eebus_lpc:
+  id: hems_lpc
+  ship_port: ${eebus_lpc_ship_port}
+  remote_ski: !secret eebus_cls_remote_ski
+  device_brand: "DIY"
+  device_type: "HEMS"
+  device_model: "esphome-hems"
+  failsafe_limit_w: ${eebus_failsafe_limit_w}
+
+  on_limit_active:
+    - then:
+        - lambda: |-
+            static int event_count = 0;
+            event_count++;
+            id(power_limit_events).publish_state(event_count);
+            ESP_LOGW("eebus", "EEBUS LPC limit active: %.0f W", x);
+        - number.set:
+            id: ct1addon
+            value: 45.0
+        - number.set:
+            id: ct2addon
+            value: 45.0
+        - number.set:
+            id: ct3addon
+            value: 45.0
+        - light.turn_on:
+            id: status_led
+            effect: "Paragraph14a Warning Flash"
+        - lambda: |-
+            id(hems_wp).set_limit(x);
+
+  on_limit_cleared:
+    - then:
+        - logger.log: "EEBUS LPC limit cleared"
+        - number.set:
+            id: ct1addon
+            value: 1.0
+        - number.set:
+            id: ct2addon
+            value: 1.0
+        - number.set:
+            id: ct3addon
+            value: 1.0
+        - lambda: |-
+            id(hems_wp).clear_limit();
+        - light.turn_off:
+            id: status_led
+
+  on_pairing_request:
+    - then:
+        - lambda: |-
+            ESP_LOGW("eebus", "Pairing request from SKI: %s", x.c_str());
+
+eebus_wp:
+  id: hems_wp
+  ship_port: ${eebus_wp_ship_port}
+  remote_ski: !secret eebus_wp_remote_ski
+  device_brand: "DIY"
+  device_type: "HEMS"
+  device_model: "esphome-hems"
+  failsafe_limit_w: ${eebus_failsafe_limit_w}
+  failsafe_duration_s: ${eebus_failsafe_duration_s}
+
+  on_wp_connected:
+    - logger.log: "K40RF connected - native EEBUS WP control active"
+
+  on_wp_disconnected:
+    - logger.log: "K40RF disconnected - relay fallback remains available"
+
+  on_power_reading:
+    - lambda: |-
+        ESP_LOGI("eebus", "WP power reading: %.0f W", x);
+
+sensor:
+  - platform: template
+    name: "${device_name} EEBUS VNB Leistungslimit"
+    id: eebus_vnb_power_limit
+    icon: "mdi:transmission-tower"
+    web_server:
+      sorting_group_id: sg_eebus
+      sorting_weight: 1
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    update_interval: 5s
+    lambda: "return id(hems_lpc).current_limit_w();"
+
+  - platform: template
+    name: "${device_name} EEBUS Verfuegbare Restleistung"
+    id: eebus_available_power
+    icon: "mdi:gauge"
+    web_server:
+      sorting_group_id: sg_eebus
+      sorting_weight: 2
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    update_interval: 5s
+    lambda: |-
+      if (!id(hems_lpc).is_limit_active()) return 99999.0f;
+      return id(hems_lpc).current_limit_w() - id(hems_wp).current_power_w();
+
+  - platform: template
+    name: "${device_name} WP Ist-Leistung EEBUS"
+    id: eebus_wp_power
+    icon: "mdi:heat-pump"
+    web_server:
+      sorting_group_id: sg_eebus
+      sorting_weight: 3
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    update_interval: 5s
+    lambda: "return id(hems_wp).current_power_w();"
+
+  - platform: template
+    name: "${device_name} WP Aktives Limit"
+    id: eebus_wp_active_limit
+    icon: "mdi:speedometer"
+    web_server:
+      sorting_group_id: sg_eebus
+      sorting_weight: 4
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    update_interval: 5s
+    lambda: "return id(hems_wp).active_limit_w();"
+
+text_sensor:
+  - platform: template
+    name: "${device_name} EEBUS Pairing-Status"
+    icon: "mdi:lan-connect"
+    web_server:
+      sorting_group_id: sg_eebus
+      sorting_weight: 10
+    update_interval: 5s
+    lambda: "return id(hems_lpc).pairing_state();"
+
+  - platform: template
+    name: "${device_name} Eigene SKI"
+    icon: "mdi:key"
+    web_server:
+      sorting_group_id: sg_eebus
+      sorting_weight: 11
+    entity_category: diagnostic
+    update_interval: 60s
+    lambda: "return id(hems_lpc).local_ski();"
+
+  - platform: template
+    name: "${device_name} Gepaarte Steuerbox-SKI"
+    icon: "mdi:key-chain"
+    web_server:
+      sorting_group_id: sg_eebus
+      sorting_weight: 12
+    entity_category: diagnostic
+    update_interval: 10s
+    lambda: |-
+      std::string ski = id(hems_lpc).paired_remote_ski();
+      return ski.empty() ? std::string("(keine)") : ski;
+
+  - platform: template
+    name: "${device_name} Pairing SKI ausstehend"
+    icon: "mdi:key-alert"
+    web_server:
+      sorting_group_id: sg_eebus
+      sorting_weight: 13
+    update_interval: 3s
+    lambda: |-
+      std::string ski = id(hems_lpc).pending_remote_ski();
+      return ski.empty() ? std::string("(keine)") : ski;
+
+  - platform: template
+    name: "${device_name} Paragraph14a Steuerungskanal"
+    icon: "mdi:transmission-tower"
+    web_server:
+      sorting_group_id: sg_eebus
+      sorting_weight: 14
+    update_interval: 5s
+    lambda: |-
+      if (id(hems_lpc).is_limit_active()) return std::string("EEBUS digital");
+      if (id(grid_provider_switch).state) return std::string("Relaiskontakt DI1");
+      return std::string("Kein Eingriff aktiv");
+
+  - platform: template
+    name: "${device_name} K40RF Verbindungsstatus"
+    icon: "mdi:heat-pump"
+    web_server:
+      sorting_group_id: sg_eebus
+      sorting_weight: 15
+    update_interval: 5s
+    lambda: "return id(hems_wp).pairing_state();"
+
+  - platform: template
+    name: "${device_name} K40RF SKI"
+    icon: "mdi:key-chain"
+    web_server:
+      sorting_group_id: sg_eebus
+      sorting_weight: 16
+    entity_category: diagnostic
+    update_interval: 30s
+    lambda: |-
+      std::string ski = id(hems_wp).remote_ski();
+      return ski.empty() ? std::string("(suche...)") : ski;
+
+  - platform: template
+    name: "${device_name} OpenEEBUS Use Cases"
+    icon: "mdi:format-list-checks"
+    web_server:
+      sorting_group_id: sg_eebus
+      sorting_weight: 17
+    entity_category: diagnostic
+    update_interval: never
+    lambda: "return std::string(\"LPC CS, LPC EG, MPC, OHPCF\");"
+
+button:
+  - platform: template
+    name: "${device_name} Pairing akzeptieren"
+    icon: "mdi:check-circle"
+    web_server:
+      sorting_group_id: sg_eebus
+      sorting_weight: 20
+    on_press:
+      - lambda: "id(hems_lpc).accept_pairing();"
+
+  - platform: template
+    name: "${device_name} Pairing ablehnen"
+    icon: "mdi:close-circle"
+    web_server:
+      sorting_group_id: sg_eebus
+      sorting_weight: 21
+    on_press:
+      - lambda: "id(hems_lpc).reject_pairing();"
+
+  - platform: template
+    name: "${device_name} Pairing zuruecksetzen"
+    icon: "mdi:lock-reset"
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: sg_eebus
+      sorting_weight: 22
+    on_press:
+      - lambda: "id(hems_lpc).forget_pairing(id(hems_lpc).paired_remote_ski());"
+
+  - platform: template
+    name: "${device_name} EEBUS Failsafe testen"
+    icon: "mdi:shield-check"
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: sg_eebus
+      sorting_weight: 23
+    on_press:
+      - lambda: |-
+          id(hems_wp).set_limit(4200.0f);
+
+  - platform: template
+    name: "${device_name} EEBUS Normalbetrieb"
+    icon: "mdi:restore"
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: sg_eebus
+      sorting_weight: 24
+    on_press:
+      - lambda: |-
+          id(hems_wp).clear_limit();
+
+  - platform: template
+    name: "${device_name} WP Limit 4200 W"
+    icon: "mdi:lightning-bolt-circle"
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: sg_eebus
+      sorting_weight: 25
+    on_press:
+      - lambda: "id(hems_wp).set_limit(4200.0f);"
+
+  - platform: template
+    name: "${device_name} WP Vollleistung freigeben"
+    icon: "mdi:check-circle"
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: sg_eebus
+      sorting_weight: 26
+    on_press:
+      - lambda: "id(hems_wp).clear_limit();"
