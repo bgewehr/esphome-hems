@@ -7,7 +7,7 @@ The setup combines:
 - 8 relay outputs and digital inputs on the Waveshare board
 - Xemex CSMB-style Modbus RTU server emulation
 - Fronius Gen24 Modbus TCP monitoring and battery discharge limiting
-- Native OpenEEBUS SHIP/SPINE integration for CLS-Steuerbox LPC and Bosch K40RF heat-pump control
+- Native OpenEEBUS SHIP/SPINE integration for CLS-Steuerbox LPC and EEBus heat-pump (EG/LPC) control
 - S0 water meter pulse counting
 
 ## Repository Layout
@@ -41,8 +41,8 @@ esphome run esphome-hems.yaml
 The native OpenEEBUS package covers the use cases exposed by `bgewehr/openeebus-esphome`:
 
 - `eebus_lpc`: LPC CS role, receives power limits from a CLS-Steuerbox.
-- `eebus_wp`: LPC EG role, sends limits to a Bosch K40RF heat-pump gateway.
-- MPC: reads heat-pump power from K40RF.
+- `eebus_wp`: LPC EG role, sends power limits to an EEBus-capable heat-pump gateway.
+- MPC: reads heat-pump power via EEBus.
 - OHPCF: represented through the OpenEEBUS heat-pump optimisation path exposed by the component.
 
 Pairing and diagnostics are exposed through the ESPHome web server.

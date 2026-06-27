@@ -38,8 +38,11 @@ esp32:
       # (restore_value) nicht crashen wenn Flash-Cache deaktiviert wird
       CONFIG_SPIRAM_FETCH_INSTRUCTIONS: "y"
       CONFIG_SPIRAM_RODATA: "y"
-      # EEBUS SHIP braucht 4 extra Sockets (2× HTTPS-Server à 2 Sockets)
-      CONFIG_LWIP_MAX_SOCKETS: "20"
+      # EEBus SHIP: Client-Zertifikat anfordern aber nicht erzwingen (VERIFY_OPTIONAL)
+      # Notwendig weil EEBus self-signed Zertifikate mit SKI-basiertem Trust verwendet
+      CONFIG_ESP_TLS_SERVER_MIN_AUTH_MODE_OPTIONAL: "y"
+      # EEBus SHIP benötigt extra Sockets: 2 HTTPS-Server × (2 open + 1 listen) = 6
+      CONFIG_LWIP_MAX_SOCKETS: "21"
 
 # PSRAM konfigurieren – ESP32-S3-WROOM-1U-N16R8 hat 8 MB Octal PSRAM.
 # Ohne diese Konfiguration können DMA-Puffer für den W5500-SPI-Ethernet-Chip
@@ -51,6 +54,7 @@ psram:
 logger:
   id: app_logger
   level: DEBUG  # Compile-Level muss höchstes sein, Runtime-Filter per Select
+  runtime_tag_levels: true
 
 select:
   - platform: template
@@ -78,7 +82,68 @@ select:
             else if (x == "DEBUG") level = ESPHOME_LOG_LEVEL_DEBUG;
             else if (x == "VERBOSE") level = ESPHOME_LOG_LEVEL_VERBOSE;
             id(app_logger).set_log_level(level);
-            esp_log_level_set("*", (esp_log_level_t)level);
+
+  - platform: template
+    name: "${device_name} Log Filter"
+    id: log_filter_select
+    icon: "mdi:filter"
+    web_server:
+      sorting_group_id: sg_system
+      sorting_weight: 3
+    options:
+      - "Alle"
+      - "EEBus"
+      - "Fronius"
+      - "Modbus"
+      - "Netzwerk"
+    initial_option: "Alle"
+    optimistic: true
+    restore_value: true
+    on_value:
+      then:
+        - lambda: |-
+            // Globales Level ermitteln
+            auto current = id(log_level_select).current_option();
+            int gl = ESPHOME_LOG_LEVEL_WARN;
+            if (current == "ERROR") gl = ESPHOME_LOG_LEVEL_ERROR;
+            else if (current == "WARN") gl = ESPHOME_LOG_LEVEL_WARN;
+            else if (current == "INFO") gl = ESPHOME_LOG_LEVEL_INFO;
+            else if (current == "DEBUG") gl = ESPHOME_LOG_LEVEL_DEBUG;
+            else if (current == "VERBOSE") gl = ESPHOME_LOG_LEVEL_VERBOSE;
+
+            if (x == "Alle") {
+              // Globales Level wiederherstellen (hebt Tag-Filter auf)
+              id(app_logger).set_log_level(gl);
+            } else {
+              // Global auf NONE, dann nur gewählte Tags freischalten
+              id(app_logger).set_log_level(ESPHOME_LOG_LEVEL_ERROR);
+              if (x == "EEBus") {
+                id(app_logger).set_log_level("eebus", gl);
+                id(app_logger).set_log_level("eebus_lpc", gl);
+                id(app_logger).set_log_level("eebus_wp", gl);
+                id(app_logger).set_log_level("eebus_http_srv", gl);
+                id(app_logger).set_log_level("eebus_ws_srv", gl);
+                id(app_logger).set_log_level("eebus_ws_cli", gl);
+                id(app_logger).set_log_level("ship", gl);
+                id(app_logger).set_log_level("spine", gl);
+                id(app_logger).set_log_level("openeebus", gl);
+              } else if (x == "Fronius") {
+                id(app_logger).set_log_level("modbustcp_controller.sensor", gl);
+                id(app_logger).set_log_level("sensor", gl);
+                id(app_logger).set_log_level("template.sensor", gl);
+              } else if (x == "Modbus") {
+                id(app_logger).set_log_level("modbus_server", gl);
+                id(app_logger).set_log_level("modbustcp", gl);
+                id(app_logger).set_log_level("modbustcp_controller.sensor", gl);
+              } else if (x == "Netzwerk") {
+                id(app_logger).set_log_level("ethernet", gl);
+                id(app_logger).set_log_level("mqtt", gl);
+                id(app_logger).set_log_level("mdns", gl);
+                id(app_logger).set_log_level("api", gl);
+                id(app_logger).set_log_level("api.connection", gl);
+                id(app_logger).set_log_level("web_server", gl);
+              }
+            }
 
 api:
   encryption:
@@ -203,7 +268,7 @@ external_components:
       - modbus_server
       - modbustcp
   - source: github://bgewehr/openeebus-esphome@main
-    refresh: 1d
+    refresh: never
     components:
       - eebus_lpc
       - eebus_wp

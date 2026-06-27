@@ -1,5 +1,5 @@
 # Native OpenEEBUS SHIP/SPINE integration.
-# Provides the CLS-Steuerbox LPC receiver and Bosch K40RF heat-pump control.
+# Provides the CLS-Steuerbox LPC receiver and EEBus heat-pump (EG/LPC) control.
 
 eebus_lpc:
   id: hems_lpc
@@ -65,10 +65,10 @@ eebus_wp:
   failsafe_duration_s: ${eebus_failsafe_duration_s}
 
   on_wp_connected:
-    - logger.log: "K40RF connected - native EEBUS WP control active"
+    - logger.log: "EEBus WP connected - native power limit control active"
 
   on_wp_disconnected:
-    - logger.log: "K40RF disconnected - relay fallback remains available"
+    - logger.log: "EEBus WP disconnected - relay fallback remains available"
 
   on_power_reading:
     - lambda: |-
@@ -76,7 +76,7 @@ eebus_wp:
 
 sensor:
   - platform: template
-    name: "${device_name} EEBUS VNB Leistungslimit"
+    name: "${device_name} CS VNB Leistungslimit"
     id: eebus_vnb_power_limit
     icon: "mdi:transmission-tower"
     web_server:
@@ -88,7 +88,7 @@ sensor:
     lambda: "return id(hems_lpc).current_limit_w();"
 
   - platform: template
-    name: "${device_name} EEBUS Verfuegbare Restleistung"
+    name: "${device_name} CS Verfuegbare Restleistung"
     id: eebus_available_power
     icon: "mdi:gauge"
     web_server:
@@ -102,12 +102,12 @@ sensor:
       return id(hems_lpc).current_limit_w() - id(hems_wp).current_power_w();
 
   - platform: template
-    name: "${device_name} WP Ist-Leistung EEBUS"
+    name: "${device_name} WP Ist-Leistung"
     id: eebus_wp_power
     icon: "mdi:heat-pump"
     web_server:
       sorting_group_id: sg_eebus
-      sorting_weight: 3
+      sorting_weight: 10
     unit_of_measurement: "W"
     accuracy_decimals: 0
     update_interval: 5s
@@ -119,7 +119,7 @@ sensor:
     icon: "mdi:speedometer"
     web_server:
       sorting_group_id: sg_eebus
-      sorting_weight: 4
+      sorting_weight: 11
     unit_of_measurement: "W"
     accuracy_decimals: 0
     update_interval: 5s
@@ -127,30 +127,40 @@ sensor:
 
 text_sensor:
   - platform: template
-    name: "${device_name} EEBUS Pairing-Status"
+    name: "${device_name} CS Pairing-Status"
     icon: "mdi:lan-connect"
     web_server:
       sorting_group_id: sg_eebus
-      sorting_weight: 10
+      sorting_weight: 3
     update_interval: 5s
     lambda: "return id(hems_lpc).pairing_state();"
 
   - platform: template
-    name: "${device_name} Eigene SKI"
+    name: "${device_name} CS Eigene SKI (Port 4712)"
     icon: "mdi:key"
     web_server:
       sorting_group_id: sg_eebus
-      sorting_weight: 11
+      sorting_weight: 5
     entity_category: diagnostic
     update_interval: 60s
     lambda: "return id(hems_lpc).local_ski();"
 
   - platform: template
-    name: "${device_name} Gepaarte Steuerbox-SKI"
+    name: "${device_name} WP Eigene SKI (Port 4713)"
+    icon: "mdi:key-variant"
+    web_server:
+      sorting_group_id: sg_eebus
+      sorting_weight: 15
+    entity_category: diagnostic
+    update_interval: 60s
+    lambda: "return id(hems_wp).local_ski();"
+
+  - platform: template
+    name: "${device_name} CS Gepaarte SKI"
     icon: "mdi:key-chain"
     web_server:
       sorting_group_id: sg_eebus
-      sorting_weight: 12
+      sorting_weight: 6
     entity_category: diagnostic
     update_interval: 10s
     lambda: |-
@@ -158,22 +168,22 @@ text_sensor:
       return ski.empty() ? std::string("(keine)") : ski;
 
   - platform: template
-    name: "${device_name} Pairing SKI ausstehend"
+    name: "${device_name} CS Pairing ausstehend"
     icon: "mdi:key-alert"
     web_server:
       sorting_group_id: sg_eebus
-      sorting_weight: 13
+      sorting_weight: 4
     update_interval: 3s
     lambda: |-
       std::string ski = id(hems_lpc).pending_remote_ski();
       return ski.empty() ? std::string("(keine)") : ski;
 
   - platform: template
-    name: "${device_name} Paragraph14a Steuerungskanal"
+    name: "${device_name} §14a Steuerungskanal"
     icon: "mdi:transmission-tower"
     web_server:
       sorting_group_id: sg_eebus
-      sorting_weight: 14
+      sorting_weight: 20
     update_interval: 5s
     lambda: |-
       if (id(hems_lpc).is_limit_active()) return std::string("EEBUS digital");
@@ -181,20 +191,20 @@ text_sensor:
       return std::string("Kein Eingriff aktiv");
 
   - platform: template
-    name: "${device_name} K40RF Verbindungsstatus"
+    name: "${device_name} WP Verbindungsstatus"
     icon: "mdi:heat-pump"
     web_server:
       sorting_group_id: sg_eebus
-      sorting_weight: 15
+      sorting_weight: 12
     update_interval: 5s
     lambda: "return id(hems_wp).pairing_state();"
 
   - platform: template
-    name: "${device_name} K40RF SKI"
+    name: "${device_name} WP Remote-SKI"
     icon: "mdi:key-chain"
     web_server:
       sorting_group_id: sg_eebus
-      sorting_weight: 16
+      sorting_weight: 14
     entity_category: diagnostic
     update_interval: 30s
     lambda: |-
@@ -206,58 +216,58 @@ text_sensor:
     icon: "mdi:format-list-checks"
     web_server:
       sorting_group_id: sg_eebus
-      sorting_weight: 17
+      sorting_weight: 21
     entity_category: diagnostic
     update_interval: never
     lambda: "return std::string(\"LPC CS, LPC EG, MPC, OHPCF\");"
 
 button:
   - platform: template
-    name: "${device_name} Pairing akzeptieren"
+    name: "${device_name} CS Pairing akzeptieren"
     icon: "mdi:check-circle"
     web_server:
       sorting_group_id: sg_eebus
-      sorting_weight: 20
+      sorting_weight: 30
     on_press:
       - lambda: "id(hems_lpc).accept_pairing();"
 
   - platform: template
-    name: "${device_name} Pairing ablehnen"
+    name: "${device_name} CS Pairing ablehnen"
     icon: "mdi:close-circle"
     web_server:
       sorting_group_id: sg_eebus
-      sorting_weight: 21
+      sorting_weight: 31
     on_press:
       - lambda: "id(hems_lpc).reject_pairing();"
 
   - platform: template
-    name: "${device_name} Pairing zuruecksetzen"
+    name: "${device_name} CS Pairing zuruecksetzen"
     icon: "mdi:lock-reset"
     entity_category: diagnostic
     web_server:
       sorting_group_id: sg_eebus
-      sorting_weight: 22
+      sorting_weight: 32
     on_press:
       - lambda: "id(hems_lpc).forget_pairing(id(hems_lpc).paired_remote_ski());"
 
   - platform: template
-    name: "${device_name} EEBUS Failsafe testen"
+    name: "${device_name} WP Failsafe testen"
     icon: "mdi:shield-check"
     entity_category: diagnostic
     web_server:
       sorting_group_id: sg_eebus
-      sorting_weight: 23
+      sorting_weight: 33
     on_press:
       - lambda: |-
           id(hems_wp).set_limit(4200.0f);
 
   - platform: template
-    name: "${device_name} EEBUS Normalbetrieb"
+    name: "${device_name} WP Normalbetrieb"
     icon: "mdi:restore"
     entity_category: diagnostic
     web_server:
       sorting_group_id: sg_eebus
-      sorting_weight: 24
+      sorting_weight: 34
     on_press:
       - lambda: |-
           id(hems_wp).clear_limit();
@@ -268,7 +278,7 @@ button:
     entity_category: diagnostic
     web_server:
       sorting_group_id: sg_eebus
-      sorting_weight: 25
+      sorting_weight: 35
     on_press:
       - lambda: "id(hems_wp).set_limit(4200.0f);"
 
@@ -278,6 +288,6 @@ button:
     entity_category: diagnostic
     web_server:
       sorting_group_id: sg_eebus
-      sorting_weight: 26
+      sorting_weight: 36
     on_press:
       - lambda: "id(hems_wp).clear_limit();"
