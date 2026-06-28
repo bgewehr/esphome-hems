@@ -11,6 +11,7 @@ Usage:
 
 import hashlib
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -31,6 +32,45 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+def _init_submodules(target_dir: Path) -> None:
+    """Initialize git submodules in target_dir if any are uninitialized.
+
+    ESPHome's external_component checkout does 'git clone --depth 1' without
+    '--recurse-submodules', so submodules are always left uninitialised.
+    This must run before copying patch files so the submodule directories exist.
+    """
+    gitmodules = target_dir / ".gitmodules"
+    if not gitmodules.exists():
+        return
+
+    result = subprocess.run(
+        ["git", "submodule", "status"],
+        cwd=target_dir,
+        capture_output=True,
+        text=True,
+    )
+    uninit = [line for line in result.stdout.splitlines() if line.startswith("-")]
+    if not uninit:
+        return
+
+    print(f"  Initialising {len(uninit)} git submodule(s) in {target_dir.name}...")
+    for line in uninit:
+        name = line.split()[-1]
+        sub_path = target_dir / name
+        # Remove any stray files that would block the clone
+        if sub_path.exists() and any(sub_path.iterdir()):
+            shutil.rmtree(sub_path)
+            sub_path.mkdir()
+        print(f"    cloning submodule: {name}")
+
+    subprocess.run(
+        ["git", "submodule", "update", "--init"],
+        cwd=target_dir,
+        check=True,
+    )
+    print(f"  Submodules ready.")
+
+
 def apply_patches() -> int:
     """Copy patch files to target locations, skipping identical files. Returns error count."""
     errors = 0
@@ -48,6 +88,8 @@ def apply_patches() -> int:
             print(f"       Run 'esphome compile' first to populate the cache.")
             errors += 1
             continue
+
+        _init_submodules(target_dir)
 
         for patch_file in patch_dir.rglob("*"):
             if patch_file.is_dir():
