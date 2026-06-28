@@ -182,11 +182,22 @@ text_sensor:
     lambda: "return id(hems_wp).pairing_state();"
 
   - platform: template
+    name: "${device_name} WP Gerät"
+    icon: "mdi:heat-pump-outline"
+    web_server:
+      sorting_group_id: sg_eebus_wp
+      sorting_weight: 4
+    update_interval: 10s
+    lambda: |-
+      std::string label = id(hems_wp).device_label();
+      return label.empty() ? std::string("(unbekannt)") : label;
+
+  - platform: template
     name: "${device_name} WP Remote-SKI"
     icon: "mdi:key-chain"
     web_server:
       sorting_group_id: sg_eebus_wp
-      sorting_weight: 4
+      sorting_weight: 5
     entity_category: diagnostic
     update_interval: 30s
     lambda: |-
@@ -198,7 +209,7 @@ text_sensor:
     icon: "mdi:key-variant"
     web_server:
       sorting_group_id: sg_eebus_wp
-      sorting_weight: 5
+      sorting_weight: 6
     entity_category: diagnostic
     update_interval: 60s
     lambda: "return id(hems_wp).local_ski();"

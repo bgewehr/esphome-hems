@@ -101,6 +101,7 @@ class EebusWpComponent : public Component {
   std::string remote_ski()      const { return remote_ski_; }
   std::string local_ski()       const { return local_ski_; }
   std::string pairing_state()   const { return pairing_state_; }
+  std::string device_label()    const { return device_label_; }
 
   /* Called from C vtable (public for WpServiceReader friend access) */
   void on_entity_connect(const EntityAddressType* addr);
@@ -112,6 +113,7 @@ class EebusWpComponent : public Component {
   std::string pairing_state_       {};
   std::string remote_ski_          {};
   std::string local_ski_           {};
+  std::string device_label_        {};
   bool        pairing_mode_active_ {false};
   uint32_t    pairing_deadline_ms_ {0};
   void save_remote_ski_nvs_(const char* ski);
@@ -193,9 +195,12 @@ static void MpcL_OnMeasurementReceive(
     const ScaledValue* val,
     const EntityAddressType*)
 {
-  if (name_id == kMpcPowerTotal && val) {
-    float w = (float)val->value * powf(10.0f, (float)val->scale);
-    reinterpret_cast<EebusWpComponent::MpcListener*>(o)->self->on_mpc_measurement(w);
+  if (!val) return;
+  float v = (float)val->value * powf(10.0f, (float)val->scale);
+  const char* name = MuMpcMeasurementGetName(name_id);
+  ESP_LOGI("eebus_wp", "MPC measurement: %s = %.3f", name ? name : "unknown", (double)v);
+  if (name_id == kMpcPowerTotal) {
+    reinterpret_cast<EebusWpComponent::MpcListener*>(o)->self->on_mpc_measurement(v);
   }
 }
 

@@ -89,27 +89,52 @@ static void SR_OnRemoteServicesUpdate(
    * callback and triggering an outbound attempt from every mDNS update causes
    * spurious connections in the wrong direction. */
   auto* r = reinterpret_cast<WpServiceReader*>(o);
-  if (!r->self->pairing_mode_active_) return;
-  if (!r->self->remote_ski_.empty()) return;  /* already paired */
 
   size_t n = VectorGetSize(entries);
   for (size_t i = 0; i < n; i++) {
     const MdnsEntry* entry = (const MdnsEntry*)VectorGetElement(entries, i);
-    const char* ski = MdnsEntryGetSki(entry);
+    const char* ski   = MdnsEntryGetSki(entry);
     if (!ski || ski[0] == '\0') continue;
     if (r->self->local_ski_ == ski) continue;
-    const char* host = MdnsEntryGetHost(entry) ? MdnsEntryGetHost(entry) : "?";
-    ESP_LOGI("eebus_wp", "mDNS: WP sichtbar ski=%s host=%s — warte auf eingehende Verbindung",
-             ski, host);
-    r->self->pairing_state_ = "WP sichtbar: " + std::string(ski) + " — warte auf Verbindung";
-    break;
+
+    /* Log all available device fields on first discovery of this SKI */
+    ESP_LOGI(TAG, "mDNS device: ski=%-40s  host=%s  brand=%s  model=%s  type=%s  id=%s  name=%s",
+             ski,
+             MdnsEntryGetHost(entry)   ? MdnsEntryGetHost(entry)   : "-",
+             MdnsEntryGetBrand(entry)  ? MdnsEntryGetBrand(entry)  : "-",
+             MdnsEntryGetModel(entry)  ? MdnsEntryGetModel(entry)  : "-",
+             MdnsEntryGetType(entry)   ? MdnsEntryGetType(entry)   : "-",
+             MdnsEntryGetId(entry)     ? MdnsEntryGetId(entry)     : "-",
+             MdnsEntryGetName(entry)   ? MdnsEntryGetName(entry)   : "-");
+
+    /* If this is our configured WP, build a label for the UI */
+    if (!r->self->remote_ski_.empty() && r->self->remote_ski_ == ski) {
+      std::string label;
+      if (MdnsEntryGetBrand(entry)) label += MdnsEntryGetBrand(entry);
+      if (MdnsEntryGetModel(entry)) { if (!label.empty()) label += " "; label += MdnsEntryGetModel(entry); }
+      if (MdnsEntryGetType(entry))  { if (!label.empty()) label += " ("; label += MdnsEntryGetType(entry); label += ")"; }
+      if (!label.empty()) r->self->device_label_ = label;
+    }
+
+    /* Pairing: show first unknown device in UI */
+    if (r->self->pairing_mode_active_ && r->self->remote_ski_.empty()) {
+      const char* host = MdnsEntryGetHost(entry) ? MdnsEntryGetHost(entry) : "?";
+      r->self->pairing_state_ = "WP sichtbar: " + std::string(ski) + " — warte auf Verbindung";
+      (void)host;
+      break;
+    }
   }
 }
 
 static void SR_OnShipIdUpdate(
-    ServiceReaderObject*, const char* ski, const char* ship_id)
+    ServiceReaderObject* o, const char* ski, const char* ship_id)
 {
-  ESP_LOGD("eebus_wp", "SHIP ID update ski=%s id=%s", ski, ship_id ? ship_id : "");
+  auto* r = reinterpret_cast<WpServiceReader*>(o);
+  ESP_LOGI(TAG, "SHIP ID: ski=%s  ship_id=%s", ski, ship_id ? ship_id : "-");
+  /* ship_id format is typically "Brand-Model-Serial" — use as fallback label */
+  if (ship_id && ship_id[0] != '\0' && r->self->device_label_.empty()) {
+    r->self->device_label_ = ship_id;
+  }
 }
 
 static void SR_OnShipStateUpdate(
@@ -319,7 +344,13 @@ void EebusWpComponent::on_entity_disconnect(const EntityAddressType* /*addr*/) {
   active_limit_w_     = 0.0f;
   pairing_state_      = "Getrennt — suche WP...";
 
-  if (eg_lpc_) EgLpcStopHeartbeat(eg_lpc_);
+  /* Do NOT stop the heartbeat here. The reference implementation (openeebus
+   * hems.c) never calls EgLpcStopHeartbeat: the heartbeat manager runs
+   * continuously from SetLocalFeature() → Start() onward. Stopping it freezes
+   * the published timestamp; when K40rf reconnects and subscribes to our
+   * DeviceDiagnosis feature it sees a stale timestamp, immediately detects a
+   * timeout, and goes to state=39 — BEFORE on_entity_connect fires to
+   * publish a fresh timestamp. Result: instant reconnect→disconnect loop. */
 
   for (auto* t : disconnected_triggers_) t->trigger();
 }
