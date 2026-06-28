@@ -41,6 +41,11 @@ esp32:
       # EEBus SHIP: Client-Zertifikat anfordern aber nicht erzwingen (VERIFY_OPTIONAL)
       # Notwendig weil EEBus self-signed Zertifikate mit SKI-basiertem Trust verwendet
       CONFIG_ESP_TLS_SERVER_MIN_AUTH_MODE_OPTIONAL: "y"
+      # EEBus SHIP: Peer-Zertifikat nach dem TLS-Handshake im RAM behalten.
+      # mbedTLS 3.x (ESP-IDF 5.x) gibt das Peer-Cert nach dem Handshake frei,
+      # sodass mbedtls_ssl_get_peer_cert() NULL zurückgibt — SKI würde 'unknown'.
+      # Mit dieser Option bleibt das Zertifikat bis zum Verbindungsende erhalten.
+      CONFIG_MBEDTLS_SSL_KEEP_PEER_CERTIFICATE: "y"
       # CONFIG_LWIP_MAX_SOCKETS wird von eebus_lpc (→16) und eebus_wp (→21)
       # automatisch gesetzt — kein manueller Eintrag hier nötig.
 
@@ -205,12 +210,18 @@ web_server:
     - id: sg_dido
       name: "DI/DO"
       sorting_weight: 4
-    - id: sg_eebus
-      name: "EEBUS"
+    - id: sg_eebus_cs
+      name: "EEBus CS (Steuerbox)"
       sorting_weight: 5
+    - id: sg_eebus_wp
+      name: "EEBus WP (Wärmepumpe)"
+      sorting_weight: 6
+    - id: sg_eebus_misc
+      name: "EEBus"
+      sorting_weight: 7
     - id: sg_system
       name: "System"
-      sorting_weight: 6
+      sorting_weight: 8
 
 mqtt:
   broker: !secret mqtt_broker

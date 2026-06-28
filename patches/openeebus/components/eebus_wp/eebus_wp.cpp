@@ -118,6 +118,14 @@ static void SR_OnShipStateUpdate(
   auto* r = reinterpret_cast<WpServiceReader*>(o);
   ESP_LOGW("eebus_wp", "SHIP state ski=%s state=%d", ski, (int)state);
   if (state == kDataExchange) {
+    /* Reject connections where TLS peer cert extraction failed.
+     * Root cause: CONFIG_MBEDTLS_SSL_KEEP_PEER_CERTIFICATE not set in sdkconfig. */
+    if (!ski || strcmp(ski, "unknown") == 0 || strlen(ski) < 40) {
+      ESP_LOGE("eebus_wp", "DataExchange mit ungültiger SKI '%s' — Pairing ignoriert. "
+               "Prüfe CONFIG_MBEDTLS_SSL_KEEP_PEER_CERTIFICATE=y in sdkconfig.",
+               ski ? ski : "null");
+      return;
+    }
     r->self->remote_ski_ = ski;
     r->self->pairing_state_ = "Gepairt: " + std::string(ski);
     ESP_LOGW("eebus_wp", "WP pairing approved, remote SKI=%s", ski);
@@ -193,20 +201,6 @@ void EebusWpComponent::setup() {
 void EebusWpComponent::loop() {
   if (!service_ || !eg_lpc_) return;
 
-  /* Verify the heartbeat is being acknowledged by WP.
-   * EgLpcIsHeartbeatWithinDuration() returns false if no heartbeat ACK
-   * was received within 2× kHeartbeatTimeoutSeconds.
-   * In that case the connection is likely stale — log and flag. */
-  if (connected_ && !EgLpcIsHeartbeatWithinDuration(eg_lpc_)) {
-    if (!heartbeat_alarm_) {
-      ESP_LOGW(TAG, "WP heartbeat overdue \xe2\x80\x94 connection may be stale");
-      heartbeat_alarm_ = true;
-      pairing_state_ = "Heartbeat-Ausfall \xe2\x80\x94 WP antwortet nicht";
-    }
-  } else {
-    heartbeat_alarm_ = false;
-  }
-
   /* Pairing window timeout */
   uint32_t now = millis();
   if (pairing_mode_active_ && now >= pairing_deadline_ms_) {
@@ -278,9 +272,22 @@ void EebusWpComponent::set_limit(float watts) {
 void EebusWpComponent::on_entity_connect(const EntityAddressType* addr) {
   ESP_LOGI(TAG, "WP entity connected");
   connected_          = true;
-  heartbeat_alarm_    = false;
   have_remote_entity_ = true;
   if (addr) remote_entity_addr_ = *addr;
+
+  /* Lazy MaMpc init: add MPC client features AFTER K40rf accepted the LPC
+   * connection. K40rf does not see these features during the initial
+   * NodeManagement handshake, avoiding a rejection at first contact. */
+  if (!ma_mpc_) {
+    MA_MPC_LISTENER_INTERFACE(&mpc_listener_) = &kMpcListenerMethods;
+    mpc_listener_.self = this;
+    ma_mpc_ = MaMpcUseCaseCreate(local_entity_, MA_MPC_LISTENER_OBJECT(&mpc_listener_));
+    if (ma_mpc_) {
+      ESP_LOGI(TAG, "MaMpc use case created — awaiting K40rf measurement data");
+    } else {
+      ESP_LOGW(TAG, "MaMpcUseCaseCreate failed");
+    }
+  }
   pairing_state_      = "Verbunden mit WP";
 
   /* Configure failsafe on WP: if HEMS heartbeat stops, WP falls back
@@ -321,7 +328,7 @@ void EebusWpComponent::on_power_limit_ack(float watts, bool active) {
   ESP_LOGD(TAG, "WP ACK limit %.0f W active=%s", watts, active ? "yes" : "no");
 }
 
-void EebusWpComponent::on_power_reading(float watts) {
+void EebusWpComponent::on_mpc_measurement(float watts) {
   current_power_w_ = watts;
   for (auto* t : power_triggers_) t->trigger(watts);
 }
@@ -487,10 +494,14 @@ bool EebusWpComponent::start_eebus_service_(
   EebusServiceConfigDelete(cfg);
   if (!service_) { ESP_LOGE(TAG, "EebusServiceCreate failed"); return false; }
 
-  if (!remote_ski_.empty()) {
+  if (!remote_ski_.empty() && remote_ski_ != "unknown" && remote_ski_.length() >= 40) {
     EEBUS_SERVICE_REGISTER_REMOTE_SKI(service_, remote_ski_.c_str(), true);
     ESP_LOGI(TAG, "Registered remote WP SKI: %s", remote_ski_.c_str());
   } else {
+    if (!remote_ski_.empty()) {
+      ESP_LOGW(TAG, "Ignoring invalid remote SKI from config: '%s'", remote_ski_.c_str());
+      remote_ski_.clear();
+    }
     ESP_LOGI(TAG, "No remote SKI — pairing mode must be activated explicitly");
   }
   pairing_mode_active_ = false;

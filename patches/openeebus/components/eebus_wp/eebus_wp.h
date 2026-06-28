@@ -36,6 +36,9 @@ extern "C" {
 #include "src/ship/model/types.h"
 #include "src/use_case/api/eg_lp_listener_interface.h"
 #include "src/use_case/actor/eg/lpc/eg_lpc.h"
+#include "src/use_case/actor/ma/mpc/ma_mpc.h"
+#include "src/use_case/api/ma_mpc_listener_interface.h"
+#include "src/use_case/model/mpc_types.h"
 #include "src/use_case/model/load_limit_types.h"
 #include "src/use_case/model/scaled_value.h"
 #include "src/spine/api/entity_local_interface.h"
@@ -95,7 +98,6 @@ class EebusWpComponent : public Component {
   bool        is_connected()    const { return connected_; }
   float       current_power_w() const { return current_power_w_; }
   float       active_limit_w()  const { return active_limit_w_; }
-  bool        heartbeat_ok()    const { return !heartbeat_alarm_; }
   std::string remote_ski()      const { return remote_ski_; }
   std::string local_ski()       const { return local_ski_; }
   std::string pairing_state()   const { return pairing_state_; }
@@ -104,7 +106,7 @@ class EebusWpComponent : public Component {
   void on_entity_connect(const EntityAddressType* addr);
   void on_entity_disconnect(const EntityAddressType* addr);
   void on_power_limit_ack(float watts, bool active);
-  void on_power_reading(float watts);
+  void on_mpc_measurement(float watts);
 
   /* Public for ServiceReader vtable access */
   std::string pairing_state_       {};
@@ -133,7 +135,6 @@ class EebusWpComponent : public Component {
 
   /* Runtime */
   bool        connected_          {false};
-  bool        heartbeat_alarm_    {false};
   float       current_power_w_    {0.0f};
   float       active_limit_w_     {0.0f};
 
@@ -142,8 +143,9 @@ class EebusWpComponent : public Component {
 
   /* openeebus objects */
   EebusServiceObject*  service_      {nullptr};
-  EntityLocalObject*   local_entity_ {nullptr};  /* owns the heartbeat timer */
+  EntityLocalObject*   local_entity_ {nullptr};
   EgLpUseCaseObject*   eg_lpc_       {nullptr};
+  MaMpcUseCaseObject*  ma_mpc_       {nullptr};
 
   /* Trigger lists */
   std::vector<WpConnectedTrigger*>    connected_triggers_;
@@ -161,6 +163,12 @@ class EebusWpComponent : public Component {
     EgLpListenerObject obj;   /* must be first */
     EebusWpComponent*  self;
   } eg_listener_{};
+
+  struct MpcListener {
+    MaMpcListenerObject obj;  /* must be first */
+    EebusWpComponent*   self;
+  } mpc_listener_{};
+
 };
 
 /* -------------------------------------------------------------------------
@@ -168,6 +176,37 @@ class EebusWpComponent : public Component {
  * ---------------------------------------------------------------------- */
 
 extern "C" {
+
+/* ---- MaMpc listener vtable ---- */
+
+static void MpcL_Destruct(MaMpcListenerObject*) {}
+
+static void MpcL_OnRemoteEntityConnect(MaMpcListenerObject* o, const EntityAddressType*) {
+  ESP_LOGI("eebus_wp", "MPC: K40rf measurement unit connected");
+}
+static void MpcL_OnRemoteEntityDisconnect(MaMpcListenerObject* o, const EntityAddressType*) {
+  ESP_LOGI("eebus_wp", "MPC: K40rf measurement unit disconnected");
+}
+static void MpcL_OnMeasurementReceive(
+    MaMpcListenerObject* o,
+    MuMpcMeasurementNameId name_id,
+    const ScaledValue* val,
+    const EntityAddressType*)
+{
+  if (name_id == kMpcPowerTotal && val) {
+    float w = (float)val->value * powf(10.0f, (float)val->scale);
+    reinterpret_cast<EebusWpComponent::MpcListener*>(o)->self->on_mpc_measurement(w);
+  }
+}
+
+static const MaMpcListenerInterface kMpcListenerMethods = {
+  .destruct                  = MpcL_Destruct,
+  .on_remote_entity_connect  = MpcL_OnRemoteEntityConnect,
+  .on_remote_entity_disconnect = MpcL_OnRemoteEntityDisconnect,
+  .on_measurement_receive    = MpcL_OnMeasurementReceive,
+};
+
+/* ---- EgLp listener vtable ---- */
 
 static void EgL_Destruct(EgLpListenerObject*) {}
 
