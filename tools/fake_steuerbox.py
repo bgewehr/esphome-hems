@@ -222,7 +222,7 @@ def ship_handshake(sock, local_ship_id: str) -> str:
     pin = next((e.get("pinState") for e in entries if "pinState" in e), None)
     if pin not in ("none", "pinOk"):
         raise ValueError(f"PIN state: unexpected value {pin!r}")
-    print("      OK → kSmeStateApproved → kDataExchange (state 39) entered on HEMS")
+    print("      OK → kSmeStateApproved (state 37) → kDataExchange (state 38) entered on HEMS")
 
     # 5. Access methods — both sides send accessMethodsRequest on DataExchange entry.
     #    HEMS sends its request immediately, so the first recv after PIN gets it.
@@ -302,7 +302,7 @@ Prerequisites:
   3. Continue here — the script will connect and complete the SHIP handshake
   4. HEMS should show the SKI above as "CS Pairing ausstehend"
   5. Press "CS Pairing akzeptieren" to persist the trust (optional — SHIP
-     handshake reaches state 39 automatically without needing this)
+     handshake reaches kDataExchange (state 38) automatically without needing this)
 """)
 
     if not args.no_pause:
@@ -338,7 +338,7 @@ Prerequisites:
 
         print(f"""
 +----------------------------------------------------------+
-|  PAIRING COMPLETE -- kDataExchange (state 39) reached!  |
+|  PAIRING COMPLETE -- kDataExchange (state 38) reached!   |
 |                                                          |
 |  Our SKI  : {ski[:48]:<48} |
 |  Server ID: {server_id:<48} |
