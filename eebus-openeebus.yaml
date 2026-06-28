@@ -127,7 +127,7 @@ sensor:
 
 text_sensor:
   - platform: template
-    name: "${device_name} CS Pairing-Status"
+    name: "${device_name} CS Verbindungsstatus"
     icon: "mdi:lan-connect"
     web_server:
       sorting_group_id: sg_eebus
@@ -222,12 +222,22 @@ text_sensor:
     lambda: "return std::string(\"LPC CS, LPC EG, MPC, OHPCF\");"
 
 button:
+  # --- CS pairing controls (weights 30-33) ---
+  - platform: template
+    name: "${device_name} CS Pairing-Modus starten"
+    icon: "mdi:account-plus"
+    web_server:
+      sorting_group_id: sg_eebus
+      sorting_weight: 30
+    on_press:
+      - lambda: "id(hems_lpc).enter_pairing_mode();"
+
   - platform: template
     name: "${device_name} CS Pairing akzeptieren"
     icon: "mdi:check-circle"
     web_server:
       sorting_group_id: sg_eebus
-      sorting_weight: 30
+      sorting_weight: 31
     on_press:
       - lambda: "id(hems_lpc).accept_pairing();"
 
@@ -236,7 +246,7 @@ button:
     icon: "mdi:close-circle"
     web_server:
       sorting_group_id: sg_eebus
-      sorting_weight: 31
+      sorting_weight: 32
     on_press:
       - lambda: "id(hems_lpc).reject_pairing();"
 
@@ -246,16 +256,17 @@ button:
     entity_category: diagnostic
     web_server:
       sorting_group_id: sg_eebus
-      sorting_weight: 32
+      sorting_weight: 33
     on_press:
       - lambda: "id(hems_lpc).forget_pairing(id(hems_lpc).paired_remote_ski());"
 
+  # --- WP pairing controls (weights 40-41) ---
   - platform: template
     name: "${device_name} WP Pairing-Modus starten"
     icon: "mdi:account-plus"
     web_server:
       sorting_group_id: sg_eebus
-      sorting_weight: 37
+      sorting_weight: 40
     on_press:
       - lambda: "id(hems_wp).enter_pairing_mode();"
 
@@ -265,17 +276,18 @@ button:
     entity_category: diagnostic
     web_server:
       sorting_group_id: sg_eebus
-      sorting_weight: 38
+      sorting_weight: 41
     on_press:
       - lambda: "id(hems_wp).forget_pairing();"
 
+  # --- WP diagnostic test buttons (weights 50-53) ---
   - platform: template
     name: "${device_name} WP Failsafe testen"
     icon: "mdi:shield-check"
     entity_category: diagnostic
     web_server:
       sorting_group_id: sg_eebus
-      sorting_weight: 33
+      sorting_weight: 50
     on_press:
       - lambda: |-
           id(hems_wp).set_limit(4200.0f);
@@ -286,7 +298,7 @@ button:
     entity_category: diagnostic
     web_server:
       sorting_group_id: sg_eebus
-      sorting_weight: 34
+      sorting_weight: 51
     on_press:
       - lambda: |-
           id(hems_wp).clear_limit();
@@ -297,7 +309,7 @@ button:
     entity_category: diagnostic
     web_server:
       sorting_group_id: sg_eebus
-      sorting_weight: 35
+      sorting_weight: 52
     on_press:
       - lambda: "id(hems_wp).set_limit(4200.0f);"
 
@@ -307,6 +319,6 @@ button:
     entity_category: diagnostic
     web_server:
       sorting_group_id: sg_eebus
-      sorting_weight: 36
+      sorting_weight: 53
     on_press:
       - lambda: "id(hems_wp).clear_limit();"
