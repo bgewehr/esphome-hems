@@ -540,15 +540,17 @@ switch:
       inverted: false
 
   - platform: template
-    name: "${device_name} - Manual §14a Test"
+    name: "${device_name} - §14a Netz-Simulation (4200 W)"
     id: manual_enwg_test
-    icon: "mdi:test-tube"
+    icon: "mdi:transmission-tower-import"
     web_server:
       sorting_group_id: sg_wallbox
       sorting_weight: 10
     optimistic: true
     turn_on_action:
-      - logger.log: "Manual §14a Test: Aktiviere Leistungsbegrenzung"
+      - lambda: |-
+          ESP_LOGW("enwg", "Simulation: Netzbetreiber aktiviert Leistungsbegrenzung 4200 W");
+          id(power_limit_events).publish_state(id(power_limit_events).state + 1);
       - number.set:
           id: ct1addon
           value: 45.0
@@ -558,11 +560,15 @@ switch:
       - number.set:
           id: ct3addon
           value: 45.0
+      - light.turn_on:
+          id: status_led
+          effect: "Paragraph14a Warning Flash"
+      - switch.turn_on: relay_1
       - lambda: |-
           id(hems_wp).set_limit(4200.0f);
-      - logger.log: "Manual §14a Test: COMPLETE"
     turn_off_action:
-      - logger.log: "Manual §14a Test: Deaktiviere Leistungsbegrenzung"
+      - lambda: |-
+          ESP_LOGW("enwg", "Simulation: Netzbetreiber deaktiviert Leistungsbegrenzung");
       - number.set:
           id: ct1addon
           value: 1.0
@@ -572,9 +578,11 @@ switch:
       - number.set:
           id: ct3addon
           value: 1.0
+      - light.turn_off:
+          id: status_led
+      - switch.turn_off: relay_1
       - lambda: |-
           id(hems_wp).clear_limit();
-      - logger.log: "Manual §14a Test: Deactivation COMPLETE"
 
 # ── Digitale Eingänge (opto-isoliert, active-low) ────────────────────────────
 binary_sensor:
@@ -598,12 +606,9 @@ binary_sensor:
       - delayed_off: 100ms
     on_press:
       then:
-        - logger.log: "§14a EnWG: Netzbetreiber aktiviert Leistungsbegrenzung"
         - lambda: |-
-            static int event_count = 0;
-            event_count++;
-            id(power_limit_events).publish_state(event_count);
-            ESP_LOGI("enwg", "Power limitation event #%d triggered", event_count);
+            id(power_limit_events).publish_state(id(power_limit_events).state + 1);
+            ESP_LOGW("enwg", "§14a EnWG: Netzbetreiber aktiviert Leistungsbegrenzung (DI1)");
         - number.set:
             id: ct1addon
             value: 45.0
@@ -616,13 +621,13 @@ binary_sensor:
         - light.turn_on:
             id: status_led
             effect: "Paragraph14a Warning Flash"
-        # EEBUS LPC: Bosch Wärmepumpe auf 4.2kW begrenzen
+        - switch.turn_on: relay_1
         - lambda: |-
             id(hems_wp).set_limit(4200.0f);
-        - logger.log: "§14a EnWG: Leistungsbegrenzung aktiv (inkl. EEBUS WP-Limit 4200W)"
     on_release:
       then:
-        - logger.log: "§14a EnWG: Netzbetreiber deaktiviert Leistungsbegrenzung"
+        - lambda: |-
+            ESP_LOGW("enwg", "§14a EnWG: Netzbetreiber deaktiviert Leistungsbegrenzung (DI1)");
         - number.set:
             id: ct1addon
             value: 1.0
@@ -632,12 +637,11 @@ binary_sensor:
         - number.set:
             id: ct3addon
             value: 1.0
-        # EEBUS LPC: Wärmepumpe freigeben
         - lambda: |-
             id(hems_wp).clear_limit();
         - light.turn_off:
             id: status_led
-        - logger.log: "§14a EnWG: Normalbetrieb wiederhergestellt"
+        - switch.turn_off: relay_1
 
   - platform: gpio
     name: "Digital Input 3"
@@ -993,11 +997,10 @@ text_sensor:
       sorting_weight: 13
     update_interval: 2s
     lambda: |-
-      if (id(grid_provider_switch).state) {
-        return {"Active - Power Limited (<= 4.2kW)"};
-      } else {
-        return {"Inactive - Normal Operation"};
-      }
+      if (id(hems_lpc).is_limit_active()) return {"Active - EEBus digital (CS)"};
+      if (id(grid_provider_switch).state) return {"Active - Relay DI1"};
+      if (id(manual_enwg_test).state)     return {"Active - Simulation 4200 W"};
+      return {"Inactive - Normal Operation"};
 
 # ── Fronius Gen24 Plus 8.0: Modbus TCP Batterie-Entladesteuerung ──────────────
 # Ausgelagert in separate Datei für saubere Struktur (vermeidet YAML-Key-Duplikate)

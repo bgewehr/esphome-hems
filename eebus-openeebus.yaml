@@ -13,9 +13,7 @@ eebus_lpc:
   on_limit_active:
     - then:
         - lambda: |-
-            static int event_count = 0;
-            event_count++;
-            id(power_limit_events).publish_state(event_count);
+            id(power_limit_events).publish_state(id(power_limit_events).state + 1);
             ESP_LOGW("eebus", "EEBUS LPC limit active: %.0f W", x);
         - number.set:
             id: ct1addon
@@ -29,6 +27,7 @@ eebus_lpc:
         - light.turn_on:
             id: status_led
             effect: "Paragraph14a Warning Flash"
+        - switch.turn_on: relay_1
         - lambda: |-
             id(hems_wp).set_limit(x);
 
@@ -48,6 +47,7 @@ eebus_lpc:
             id(hems_wp).clear_limit();
         - light.turn_off:
             id: status_led
+        - switch.turn_off: relay_1
 
   on_pairing_request:
     - then:
@@ -223,8 +223,9 @@ text_sensor:
       sorting_weight: 1
     update_interval: 5s
     lambda: |-
-      if (id(hems_lpc).is_limit_active()) return std::string("EEBUS digital");
+      if (id(hems_lpc).is_limit_active()) return std::string("EEBus digital (CS)");
       if (id(grid_provider_switch).state) return std::string("Relaiskontakt DI1");
+      if (id(manual_enwg_test).state) return std::string("Simulation 4200 W");
       return std::string("Kein Eingriff aktiv");
 
   - platform: template
