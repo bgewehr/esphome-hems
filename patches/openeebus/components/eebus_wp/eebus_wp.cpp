@@ -80,22 +80,29 @@ static void SR_OnRemoteSkiDisconnected(
 static void SR_OnRemoteServicesUpdate(
     ServiceReaderObject* o, EebusServiceObject* svc, const Vector* entries)
 {
+  (void)svc;
+  /* In EEBus, both the HEMS (EG role) and K40rf (CS role) connect to each other
+   * via "auto" SHIP role.  Connection initiation happens via the startup
+   * EEBUS_SERVICE_REGISTER_REMOTE_SKI call (known SKI) or inbound from K40rf
+   * via IsWaitingForTrustAllowed (pairing).  Do NOT call REGISTER_REMOTE_SKI
+   * here — the reference openeebus/examples/hems/hems.c does nothing in this
+   * callback and triggering an outbound attempt from every mDNS update causes
+   * spurious connections in the wrong direction. */
   auto* r = reinterpret_cast<WpServiceReader*>(o);
-  if (!r->self->remote_ski_.empty()) return;  /* already targeting a specific device */
-  if (!r->self->pairing_mode_active_) return;  /* pairing mode not active */
-  if (millis() >= r->self->pairing_deadline_ms_) return;  /* window expired */
+  if (!r->self->pairing_mode_active_) return;
+  if (!r->self->remote_ski_.empty()) return;  /* already paired */
 
   size_t n = VectorGetSize(entries);
   for (size_t i = 0; i < n; i++) {
     const MdnsEntry* entry = (const MdnsEntry*)VectorGetElement(entries, i);
     const char* ski = MdnsEntryGetSki(entry);
     if (!ski || ski[0] == '\0') continue;
-    if (r->self->local_ski_ == ski) continue;  /* skip ourselves */
-    ESP_LOGW("eebus_wp", "mDNS: discovered WP ski=%s host=%s, registering",
-             ski, MdnsEntryGetHost(entry) ? MdnsEntryGetHost(entry) : "?");
-    EEBUS_SERVICE_REGISTER_REMOTE_SKI(svc, ski, true);
-    r->self->pairing_state_ = "mDNS: Verbinde " + std::string(ski);
-    break;  /* register only the first discovered candidate */
+    if (r->self->local_ski_ == ski) continue;
+    const char* host = MdnsEntryGetHost(entry) ? MdnsEntryGetHost(entry) : "?";
+    ESP_LOGI("eebus_wp", "mDNS: WP sichtbar ski=%s host=%s — warte auf eingehende Verbindung",
+             ski, host);
+    r->self->pairing_state_ = "WP sichtbar: " + std::string(ski) + " — warte auf Verbindung";
+    break;
   }
 }
 
