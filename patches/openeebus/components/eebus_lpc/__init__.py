@@ -8,22 +8,13 @@ Pairing flow:
   3. User presses "Pairing akzeptieren" button in web UI.
   4. SKI persisted to NVS — survives reboot.
   5. LPC limits received → on_limit_active trigger fires.
-
-Socket budget (per instance):
-  1 HTTPS listening socket  (port 4712)
-  2 active WebSocket/TLS connections (max_open_sockets = 2)
-  1 httpd ctrl_port socket  (internal signalling)
-  --
-  4 sockets for this component alone.
-  Together with eebus_wp (also 4) and ESPHome base (~13):
-  total ≈ 21 → sets CONFIG_LWIP_MAX_SOCKETS to 16 for LPC-only setups.
-  eebus_wp overrides to 21 when both components are present.
 """
 
 import os
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome import automation
+from esphome.components import socket
 from esphome.const import CONF_ID, CONF_TRIGGER_ID
 
 DEPENDENCIES = ["network", "esp32"]
@@ -50,24 +41,34 @@ CONF_ON_LIMIT_ACTIVE    = "on_limit_active"
 CONF_ON_LIMIT_CLEARED   = "on_limit_cleared"
 CONF_ON_PAIRING_REQUEST = "on_pairing_request"
 
-CONFIG_SCHEMA = cv.Schema({
-    cv.GenerateID(): cv.declare_id(EebusLpcComponent),
-    cv.Optional(CONF_SHIP_PORT,      default=4712):          cv.port,
-    cv.Optional(CONF_REMOTE_SKI,     default=""):            cv.string,
-    cv.Optional(CONF_DEVICE_BRAND,   default="DIY"):         cv.string_strict,
-    cv.Optional(CONF_DEVICE_TYPE,    default="HEMS"):        cv.string_strict,
-    cv.Optional(CONF_DEVICE_MODEL,   default="ESP32-HEMS-14a"): cv.string_strict,
-    cv.Optional(CONF_FAILSAFE_LIMIT, default=4200.0):        cv.positive_float,
-    cv.Optional(CONF_ON_LIMIT_ACTIVE): automation.validate_automation({
-        cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(LimitActiveTrigger),
-    }),
-    cv.Optional(CONF_ON_LIMIT_CLEARED): automation.validate_automation({
-        cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(LimitClearedTrigger),
-    }),
-    cv.Optional(CONF_ON_PAIRING_REQUEST): automation.validate_automation({
-        cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(PairingRequestTrigger),
-    }),
-}).extend(cv.COMPONENT_SCHEMA)
+def _consume_eebus_lpc_sockets(config):
+    # httpd_ssl instance: 1 HTTPS listen + 2 active WS connections + 1 ctrl_port = 4 sockets
+    socket.consume_sockets(1, "eebus_lpc", socket.SocketType.TCP_LISTEN)(config)
+    socket.consume_sockets(3, "eebus_lpc")(config)
+    return config
+
+
+CONFIG_SCHEMA = cv.All(
+    cv.Schema({
+        cv.GenerateID(): cv.declare_id(EebusLpcComponent),
+        cv.Optional(CONF_SHIP_PORT,      default=4712):          cv.port,
+        cv.Optional(CONF_REMOTE_SKI,     default=""):            cv.string,
+        cv.Optional(CONF_DEVICE_BRAND,   default="DIY"):         cv.string_strict,
+        cv.Optional(CONF_DEVICE_TYPE,    default="HEMS"):        cv.string_strict,
+        cv.Optional(CONF_DEVICE_MODEL,   default="ESP32-HEMS-14a"): cv.string_strict,
+        cv.Optional(CONF_FAILSAFE_LIMIT, default=4200.0):        cv.positive_float,
+        cv.Optional(CONF_ON_LIMIT_ACTIVE): automation.validate_automation({
+            cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(LimitActiveTrigger),
+        }),
+        cv.Optional(CONF_ON_LIMIT_CLEARED): automation.validate_automation({
+            cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(LimitClearedTrigger),
+        }),
+        cv.Optional(CONF_ON_PAIRING_REQUEST): automation.validate_automation({
+            cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(PairingRequestTrigger),
+        }),
+    }).extend(cv.COMPONENT_SCHEMA),
+    _consume_eebus_lpc_sockets,
+)
 
 
 def _generate_unity_build(component_dir, repo_root):
@@ -187,6 +188,9 @@ async def to_code(config):
     repo_root     = os.path.dirname(os.path.dirname(component_dir))
 
     # Generate per-source wrapper .c files (oe__*.c) in this directory.
+    # Each wrapper includes exactly one openeebus C source so they compile
+    # as separate translation units — avoids symbol collisions in unity builds.
+    # Runs before ESPHome copies source files to build/src/.
     _generate_unity_build(component_dir, repo_root)
 
     # Add include search paths (forward slashes — required by Xtensa GCC on Windows).
@@ -203,28 +207,26 @@ async def to_code(config):
     if idf_cjson:
         cg.add_build_flag("-I" + os.path.dirname(idf_cjson[0]).replace("\\", "/"))
 
+    # esp_websocket_client is required by the port/esp32 WebSocket client layer
+    # (used by eebus_wp for outbound SHIP connections to the K40RF gateway).
+    # In ESP-IDF 5.x it is a managed component — declare it so the IDF
+    # Component Manager downloads and includes it in the build.
     from esphome.components.esp32 import (
         add_idf_component,
         add_idf_sdkconfig_option,
         include_builtin_idf_component,
     )
-
-    # esp_websocket_client is required by the port/esp32 WebSocket client layer.
     add_idf_component(name="espressif/esp_websocket_client", ref="1.3.0")
 
-    # The WebSocket server uses ESP-IDF's HTTP server WS support.
+    # The port/esp32 WebSocket server layer uses the ESP-IDF HTTP server's
+    # built-in WebSocket support (httpd_ws_frame_t, httpd_ws_send_frame, etc.).
+    # Enable it in sdkconfig so the relevant struct fields and APIs are compiled in.
     add_idf_sdkconfig_option("CONFIG_HTTPD_WS_SUPPORT", True)
 
-    # The SHIP server uses TLS (esp_https_server).
+    # The SHIP server uses TLS (httpd_ssl_config_t, httpd_ssl_start) which lives
+    # in esp_https_server — excluded by ESPHome by default.
     include_builtin_idf_component("esp_https_server")
     add_idf_sdkconfig_option("CONFIG_ESP_HTTPS_SERVER_ENABLE", True)
-
-    # Socket budget for eebus_lpc alone:
-    #   1 HTTPS listen + 2 active WS connections + 1 ctrl_port = 4 sockets.
-    #   ESPHome base (API, OTA, web_server, MQTT, DNS) ≈ 12 sockets.
-    #   Total for LPC-only setup ≈ 16.
-    # eebus_wp will raise this to 21 when present (see eebus_wp/__init__.py).
-    add_idf_sdkconfig_option("CONFIG_LWIP_MAX_SOCKETS", 16)
 
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)

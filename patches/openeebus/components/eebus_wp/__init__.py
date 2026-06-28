@@ -14,27 +14,18 @@ Use cases supported by Bosch K40RF:
 Example YAML:
     eebus_wp:
       id: hems_wp
-      ship_port: 4713             # must differ from eebus_lpc (4712)
-      remote_ski: "aabbcc..."     # SKI of K40RF — from web UI after pairing
+      remote_ski: "aabbcc..."   # SKI of K40RF — from web UI after pairing
       on_wp_connected:
         - logger.log: "K40RF connected"
       on_wp_disconnected:
         - logger.log: "K40RF disconnected"
-
-Socket budget (per instance):
-  1 HTTPS listening socket  (port 4713)
-  2 active WebSocket/TLS connections (max_open_sockets = 2)
-  1 httpd ctrl_port socket  (internal signalling)
-  --
-  4 sockets for this component.
-  Together with eebus_lpc (also 4) and ESPHome base (~13):
-  total ≈ 21 → sets CONFIG_LWIP_MAX_SOCKETS to 21 (overrides eebus_lpc's 16).
 """
 
 import os
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome import automation
+from esphome.components import socket
 from esphome.const import CONF_ID, CONF_TRIGGER_ID
 
 DEPENDENCIES = ["network", "esp32"]
@@ -59,25 +50,35 @@ CONF_ON_WP_CONNECTED     = "on_wp_connected"
 CONF_ON_WP_DISCONNECTED  = "on_wp_disconnected"
 CONF_ON_POWER_READING    = "on_power_reading"
 
-CONFIG_SCHEMA = cv.Schema({
-    cv.GenerateID(): cv.declare_id(EebusWpComponent),
-    cv.Optional(CONF_SHIP_PORT,           default=4713):    cv.port,  # port 4713 (4712 = eebus_lpc)
-    cv.Optional(CONF_REMOTE_SKI,          default=""):      cv.string,
-    cv.Optional(CONF_DEVICE_BRAND,        default="DIY"):   cv.string_strict,
-    cv.Optional(CONF_DEVICE_TYPE,         default="HEMS"):  cv.string_strict,
-    cv.Optional(CONF_DEVICE_MODEL,        default="ESP32-HEMS-14a"): cv.string_strict,
-    cv.Optional(CONF_FAILSAFE_LIMIT_W,    default=4200.0):  cv.positive_float,
-    cv.Optional(CONF_FAILSAFE_DURATION_S, default=7200):    cv.positive_int,  # 2h default
-    cv.Optional(CONF_ON_WP_CONNECTED): automation.validate_automation({
-        cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(WpConnectedTrigger),
-    }),
-    cv.Optional(CONF_ON_WP_DISCONNECTED): automation.validate_automation({
-        cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(WpDisconnectedTrigger),
-    }),
-    cv.Optional(CONF_ON_POWER_READING): automation.validate_automation({
-        cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(WpPowerReadingTrigger),
-    }),
-}).extend(cv.COMPONENT_SCHEMA)
+def _consume_eebus_wp_sockets(config):
+    # httpd_ssl instance: 1 HTTPS listen + 2 active WS connections + 1 ctrl_port = 4 sockets
+    socket.consume_sockets(1, "eebus_wp", socket.SocketType.TCP_LISTEN)(config)
+    socket.consume_sockets(3, "eebus_wp")(config)
+    return config
+
+
+CONFIG_SCHEMA = cv.All(
+    cv.Schema({
+        cv.GenerateID(): cv.declare_id(EebusWpComponent),
+        cv.Optional(CONF_SHIP_PORT,           default=4712):    cv.port,
+        cv.Optional(CONF_REMOTE_SKI,          default=""):      cv.string,
+        cv.Optional(CONF_DEVICE_BRAND,        default="DIY"):   cv.string_strict,
+        cv.Optional(CONF_DEVICE_TYPE,         default="HEMS"):  cv.string_strict,
+        cv.Optional(CONF_DEVICE_MODEL,        default="ESP32-HEMS-14a"): cv.string_strict,
+        cv.Optional(CONF_FAILSAFE_LIMIT_W,    default=4200.0):  cv.positive_float,
+        cv.Optional(CONF_FAILSAFE_DURATION_S, default=7200):    cv.positive_int,  # 2h default
+        cv.Optional(CONF_ON_WP_CONNECTED): automation.validate_automation({
+            cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(WpConnectedTrigger),
+        }),
+        cv.Optional(CONF_ON_WP_DISCONNECTED): automation.validate_automation({
+            cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(WpDisconnectedTrigger),
+        }),
+        cv.Optional(CONF_ON_POWER_READING): automation.validate_automation({
+            cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(WpPowerReadingTrigger),
+        }),
+    }).extend(cv.COMPONENT_SCHEMA),
+    _consume_eebus_wp_sockets,
+)
 
 
 async def to_code(config):
@@ -85,28 +86,6 @@ async def to_code(config):
     openeebus_root = os.path.join(repo_root, "openeebus")
     for path in (repo_root, openeebus_root):
         cg.add_build_flag("-I" + path.replace("\\", "/"))
-
-    from esphome.components.esp32 import (
-        add_idf_component,
-        add_idf_sdkconfig_option,
-        include_builtin_idf_component,
-    )
-
-    # Same IDF dependencies as eebus_lpc — declared here so eebus_wp can be
-    # used even when eebus_lpc is processed after it or in a standalone setup.
-    add_idf_component(name="espressif/esp_websocket_client", ref="1.3.0")
-    add_idf_sdkconfig_option("CONFIG_HTTPD_WS_SUPPORT", True)
-    include_builtin_idf_component("esp_https_server")
-    add_idf_sdkconfig_option("CONFIG_ESP_HTTPS_SERVER_ENABLE", True)
-
-    # Socket budget when BOTH eebus_lpc AND eebus_wp are present:
-    #   eebus_lpc:  4 sockets (1 listen + 2 active + 1 ctrl)
-    #   eebus_wp:   4 sockets (1 listen + 2 active + 1 ctrl)
-    #   ESPHome base (API, OTA, web_server, MQTT, DNS): ~13 sockets
-    #   Total: 21.
-    # This value overrides the 16 set by eebus_lpc when both components are used.
-    add_idf_sdkconfig_option("CONFIG_LWIP_MAX_SOCKETS", 21)
-
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
 
