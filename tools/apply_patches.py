@@ -9,6 +9,7 @@ Usage:
     python tools/apply_patches.py
 """
 
+import hashlib
 import shutil
 import sys
 from pathlib import Path
@@ -24,8 +25,14 @@ PATCH_TARGETS = {
 }
 
 
+def _sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    h.update(path.read_bytes())
+    return h.hexdigest()
+
+
 def apply_patches() -> int:
-    """Copy all patch files to their target locations. Returns error count."""
+    """Copy patch files to target locations, skipping identical files. Returns error count."""
     errors = 0
 
     for patch_name, target_hash in PATCH_TARGETS.items():
@@ -49,6 +56,9 @@ def apply_patches() -> int:
             dest = target_dir / relative
 
             dest.parent.mkdir(parents=True, exist_ok=True)
+            if dest.exists() and _sha256(dest) == _sha256(patch_file):
+                print(f"  --   {relative}  (unchanged, skip)")
+                continue
             shutil.copy2(patch_file, dest)
             print(f"  OK   {relative}")
 

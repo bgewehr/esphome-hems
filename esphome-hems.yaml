@@ -41,8 +41,8 @@ esp32:
       # EEBus SHIP: Client-Zertifikat anfordern aber nicht erzwingen (VERIFY_OPTIONAL)
       # Notwendig weil EEBus self-signed Zertifikate mit SKI-basiertem Trust verwendet
       CONFIG_ESP_TLS_SERVER_MIN_AUTH_MODE_OPTIONAL: "y"
-      # EEBus SHIP benötigt extra Sockets: 2 HTTPS-Server × (2 open + 1 listen) = 6
-      CONFIG_LWIP_MAX_SOCKETS: "21"
+      # CONFIG_LWIP_MAX_SOCKETS wird von eebus_lpc (→16) und eebus_wp (→21)
+      # automatisch gesetzt — kein manueller Eintrag hier nötig.
 
 # PSRAM konfigurieren – ESP32-S3-WROOM-1U-N16R8 hat 8 MB Octal PSRAM.
 # Ohne diese Konfiguration können DMA-Puffer für den W5500-SPI-Ethernet-Chip
@@ -93,8 +93,9 @@ select:
     options:
       - "Alle"
       - "EEBus"
-      - "Fronius"
-      - "Modbus"
+      - "Modbus TCP"
+      - "Modbus RTU"
+      - "MQTT"
       - "Netzwerk"
     initial_option: "Alle"
     optimistic: true
@@ -111,37 +112,57 @@ select:
             else if (current == "DEBUG") gl = ESPHOME_LOG_LEVEL_DEBUG;
             else if (current == "VERBOSE") gl = ESPHOME_LOG_LEVEL_VERBOSE;
 
+            // Alle bekannten Tags zuerst auf ERROR zurücksetzen, damit kein
+            // vorheriger Filter-Zustand durchschlägt (level_for() prüft Tag-Map
+            // vor dem globalen Level — alte Einträge müssen explizit gelöscht werden).
+            auto suppress = [&](const char* tag) { id(app_logger).set_log_level(tag, ESPHOME_LOG_LEVEL_ERROR); };
+            suppress("eebus"); suppress("eebus_lpc"); suppress("eebus_wp");
+            suppress("eebus_http_srv"); suppress("eebus_ws_srv"); suppress("eebus_ws_cli");
+            suppress("eebus_mdns");
+            suppress("ship"); suppress("spine"); suppress("openeebus"); suppress("mdns");
+            suppress("esp-tls-mbedtls"); suppress("esp_https_server"); suppress("httpd");
+            suppress("modbustcp_controller.sensor"); suppress("modbustcp");
+            suppress("sensor"); suppress("template.sensor");
+            suppress("modbus_server");
+            suppress("mqtt");
+            suppress("ethernet"); suppress("api"); suppress("api.connection"); suppress("web_server");
+
             if (x == "Alle") {
-              // Globales Level wiederherstellen (hebt Tag-Filter auf)
+              // Globales Level setzen; alle Tags explizit mitsetzen damit die
+              // Map-Einträge nicht ältere Werte behalten.
               id(app_logger).set_log_level(gl);
+              auto enable = [&](const char* tag) { id(app_logger).set_log_level(tag, gl); };
+              enable("eebus"); enable("eebus_lpc"); enable("eebus_wp");
+              enable("eebus_http_srv"); enable("eebus_ws_srv"); enable("eebus_ws_cli");
+              enable("eebus_mdns");
+              enable("ship"); enable("spine"); enable("openeebus"); enable("mdns");
+              enable("esp-tls-mbedtls"); enable("esp_https_server"); enable("httpd");
+              enable("modbustcp_controller.sensor"); enable("modbustcp");
+              enable("sensor"); enable("template.sensor");
+              enable("modbus_server"); enable("mqtt");
+              enable("ethernet"); enable("api"); enable("api.connection"); enable("web_server");
             } else {
-              // Global auf NONE, dann nur gewählte Tags freischalten
+              // Global auf ERROR, nur gewählte Tags auf Wunschlevel setzen.
               id(app_logger).set_log_level(ESPHOME_LOG_LEVEL_ERROR);
+              // EEBus filter always shows INFO minimum so key connection events are visible.
+              int eebus_level = (gl > ESPHOME_LOG_LEVEL_INFO) ? gl : ESPHOME_LOG_LEVEL_INFO;
+              auto enable = [&](const char* tag) { id(app_logger).set_log_level(tag, gl); };
+              auto enable_eebus = [&](const char* tag) { id(app_logger).set_log_level(tag, eebus_level); };
               if (x == "EEBus") {
-                id(app_logger).set_log_level("eebus", gl);
-                id(app_logger).set_log_level("eebus_lpc", gl);
-                id(app_logger).set_log_level("eebus_wp", gl);
-                id(app_logger).set_log_level("eebus_http_srv", gl);
-                id(app_logger).set_log_level("eebus_ws_srv", gl);
-                id(app_logger).set_log_level("eebus_ws_cli", gl);
-                id(app_logger).set_log_level("ship", gl);
-                id(app_logger).set_log_level("spine", gl);
-                id(app_logger).set_log_level("openeebus", gl);
-              } else if (x == "Fronius") {
-                id(app_logger).set_log_level("modbustcp_controller.sensor", gl);
-                id(app_logger).set_log_level("sensor", gl);
-                id(app_logger).set_log_level("template.sensor", gl);
-              } else if (x == "Modbus") {
-                id(app_logger).set_log_level("modbus_server", gl);
-                id(app_logger).set_log_level("modbustcp", gl);
-                id(app_logger).set_log_level("modbustcp_controller.sensor", gl);
+                enable_eebus("eebus"); enable_eebus("eebus_lpc"); enable_eebus("eebus_wp");
+                enable_eebus("eebus_http_srv"); enable_eebus("eebus_ws_srv"); enable_eebus("eebus_ws_cli");
+                enable_eebus("eebus_mdns");
+                enable_eebus("ship"); enable_eebus("spine"); enable_eebus("openeebus"); enable_eebus("mdns");
+                enable("esp-tls-mbedtls"); enable("esp_https_server"); enable("httpd");
+              } else if (x == "Modbus TCP") {
+                enable("modbustcp_controller.sensor"); enable("modbustcp");
+                enable("sensor"); enable("template.sensor");
+              } else if (x == "Modbus RTU") {
+                enable("modbus_server");
+              } else if (x == "MQTT") {
+                enable("mqtt");
               } else if (x == "Netzwerk") {
-                id(app_logger).set_log_level("ethernet", gl);
-                id(app_logger).set_log_level("mqtt", gl);
-                id(app_logger).set_log_level("mdns", gl);
-                id(app_logger).set_log_level("api", gl);
-                id(app_logger).set_log_level("api.connection", gl);
-                id(app_logger).set_log_level("web_server", gl);
+                enable("ethernet"); enable("api"); enable("api.connection"); enable("web_server");
               }
             }
 
@@ -210,8 +231,8 @@ globals:
   # Fronius Batterie-Entladesteuerung
   - id: include_meter_ev
     type: bool
-    restore_value: true
-    initial_value: "true"
+    restore_value: False
+    initial_value: "false"
   - id: include_meter_hp
     type: bool
     restore_value: true
@@ -220,14 +241,6 @@ globals:
     type: bool
     restore_value: true
     initial_value: "true"
-  - id: battery_dirty
-    type: bool
-    restore_value: true
-    initial_value: "false"
-  - id: battery_charging
-    type: bool
-    restore_value: true
-    initial_value: "false"
   # Scale Factors (werden alle 5s vom Device gelesen, kein restore nötig)
   - id: sf_ac_power
     type: int
@@ -268,12 +281,12 @@ external_components:
       - modbus_server
       - modbustcp
   - source: github://bgewehr/openeebus-esphome@main
-    refresh: never
+    refresh: 1d
     components:
       - eebus_lpc
       - eebus_wp
   - source: github://creepystefan/esphome_modbus_tcp
-    refresh: never
+    refresh: 1d
     components:
       - modbustcp_controller
 

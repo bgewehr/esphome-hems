@@ -464,7 +464,7 @@ sensor:
       if (!id(include_meter_hp) && hp > 30) limit_needed = true;
 
       // Keine Begrenzung nötig oder Batterie lädt
-      if (!limit_needed || id(battery_charging)) {
+      if (!limit_needed || id(fronius_battery_power).state < 0) {
         return 100.0f;
       }
 
@@ -699,40 +699,3 @@ switch:
           value: "false"
     lambda: return id(include_meter_house);
 
-  - platform: template
-    name: "${device_name} Battery Dirty"
-    id: sw_battery_dirty
-    web_server:
-      sorting_group_id: sg_fronius
-      sorting_weight: 13
-    icon: "mdi:battery-alert"
-    optimistic: true
-    restore_mode: RESTORE_DEFAULT_OFF
-    turn_on_action:
-      - globals.set:
-          id: battery_dirty
-          value: "true"
-    turn_off_action:
-      - globals.set:
-          id: battery_dirty
-          value: "false"
-    lambda: return id(battery_dirty);
-
-  - platform: template
-    name: "${device_name} Battery Charging"
-    id: sw_battery_charging
-    web_server:
-      sorting_group_id: sg_fronius
-      sorting_weight: 14
-    icon: "mdi:battery-charging"
-    optimistic: true
-    restore_mode: RESTORE_DEFAULT_OFF
-    turn_on_action:
-      - globals.set:
-          id: battery_charging
-          value: "true"
-    turn_off_action:
-      - globals.set:
-          id: battery_charging
-          value: "false"
-    lambda: return id(battery_charging);

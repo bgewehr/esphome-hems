@@ -87,7 +87,7 @@ void ModbusServer::process_frame_() {
       uint16_t start = (uint16_t) rx_buf_[2] << 8 | rx_buf_[3];
       uint16_t count = (uint16_t) rx_buf_[4] << 8 | rx_buf_[5];
       if (count == 0 || count > 125) { send_exception_(fc, 0x03); return; }
-      uint8_t resp[5 + count * 2];
+      uint8_t resp[3 + count * 2];  // addr(1)+fc(1)+byte_count(1)+data — CRC appended by send_response_
       resp[0] = address_;
       resp[1] = fc;
       resp[2] = (uint8_t)(count * 2);
@@ -109,7 +109,7 @@ void ModbusServer::process_frame_() {
       uint16_t start = (uint16_t) rx_buf_[2] << 8 | rx_buf_[3];
       uint16_t count = (uint16_t) rx_buf_[4] << 8 | rx_buf_[5];
       if (count == 0 || count > 125) { send_exception_(fc, 0x03); return; }
-      uint8_t resp[5 + count * 2];
+      uint8_t resp[3 + count * 2];  // addr(1)+fc(1)+byte_count(1)+data — CRC appended by send_response_
       resp[0] = address_;
       resp[1] = fc;
       resp[2] = (uint8_t)(count * 2);
@@ -133,8 +133,8 @@ void ModbusServer::process_frame_() {
       if (hreg_write_cbs_.count(addr))
         val = hreg_write_cbs_[addr](addr, val);
       holding_regs_[addr] = val;
-      // Echo request as response
-      send_response_(rx_buf_, rx_pos_);
+      // Echo the request payload (addr+fc+reg_addr+value, strip received CRC)
+      send_response_(rx_buf_, rx_pos_ - 2);
       break;
     }
     case 0x10: {  // Write Multiple Holding Registers
@@ -171,13 +171,8 @@ void ModbusServer::process_frame_() {
 // ─── helpers ───────────────────────────────────────────────────────────────
 
 void ModbusServer::send_response_(const uint8_t *buf, size_t len) {
-  // Append CRC (if the caller hasn't, i.e. len is payload without CRC)
-  // For echoed frames (FC06) buf already has CRC – we recalc and append fresh
-  // to avoid double-CRC: strip existing CRC first.
-  // Strategy: always treat buf as payload WITHOUT crc; caller passes
-  // payload-only length. For FC06 echo we pass the full rx frame and have
-  // added 2 to len, so we DON'T call send_response_ for that case - instead
-  // we recompute:
+  // buf contains the payload WITHOUT CRC; send_response_ appends CRC.
+  // All callers must pass payload-only length (strip received CRC before calling).
   uint8_t frame[len + 2];
   memcpy(frame, buf, len);
   uint16_t crc = crc16_(frame, len);

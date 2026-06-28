@@ -251,6 +251,25 @@ button:
       - lambda: "id(hems_lpc).forget_pairing(id(hems_lpc).paired_remote_ski());"
 
   - platform: template
+    name: "${device_name} WP Pairing-Modus starten"
+    icon: "mdi:account-plus"
+    web_server:
+      sorting_group_id: sg_eebus
+      sorting_weight: 37
+    on_press:
+      - lambda: "id(hems_wp).enter_pairing_mode();"
+
+  - platform: template
+    name: "${device_name} WP Pairing zurücksetzen"
+    icon: "mdi:lock-reset"
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: sg_eebus
+      sorting_weight: 38
+    on_press:
+      - lambda: "id(hems_wp).forget_pairing();"
+
+  - platform: template
     name: "${device_name} WP Failsafe testen"
     icon: "mdi:shield-check"
     entity_category: diagnostic

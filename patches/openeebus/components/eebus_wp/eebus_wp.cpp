@@ -22,6 +22,7 @@ extern "C" {
 #include "src/service/api/eebus_service_config.h"
 #include "src/service/api/service_reader_interface.h"
 #include "src/common/eebus_device_info.h"
+#include "src/ship/api/mdns_entry.h"
 #include "src/ship/tls_certificate/tls_certificate.h"
 #include "src/spine/entity/entity_local.h"
 #include "src/spine/model/entity_types.h"
@@ -34,9 +35,10 @@ extern "C" {
 namespace esphome {
 namespace eebus_wp {
 
-static const char* NVS_NS       = "eebus_wp";
-static const char* NVS_KEY_CERT = "cert_der";
-static const char* NVS_KEY_KEY  = "key_der";
+static const char* NVS_NS        = "eebus_wp";
+static const char* NVS_KEY_CERT  = "cert_der";
+static const char* NVS_KEY_KEY   = "key_der";
+static const char* NVS_KEY_SKI   = "remote_ski";
 
 /* SPINE spec: EG sends heartbeat every kHeartbeatTimeoutSeconds.
  * WP expects a heartbeat within this window — if missed it raises a fault.
@@ -60,7 +62,7 @@ static void SR_OnRemoteSkiConnected(
     ServiceReaderObject* o, EebusServiceObject* /*svc*/, const char* ski)
 {
   auto* r = reinterpret_cast<WpServiceReader*>(o);
-  ESP_LOGI("eebus_wp", "Remote SKI connected: %s", ski);
+  ESP_LOGW("eebus_wp", "Remote SKI connected: %s", ski);
   r->self->pairing_state_ = "Verbinde WP: " + std::string(ski);
 }
 
@@ -73,7 +75,24 @@ static void SR_OnRemoteSkiDisconnected(
 }
 
 static void SR_OnRemoteServicesUpdate(
-    ServiceReaderObject*, EebusServiceObject*, const Vector*) {}
+    ServiceReaderObject* o, EebusServiceObject* svc, const Vector* entries)
+{
+  auto* r = reinterpret_cast<WpServiceReader*>(o);
+  if (!r->self->remote_ski_.empty()) return;  /* already targeting a specific device */
+
+  size_t n = VectorGetSize(entries);
+  for (size_t i = 0; i < n; i++) {
+    const MdnsEntry* entry = (const MdnsEntry*)VectorGetElement(entries, i);
+    const char* ski = MdnsEntryGetSki(entry);
+    if (!ski || ski[0] == '\0') continue;
+    if (r->self->local_ski_ == ski) continue;  /* skip ourselves */
+    ESP_LOGW("eebus_wp", "mDNS: discovered WP ski=%s host=%s, registering",
+             ski, MdnsEntryGetHost(entry) ? MdnsEntryGetHost(entry) : "?");
+    EEBUS_SERVICE_REGISTER_REMOTE_SKI(svc, ski, true);
+    r->self->pairing_state_ = "mDNS: Verbinde " + std::string(ski);
+    break;  /* register only the first discovered candidate */
+  }
+}
 
 static void SR_OnShipIdUpdate(
     ServiceReaderObject*, const char* ski, const char* ship_id)
@@ -85,16 +104,19 @@ static void SR_OnShipStateUpdate(
     ServiceReaderObject* o, const char* ski, SmeState state)
 {
   auto* r = reinterpret_cast<WpServiceReader*>(o);
-  ESP_LOGD("eebus_wp", "SHIP state ski=%s state=%d", ski, (int)state);
-  if (state == kSmeStateApproved || state == kDataExchange) {
+  ESP_LOGW("eebus_wp", "SHIP state ski=%s state=%d", ski, (int)state);
+  if (state == kDataExchange) {
     r->self->remote_ski_ = ski;
     r->self->pairing_state_ = "Gepairt: " + std::string(ski);
+    ESP_LOGW("eebus_wp", "WP pairing approved, remote SKI=%s", ski);
+    r->self->save_remote_ski_nvs_(ski);
+    r->self->on_ship_data_exchange_(ski);
   }
 }
 
-static bool SR_IsWaitingForTrustAllowed(const ServiceReaderObject* o, const char* /*ski*/) {
-  /* Auto-accept when no specific SKI configured */
-  return reinterpret_cast<const WpServiceReader*>(o)->self->remote_ski_.empty();
+static bool SR_IsWaitingForTrustAllowed(const ServiceReaderObject* o, const char* ski) {
+  if (!ski || strcmp(ski, "unknown") == 0 || strlen(ski) < 20) return false;
+  return reinterpret_cast<const WpServiceReader*>(o)->self->pairing_mode_;
 }
 
 static const ServiceReaderInterface kServiceReaderMethods = {
@@ -115,6 +137,20 @@ static const ServiceReaderInterface kServiceReaderMethods = {
 
 void EebusWpComponent::setup() {
   ESP_LOGI(TAG, "Setting up EEBus WP controller");
+
+  /* Load paired K40RF SKI from NVS if not set in YAML secrets */
+  if (remote_ski_.empty()) {
+    remote_ski_ = load_remote_ski_nvs_();
+    if (!remote_ski_.empty()) {
+      if (remote_ski_ == "unknown" || remote_ski_.length() < 20) {
+        ESP_LOGW(TAG, "Clearing invalid SKI from NVS: '%s'", remote_ski_.c_str());
+        save_remote_ski_nvs_("");
+        remote_ski_.clear();
+      } else {
+        ESP_LOGW(TAG, "Loaded paired WP SKI from NVS: %s", remote_ski_.c_str());
+      }
+    }
+  }
 
   uint8_t* cert = nullptr; size_t cl = 0;
   uint8_t* key  = nullptr; size_t kl = 0;
@@ -304,6 +340,34 @@ bool EebusWpComponent::load_cert_nvs_(
   return ok;
 }
 
+void EebusWpComponent::save_remote_ski_nvs_(const char* ski) {
+  if (!ski) return;
+  /* Allow empty string to clear NVS; reject "unknown" and suspiciously short strings */
+  if (strlen(ski) > 0 && (strcmp(ski, "unknown") == 0 || strlen(ski) < 20)) {
+    ESP_LOGW(TAG, "save_remote_ski_nvs_: ignoring invalid SKI '%s'", ski);
+    return;
+  }
+  nvs_handle_t h;
+  if (nvs_open(NVS_NS, NVS_READWRITE, &h) != ESP_OK) return;
+  nvs_set_str(h, NVS_KEY_SKI, ski);
+  nvs_commit(h);
+  nvs_close(h);
+}
+
+std::string EebusWpComponent::load_remote_ski_nvs_() {
+  nvs_handle_t h;
+  if (nvs_open(NVS_NS, NVS_READONLY, &h) != ESP_OK) return {};
+  size_t len = 0;
+  std::string result;
+  if (nvs_get_str(h, NVS_KEY_SKI, nullptr, &len) == ESP_OK && len > 1) {
+    result.resize(len);
+    nvs_get_str(h, NVS_KEY_SKI, &result[0], &len);
+    result.resize(len - 1);  /* strip NUL terminator included in len */
+  }
+  nvs_close(h);
+  return result;
+}
+
 bool EebusWpComponent::load_or_generate_cert_() {
   mbedtls_pk_context       pk;
   mbedtls_x509write_cert   crt;
@@ -402,6 +466,12 @@ bool EebusWpComponent::start_eebus_service_(
 
   if (!remote_ski_.empty()) {
     EEBUS_SERVICE_REGISTER_REMOTE_SKI(service_, remote_ski_.c_str(), true);
+    pairing_mode_ = false;
+    ESP_LOGI(TAG, "Registered remote WP SKI: %s", remote_ski_.c_str());
+  } else {
+    pairing_mode_ = true;
+    EEBUS_SERVICE_SET_PAIRING_POSSIBLE(service_, true);
+    ESP_LOGI(TAG, "WP pairing mode active — will accept first connecting device");
   }
 
   /* Get local SPINE device */
@@ -438,6 +508,37 @@ bool EebusWpComponent::start_eebus_service_(
   pairing_state_ = "Suche WP via mDNS...";
   ESP_LOGI(TAG, "EEBus WP service started");
   return true;
+}
+
+/* =========================================================================
+ * Pairing management
+ * ====================================================================== */
+
+void EebusWpComponent::on_ship_data_exchange_(const char* ski) {
+  ESP_LOGW(TAG, "WP data exchange active — SKI persisted: %s", ski);
+  if (pairing_mode_) {
+    pairing_mode_ = false;
+    EEBUS_SERVICE_SET_PAIRING_POSSIBLE(service_, false);
+    ESP_LOGI(TAG, "Pairing mode exited after successful connection");
+  }
+}
+
+void EebusWpComponent::enter_pairing_mode() {
+  ESP_LOGW(TAG, "Pairing mode activated");
+  pairing_mode_ = true;
+  if (service_) {
+    if (!remote_ski_.empty())
+      EEBUS_SERVICE_UNREGISTER_REMOTE_SKI(service_, remote_ski_.c_str());
+    EEBUS_SERVICE_SET_PAIRING_POSSIBLE(service_, true);
+  }
+  pairing_state_ = "Pairing-Modus aktiv — warte auf Verbindung...";
+}
+
+void EebusWpComponent::forget_pairing() {
+  ESP_LOGW(TAG, "Pairing forgotten");
+  save_remote_ski_nvs_("");
+  remote_ski_.clear();
+  enter_pairing_mode();
 }
 
 }  // namespace eebus_wp
