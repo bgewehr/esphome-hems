@@ -131,10 +131,10 @@ void Tick(HeartbeatManagerObject* self) {
   if (hm->tick_cnt == 0) {
     hm->heartbeat_num++;
     UpdateHeartbeatData(hm);
-    /* Send at half the advertised timeout interval so the remote LP's deadline
-     * is never at risk of a race with our tick. The published heartbeat_timeout
-     * stays at the full value (what K40rf uses as its deadline window); we just
-     * refresh more frequently than strictly necessary. */
+    /* Send at half the advertised timeout so the remote CS's deadline window is
+     * never at risk of a boundary race with our tick counter. The published
+     * heartbeat_timeout stays at the full value (the window the CS enforces);
+     * we just refresh at twice the required rate. */
     hm->tick_cnt = (hm->heartbeat_timeout > 1u) ? (hm->heartbeat_timeout / 2u) : hm->heartbeat_timeout;
   }
 }
@@ -154,17 +154,15 @@ EebusError Start(HeartbeatManagerObject* self) {
 
   hm->running = true;
 
-  /* Immediately publish a fresh heartbeat so remote entities that subscribe
-   * right after Start() see a current timestamp rather than the stale one
-   * from before the last Stop(). Without this, a remote LP that subscribes
-   * after a reconnect would see an old timestamp and conclude the EG
-   * heartbeat is overdue, causing it to immediately disconnect. */
+  /* Immediately publish a fresh heartbeat so a remote CS that subscribes
+   * right after Start() sees a current timestamp. Without this initial
+   * publish the remote CS receives whatever timestamp was last written
+   * (possibly very old) and may immediately consider the heartbeat overdue. */
   if (hm->local_feature != NULL) {
     hm->heartbeat_num++;
     UpdateHeartbeatData(hm);
-    /* Use half the timeout so the next periodic heartbeat fires at timeout/2
-     * seconds — well before the remote LP's 1×-timeout deadline.
-     * Prevents the race where K40rf's timer and our tick both expire at T=timeout. */
+    /* Use half the timeout so the next periodic heartbeat fires well before
+     * the remote CS's 1×-timeout deadline, avoiding a boundary race. */
     hm->tick_cnt = (hm->heartbeat_timeout > 1u) ? (hm->heartbeat_timeout / 2u) : hm->heartbeat_timeout;
   }
 
