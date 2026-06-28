@@ -23,6 +23,12 @@ esphome:
   project:
     name: "ESPHome.HEMS"
     version: "2"
+  on_boot:
+    priority: -100
+    then:
+      - text_sensor.template.publish:
+          id: build_time_sensor
+          state: !lambda 'return std::string(__DATE__) + "  " + std::string(__TIME__);'
 
 esp32:
   board: esp32s3box
@@ -970,13 +976,13 @@ text_sensor:
 
   - platform: template
     name: "${device_name} Build-Zeit"
+    id: build_time_sensor
     icon: "mdi:calendar-clock"
     entity_category: diagnostic
     web_server:
       sorting_group_id: sg_system
       sorting_weight: 4
     update_interval: never
-    lambda: 'return std::string(__DATE__) + "  " + std::string(__TIME__);'
 
   - platform: template
     name: "${device_name} - §14a Status"

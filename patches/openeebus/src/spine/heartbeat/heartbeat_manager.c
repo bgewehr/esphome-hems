@@ -131,8 +131,11 @@ void Tick(HeartbeatManagerObject* self) {
   if (hm->tick_cnt == 0) {
     hm->heartbeat_num++;
     UpdateHeartbeatData(hm);
-    // On timeout, reset the heartbeat counter
-    hm->tick_cnt = hm->heartbeat_timeout;
+    /* Send at half the advertised timeout interval so the remote LP's deadline
+     * is never at risk of a race with our tick. The published heartbeat_timeout
+     * stays at the full value (what K40rf uses as its deadline window); we just
+     * refresh more frequently than strictly necessary. */
+    hm->tick_cnt = (hm->heartbeat_timeout > 1u) ? (hm->heartbeat_timeout / 2u) : hm->heartbeat_timeout;
   }
 }
 
