@@ -208,22 +208,22 @@ web_server:
       name: "Fronius"
       sorting_weight: 1
     - id: sg_wallbox
-      name: "Wallbox"
+      name: "Xemex CSMB"
       sorting_weight: 2
+    - id: sg_netz
+      name: "Netzdienliche Steuerung"
+      sorting_weight: 3
     - id: sg_wasser
       name: "Wasser"
-      sorting_weight: 3
+      sorting_weight: 4
     - id: sg_dido
       name: "DI/DO"
-      sorting_weight: 4
+      sorting_weight: 5
     - id: sg_eebus_cs
       name: "EEBus CS (Steuerbox)"
-      sorting_weight: 5
+      sorting_weight: 6
     - id: sg_eebus_wp
       name: "EEBus WP (Wärmepumpe)"
-      sorting_weight: 6
-    - id: sg_eebus_misc
-      name: "EEBus"
       sorting_weight: 7
     - id: sg_system
       name: "System"
@@ -237,6 +237,7 @@ mqtt:
 
 time:
   - platform: homeassistant
+    id: ha_time
 
 # Externes Modbus-Server-Komponent (Xemex CSMB Simulation)
 # Persistente Variablen (überleben Neustart, konfigurierbar aus HA)
@@ -245,6 +246,10 @@ globals:
     type: float
     restore_value: true
     initial_value: "${water_liters_per_pulse_default}"
+  - id: water_total_m3
+    type: float
+    restore_value: true
+    initial_value: "0.0"
   # Fronius Batterie-Entladesteuerung
   - id: include_meter_ev
     type: bool
@@ -428,11 +433,11 @@ modbus_server:
 # ── 8 Relais-Ausgänge (über TCA9554) ────────────────────────────────────────
 switch:
   - platform: gpio
-    name: "Relay 1"
+    name: "Fronius §14a Leistungslimit"
     id: relay_1
-    icon: mdi:electric-switch
+    icon: mdi:transmission-tower-off
     web_server:
-      sorting_group_id: sg_dido
+      sorting_group_id: sg_fronius
       sorting_weight: 1
     pin:
       pca9554: relay_expander
@@ -540,17 +545,20 @@ switch:
       inverted: false
 
   - platform: template
-    name: "${device_name} - §14a Netz-Simulation (4200 W)"
+    name: "${device_name} - §14a-Simulation (4200 W)"
     id: manual_enwg_test
     icon: "mdi:transmission-tower-import"
     web_server:
-      sorting_group_id: sg_wallbox
-      sorting_weight: 10
+      sorting_group_id: sg_netz
+      sorting_weight: 2
     optimistic: true
     turn_on_action:
       - lambda: |-
           ESP_LOGW("enwg", "Simulation: Netzbetreiber aktiviert Leistungsbegrenzung 4200 W");
           id(power_limit_events).publish_state(id(power_limit_events).state + 1);
+      - text_sensor.template.publish:
+          id: last_enwg_event
+          state: !lambda 'return std::string("Aktiviert (Sim): ") + id(ha_time).now().strftime("%d.%m.%Y %H:%M:%S");'
       - number.set:
           id: ct1addon
           value: 45.0
@@ -569,6 +577,9 @@ switch:
     turn_off_action:
       - lambda: |-
           ESP_LOGW("enwg", "Simulation: Netzbetreiber deaktiviert Leistungsbegrenzung");
+      - text_sensor.template.publish:
+          id: last_enwg_event
+          state: !lambda 'return std::string("Beendet (Sim): ") + id(ha_time).now().strftime("%d.%m.%Y %H:%M:%S");'
       - number.set:
           id: ct1addon
           value: 1.0
@@ -593,8 +604,8 @@ binary_sensor:
     device_class: power
     icon: mdi:transmission-tower
     web_server:
-      sorting_group_id: sg_wallbox
-      sorting_weight: 11
+      sorting_group_id: sg_netz
+      sorting_weight: 1
     pin:
       number: GPIO4
       mode:
@@ -609,6 +620,9 @@ binary_sensor:
         - lambda: |-
             id(power_limit_events).publish_state(id(power_limit_events).state + 1);
             ESP_LOGW("enwg", "§14a EnWG: Netzbetreiber aktiviert Leistungsbegrenzung (DI1)");
+        - text_sensor.template.publish:
+            id: last_enwg_event
+            state: !lambda 'return std::string("Aktiviert (DI1): ") + id(ha_time).now().strftime("%d.%m.%Y %H:%M:%S");'
         - number.set:
             id: ct1addon
             value: 45.0
@@ -628,6 +642,9 @@ binary_sensor:
       then:
         - lambda: |-
             ESP_LOGW("enwg", "§14a EnWG: Netzbetreiber deaktiviert Leistungsbegrenzung (DI1)");
+        - text_sensor.template.publish:
+            id: last_enwg_event
+            state: !lambda 'return std::string("Beendet (DI1): ") + id(ha_time).now().strftime("%d.%m.%Y %H:%M:%S");'
         - number.set:
             id: ct1addon
             value: 1.0
@@ -940,19 +957,24 @@ sensor:
       inverted: true              # S0 active-low
     filters:
       - lambda: return x * id(water_liter_per_pulse);  # Impulse → L/min
-    total:
-      name: "Water Total"
-      id: water_total
-      icon: mdi:water
-      web_server:
-        sorting_group_id: sg_wasser
-        sorting_weight: 2
-      unit_of_measurement: "m³"
-      device_class: water
-      state_class: total_increasing
-      accuracy_decimals: 3
-      filters:
-        - lambda: return x * id(water_liter_per_pulse) * 0.001;  # Impulse → m³
+    on_raw_value:
+      - globals.set:
+          id: water_total_m3
+          value: !lambda "return id(water_total_m3) + id(water_liter_per_pulse) * 0.001f;"
+
+  - platform: template
+    name: "Water Total"
+    id: water_total
+    icon: mdi:water
+    web_server:
+      sorting_group_id: sg_wasser
+      sorting_weight: 2
+    unit_of_measurement: "m³"
+    device_class: water
+    state_class: total_increasing
+    accuracy_decimals: 3
+    update_interval: 10s
+    lambda: "return id(water_total_m3);"
 
   # ── CT-Ströme + Power-Events ──────────────────────────────────────────────
   - platform: template
@@ -960,8 +982,8 @@ sensor:
     id: power_limit_events
     icon: "mdi:counter"
     web_server:
-      sorting_group_id: sg_wallbox
-      sorting_weight: 12
+      sorting_group_id: sg_netz
+      sorting_weight: 5
     unit_of_measurement: "events"
     state_class: "total_increasing"
     accuracy_decimals: 0
@@ -989,12 +1011,21 @@ text_sensor:
     update_interval: never
 
   - platform: template
+    name: "${device_name} - Letztes §14a-Ereignis"
+    id: last_enwg_event
+    icon: "mdi:clock-alert"
+    web_server:
+      sorting_group_id: sg_netz
+      sorting_weight: 6
+    update_interval: never
+
+  - platform: template
     name: "${device_name} - §14a Status"
     id: enwg_status
     icon: "mdi:transmission-tower"
     web_server:
-      sorting_group_id: sg_wallbox
-      sorting_weight: 13
+      sorting_group_id: sg_netz
+      sorting_weight: 3
     update_interval: 2s
     lambda: |-
       if (id(hems_lpc).is_limit_active()) return {"Active - EEBus digital (CS)"};

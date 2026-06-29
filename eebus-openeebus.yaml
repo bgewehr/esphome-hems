@@ -15,6 +15,9 @@ eebus_lpc:
         - lambda: |-
             id(power_limit_events).publish_state(id(power_limit_events).state + 1);
             ESP_LOGW("eebus", "EEBUS LPC limit active: %.0f W", x);
+        - text_sensor.template.publish:
+            id: last_enwg_event
+            state: !lambda 'return std::string("Aktiviert (EEBus): ") + id(ha_time).now().strftime("%d.%m.%Y %H:%M:%S");'
         - number.set:
             id: ct1addon
             value: 45.0
@@ -34,6 +37,9 @@ eebus_lpc:
   on_limit_cleared:
     - then:
         - logger.log: "EEBUS LPC limit cleared"
+        - text_sensor.template.publish:
+            id: last_enwg_event
+            state: !lambda 'return std::string("Beendet (EEBus): ") + id(ha_time).now().strftime("%d.%m.%Y %H:%M:%S");'
         - number.set:
             id: ct1addon
             value: 1.0
@@ -77,7 +83,7 @@ eebus_wp:
 sensor:
   # --- CS (sg_eebus_cs, weights 1-2) ---
   - platform: template
-    name: "${device_name} CS VNB Leistungslimit"
+    name: "${device_name} CS §14a Leistungslimit"
     id: eebus_vnb_power_limit
     icon: "mdi:transmission-tower"
     web_server:
@@ -99,33 +105,33 @@ sensor:
     accuracy_decimals: 0
     update_interval: 5s
     lambda: |-
-      if (!id(hems_lpc).is_limit_active()) return 99999.0f;
+      if (!id(hems_lpc).is_limit_active()) return NAN;
       return id(hems_lpc).current_limit_w() - id(hems_wp).current_power_w();
 
   # --- WP (sg_eebus_wp, weights 1-2) ---
   - platform: template
-    name: "${device_name} WP Ist-Leistung"
-    id: eebus_wp_power
-    icon: "mdi:heat-pump"
+    name: "${device_name} WP §14a Leistungslimit"
+    id: eebus_wp_active_limit
+    icon: "mdi:speedometer"
     web_server:
       sorting_group_id: sg_eebus_wp
       sorting_weight: 1
     unit_of_measurement: "W"
     accuracy_decimals: 0
     update_interval: 5s
-    lambda: "return id(hems_wp).current_power_w();"
+    lambda: "return id(hems_wp).active_limit_w();"
 
   - platform: template
-    name: "${device_name} WP Aktives Limit"
-    id: eebus_wp_active_limit
-    icon: "mdi:speedometer"
+    name: "${device_name} WP MPC Power"
+    id: eebus_wp_power
+    icon: "mdi:heat-pump"
     web_server:
       sorting_group_id: sg_eebus_wp
       sorting_weight: 2
     unit_of_measurement: "W"
     accuracy_decimals: 0
     update_interval: 5s
-    lambda: "return id(hems_wp).active_limit_w();"
+    lambda: "return id(hems_wp).current_power_w();"
 
 text_sensor:
   # --- CS (sg_eebus_cs, weights 3-6) ---
@@ -214,13 +220,13 @@ text_sensor:
     update_interval: 60s
     lambda: "return id(hems_wp).local_ski();"
 
-  # --- Allgemein (sg_eebus_misc, weights 1-2) ---
+  # --- §14a Steuerungskanal (sg_netz) ---
   - platform: template
     name: "${device_name} §14a Steuerungskanal"
     icon: "mdi:transmission-tower"
     web_server:
-      sorting_group_id: sg_eebus_misc
-      sorting_weight: 1
+      sorting_group_id: sg_netz
+      sorting_weight: 4
     update_interval: 5s
     lambda: |-
       if (id(hems_lpc).is_limit_active()) return std::string("EEBus digital (CS)");
@@ -228,15 +234,27 @@ text_sensor:
       if (id(manual_enwg_test).state) return std::string("Simulation 4200 W");
       return std::string("Kein Eingriff aktiv");
 
+  # --- CS Use Cases (sg_eebus_cs) ---
   - platform: template
-    name: "${device_name} OpenEEBUS Use Cases"
+    name: "${device_name} CS Use Cases"
     icon: "mdi:format-list-checks"
     web_server:
-      sorting_group_id: sg_eebus_misc
-      sorting_weight: 2
+      sorting_group_id: sg_eebus_cs
+      sorting_weight: 7
     entity_category: diagnostic
     update_interval: never
-    lambda: "return std::string(\"LPC CS, LPC EG, MPC, OHPCF\");"
+    lambda: "return std::string(\"LPC (§14a Leistungsbegrenzung, digital)\");"
+
+  # --- WP Use Cases (sg_eebus_wp) ---
+  - platform: template
+    name: "${device_name} WP Use Cases"
+    icon: "mdi:format-list-checks"
+    web_server:
+      sorting_group_id: sg_eebus_wp
+      sorting_weight: 7
+    entity_category: diagnostic
+    update_interval: never
+    lambda: "return std::string(\"LPC EG (Leistungsbegrenzung), MPC (Messung)\");"
 
 button:
   # --- CS Pairing (sg_eebus_cs, weights 10-13) ---

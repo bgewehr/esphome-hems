@@ -55,7 +55,7 @@ sensor:
     id: fronius_ac_power
     web_server:
       sorting_group_id: sg_fronius
-      sorting_weight: 1
+      sorting_weight: 2
     register_type: holding
     address: 40083
     value_type: S_WORD
@@ -108,7 +108,7 @@ sensor:
     id: fronius_solar_power
     web_server:
       sorting_group_id: sg_fronius
-      sorting_weight: 2
+      sorting_weight: 3
     unit_of_measurement: "W"
     device_class: power
     state_class: measurement
@@ -137,7 +137,7 @@ sensor:
     id: fronius_grid_power
     web_server:
       sorting_group_id: sg_fronius
-      sorting_weight: 3
+      sorting_weight: 4
     register_type: holding
     address: 40087
     value_type: S_WORD
@@ -205,8 +205,8 @@ sensor:
     name: "${device_name} Fronius Grid Current A"
     id: fronius_grid_current_a
     web_server:
-      sorting_group_id: sg_wallbox
-      sorting_weight: 7
+      sorting_group_id: sg_fronius
+      sorting_weight: 5
     register_type: holding
     address: 40072
     value_type: S_WORD
@@ -231,8 +231,8 @@ sensor:
     name: "${device_name} Fronius Grid Current B"
     id: fronius_grid_current_b
     web_server:
-      sorting_group_id: sg_wallbox
-      sorting_weight: 8
+      sorting_group_id: sg_fronius
+      sorting_weight: 6
     register_type: holding
     address: 40073
     value_type: S_WORD
@@ -257,8 +257,8 @@ sensor:
     name: "${device_name} Fronius Grid Current C"
     id: fronius_grid_current_c
     web_server:
-      sorting_group_id: sg_wallbox
-      sorting_weight: 9
+      sorting_group_id: sg_fronius
+      sorting_weight: 7
     register_type: holding
     address: 40074
     value_type: S_WORD
@@ -298,7 +298,7 @@ sensor:
     id: fronius_ev_power
     web_server:
       sorting_group_id: sg_fronius
-      sorting_weight: 4
+      sorting_weight: 8
     register_type: holding
     address: 40087
     value_type: S_WORD
@@ -330,7 +330,7 @@ sensor:
     id: fronius_hp_power
     web_server:
       sorting_group_id: sg_fronius
-      sorting_weight: 5
+      sorting_weight: 9
     register_type: holding
     address: 40087
     value_type: S_WORD
@@ -363,7 +363,7 @@ sensor:
     id: fronius_house_power
     web_server:
       sorting_group_id: sg_fronius
-      sorting_weight: 6
+      sorting_weight: 10
     unit_of_measurement: "W"
     device_class: power
     state_class: measurement
@@ -389,7 +389,7 @@ sensor:
     id: fronius_power_sum
     web_server:
       sorting_group_id: sg_fronius
-      sorting_weight: 7
+      sorting_weight: 11
     unit_of_measurement: "W"
     device_class: power
     state_class: measurement
@@ -413,7 +413,7 @@ sensor:
     id: fronius_ohmpilot_power
     web_server:
       sorting_group_id: sg_fronius
-      sorting_weight: 9
+      sorting_weight: 15
     unit_of_measurement: "W"
     device_class: power
     state_class: measurement
@@ -425,7 +425,7 @@ sensor:
     id: fronius_ohmpilot_temp
     web_server:
       sorting_group_id: sg_fronius
-      sorting_weight: 9
+      sorting_weight: 16
     unit_of_measurement: "°C"
     device_class: temperature
     state_class: measurement
@@ -442,7 +442,7 @@ sensor:
     id: fronius_discharge_limit
     web_server:
       sorting_group_id: sg_fronius
-      sorting_weight: 8
+      sorting_weight: 13
     unit_of_measurement: "%"
     icon: "mdi:battery-arrow-down"
     accuracy_decimals: 1
@@ -514,7 +514,7 @@ sensor:
     id: fronius_battery_power
     web_server:
       sorting_group_id: sg_fronius
-      sorting_weight: 8
+      sorting_weight: 12
     unit_of_measurement: "W"
     device_class: power
     state_class: measurement
@@ -543,7 +543,7 @@ sensor:
     id: fronius_battery_soc
     web_server:
       sorting_group_id: sg_fronius
-      sorting_weight: 9
+      sorting_weight: 14
     register_type: holding
     address: 40351
     value_type: U_WORD
@@ -647,7 +647,7 @@ switch:
     id: sw_include_ev
     web_server:
       sorting_group_id: sg_fronius
-      sorting_weight: 10
+      sorting_weight: 17
     icon: "mdi:ev-station"
     optimistic: true
     restore_mode: RESTORE_DEFAULT_ON
@@ -666,7 +666,7 @@ switch:
     id: sw_include_hp
     web_server:
       sorting_group_id: sg_fronius
-      sorting_weight: 11
+      sorting_weight: 18
     icon: "mdi:heat-pump"
     optimistic: true
     restore_mode: RESTORE_DEFAULT_ON
@@ -685,7 +685,7 @@ switch:
     id: sw_include_house
     web_server:
       sorting_group_id: sg_fronius
-      sorting_weight: 12
+      sorting_weight: 19
     icon: "mdi:home-lightning-bolt"
     optimistic: true
     restore_mode: RESTORE_DEFAULT_ON
