@@ -53,6 +53,7 @@ sensor:
     modbustcp_controller_id: fronius_inverter
     name: "${device_name} Fronius AC Power"
     id: fronius_ac_power
+    icon: "mdi:solar-power-variant"
     web_server:
       sorting_group_id: sg_fronius
       sorting_weight: 2
@@ -106,6 +107,7 @@ sensor:
   - platform: template
     name: "${device_name} Fronius Solar Power"
     id: fronius_solar_power
+    icon: "mdi:solar-panel"
     web_server:
       sorting_group_id: sg_fronius
       sorting_weight: 3
@@ -135,6 +137,7 @@ sensor:
     modbustcp_controller_id: fronius_meter_grid
     name: "${device_name} Fronius Grid Power"
     id: fronius_grid_power
+    icon: "mdi:transmission-tower"
     web_server:
       sorting_group_id: sg_fronius
       sorting_weight: 4
@@ -204,6 +207,7 @@ sensor:
     modbustcp_controller_id: fronius_meter_grid
     name: "${device_name} Fronius Grid Current A"
     id: fronius_grid_current_a
+    icon: "mdi:current-ac"
     web_server:
       sorting_group_id: sg_fronius
       sorting_weight: 5
@@ -220,16 +224,12 @@ sensor:
           float power = id(fronius_grid_power_a).state;
           if (!std::isnan(power) && power < 0) current = -current;
           return current;
-    on_value:
-      then:
-        - number.set:
-            id: ct1current
-            value: !lambda "return std::max(0.0f, x) + id(ct1addon).state;"
 
   - platform: modbustcp_controller
     modbustcp_controller_id: fronius_meter_grid
     name: "${device_name} Fronius Grid Current B"
     id: fronius_grid_current_b
+    icon: "mdi:current-ac"
     web_server:
       sorting_group_id: sg_fronius
       sorting_weight: 6
@@ -246,16 +246,12 @@ sensor:
           float power = id(fronius_grid_power_b).state;
           if (!std::isnan(power) && power < 0) current = -current;
           return current;
-    on_value:
-      then:
-        - number.set:
-            id: ct2current
-            value: !lambda "return std::max(0.0f, x) + id(ct2addon).state;"
 
   - platform: modbustcp_controller
     modbustcp_controller_id: fronius_meter_grid
     name: "${device_name} Fronius Grid Current C"
     id: fronius_grid_current_c
+    icon: "mdi:current-ac"
     web_server:
       sorting_group_id: sg_fronius
       sorting_weight: 7
@@ -272,11 +268,6 @@ sensor:
           float power = id(fronius_grid_power_c).state;
           if (!std::isnan(power) && power < 0) current = -current;
           return current;
-    on_value:
-      then:
-        - number.set:
-            id: ct3current
-            value: !lambda "return std::max(0.0f, x) + id(ct3addon).state;"
 
   - platform: modbustcp_controller
     modbustcp_controller_id: fronius_meter_grid
@@ -296,6 +287,7 @@ sensor:
     modbustcp_controller_id: fronius_meter_ev
     name: "${device_name} Fronius EV Power"
     id: fronius_ev_power
+    icon: "mdi:ev-station"
     web_server:
       sorting_group_id: sg_fronius
       sorting_weight: 8
@@ -322,12 +314,105 @@ sensor:
       then:
         - lambda: 'if ((int)x >= -4 && (int)x <= 4) id(sf_ev_power) = (int)x;'
 
+  # ── Smart Meter EV/Wallbox: Phasenströme (SunSpec Model 201, Unit 241) ───────
+  # SF zuerst lesen (40075), damit sf_ev_current bekannt ist bevor die
+  # Stromregister (40072-40074) verarbeitet werden. Initial-Sentinel 100
+  # → Filter gibt NAN zurück bis SF korrekt gelesen wurde.
+  # EV-Meter liefert SF=-5, daher SunSpec-Range -10..10 statt -4..4.
+  - platform: modbustcp_controller
+    modbustcp_controller_id: fronius_meter_ev
+    name: "${device_name} Fronius EV Current SF"
+    id: fronius_ev_current_sf
+    register_type: holding
+    address: 40075
+    value_type: S_WORD
+    internal: true
+    on_value:
+      then:
+        - lambda: 'if ((int)x >= -10 && (int)x <= 10) id(sf_ev_current) = (int)x;'
+
+  - platform: modbustcp_controller
+    modbustcp_controller_id: fronius_meter_ev
+    name: "${device_name} Fronius EV Current A"
+    id: fronius_ev_current_a
+    icon: "mdi:current-ac"
+    web_server:
+      sorting_group_id: sg_wallbox
+      sorting_weight: 7
+    register_type: holding
+    address: 40072
+    value_type: S_WORD
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 1
+    filters:
+      - lambda: |-
+          if (id(sf_ev_current) > 10 || id(sf_ev_current) < -10) return NAN;
+          return std::abs(x * pow(10, id(sf_ev_current)));
+    on_value:
+      then:
+        - number.set:
+            id: ct1current
+            value: !lambda "return std::max(0.0f, x) + id(ct1addon).state;"
+
+  - platform: modbustcp_controller
+    modbustcp_controller_id: fronius_meter_ev
+    name: "${device_name} Fronius EV Current B"
+    id: fronius_ev_current_b
+    icon: "mdi:current-ac"
+    web_server:
+      sorting_group_id: sg_wallbox
+      sorting_weight: 8
+    register_type: holding
+    address: 40073
+    value_type: S_WORD
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 1
+    filters:
+      - lambda: |-
+          if (id(sf_ev_current) > 10 || id(sf_ev_current) < -10) return NAN;
+          return std::abs(x * pow(10, id(sf_ev_current)));
+    on_value:
+      then:
+        - number.set:
+            id: ct2current
+            value: !lambda "return std::max(0.0f, x) + id(ct2addon).state;"
+
+  - platform: modbustcp_controller
+    modbustcp_controller_id: fronius_meter_ev
+    name: "${device_name} Fronius EV Current C"
+    id: fronius_ev_current_c
+    icon: "mdi:current-ac"
+    web_server:
+      sorting_group_id: sg_wallbox
+      sorting_weight: 9
+    register_type: holding
+    address: 40074
+    value_type: S_WORD
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 1
+    filters:
+      - lambda: |-
+          if (id(sf_ev_current) > 10 || id(sf_ev_current) < -10) return NAN;
+          return std::abs(x * pow(10, id(sf_ev_current)));
+    on_value:
+      then:
+        - number.set:
+            id: ct3current
+            value: !lambda "return std::max(0.0f, x) + id(ct3addon).state;"
+
   # ── Smart Meter Wärmepumpe (Unit 242): Leistung ─────────────────────────────
   # Gleiche Register wie Grid Meter, aber andere Unit-ID
   - platform: modbustcp_controller
     modbustcp_controller_id: fronius_meter_hp
     name: "${device_name} Fronius HP Power"
     id: fronius_hp_power
+    icon: "mdi:heat-pump"
     web_server:
       sorting_group_id: sg_fronius
       sorting_weight: 9
@@ -361,6 +446,7 @@ sensor:
   - platform: template
     name: "${device_name} Fronius House Power"
     id: fronius_house_power
+    icon: "mdi:home-lightning-bolt"
     web_server:
       sorting_group_id: sg_fronius
       sorting_weight: 10
@@ -387,6 +473,7 @@ sensor:
   - platform: template
     name: "${device_name} Fronius Switchable Power"
     id: fronius_power_sum
+    icon: "mdi:power-plug"
     web_server:
       sorting_group_id: sg_fronius
       sorting_weight: 11
@@ -411,6 +498,7 @@ sensor:
   - platform: template
     name: "${device_name} Fronius Ohmpilot Power"
     id: fronius_ohmpilot_power
+    icon: "mdi:resistor"
     web_server:
       sorting_group_id: sg_fronius
       sorting_weight: 15
@@ -423,6 +511,7 @@ sensor:
   - platform: template
     name: "${device_name} Fronius Ohmpilot Temperature"
     id: fronius_ohmpilot_temp
+    icon: "mdi:thermometer"
     web_server:
       sorting_group_id: sg_fronius
       sorting_weight: 16
@@ -512,6 +601,7 @@ sensor:
   - platform: template
     name: "${device_name} Fronius Battery Power"
     id: fronius_battery_power
+    icon: "mdi:battery-charging"
     web_server:
       sorting_group_id: sg_fronius
       sorting_weight: 12
@@ -541,6 +631,7 @@ sensor:
     modbustcp_controller_id: fronius_inverter
     name: "${device_name} Fronius Battery SOC"
     id: fronius_battery_soc
+    icon: "mdi:battery"
     web_server:
       sorting_group_id: sg_fronius
       sorting_weight: 14
@@ -643,7 +734,7 @@ interval:
 # ── Schalter für Fronius Steuerung ────────────────────────────────────────────
 switch:
   - platform: template
-    name: "${device_name} Include EV Meter"
+    name: "${device_name} Charge EV from Battery"
     id: sw_include_ev
     web_server:
       sorting_group_id: sg_fronius
@@ -662,7 +753,7 @@ switch:
     lambda: return id(include_meter_ev);
 
   - platform: template
-    name: "${device_name} Include HP Meter"
+    name: "${device_name} Operate HP from Battery"
     id: sw_include_hp
     web_server:
       sorting_group_id: sg_fronius
@@ -681,7 +772,7 @@ switch:
     lambda: return id(include_meter_hp);
 
   - platform: template
-    name: "${device_name} Include House Meter"
+    name: "${device_name} Operate House from Battery"
     id: sw_include_house
     web_server:
       sorting_group_id: sg_fronius

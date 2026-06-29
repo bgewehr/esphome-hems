@@ -42,13 +42,13 @@ eebus_lpc:
             state: !lambda 'return std::string("Beendet (EEBus): ") + id(ha_time).now().strftime("%d.%m.%Y %H:%M:%S");'
         - number.set:
             id: ct1addon
-            value: 1.0
+            value: !lambda "return id(ladebegrenzung_addon);"
         - number.set:
             id: ct2addon
-            value: 1.0
+            value: !lambda "return id(ladebegrenzung_addon);"
         - number.set:
             id: ct3addon
-            value: 1.0
+            value: !lambda "return id(ladebegrenzung_addon);"
         - lambda: |-
             id(hems_wp).clear_limit();
         - light.turn_off:
@@ -242,8 +242,8 @@ text_sensor:
       sorting_group_id: sg_eebus_cs
       sorting_weight: 7
     entity_category: diagnostic
-    update_interval: never
-    lambda: "return std::string(\"LPC (§14a Leistungsbegrenzung, digital)\");"
+    update_interval: 60s
+    lambda: "return std::string(\"LPC\");"
 
   # --- WP Use Cases (sg_eebus_wp) ---
   - platform: template
@@ -253,8 +253,8 @@ text_sensor:
       sorting_group_id: sg_eebus_wp
       sorting_weight: 7
     entity_category: diagnostic
-    update_interval: never
-    lambda: "return std::string(\"LPC EG (Leistungsbegrenzung), MPC (Messung)\");"
+    update_interval: 60s
+    lambda: "return std::string(\"EG/LPC, MA/MPC\");"
 
 button:
   # --- CS Pairing (sg_eebus_cs, weights 10-13) ---

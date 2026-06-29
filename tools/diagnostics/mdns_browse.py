@@ -16,7 +16,7 @@ def on_service_state_change(zeroconf, service_type, name, state_change):
 zc = Zeroconf()
 sb = ServiceBrowser(zc, '_ship._tcp.local.', handlers=[on_service_state_change])
 done.wait(timeout=6.0)
-time.sleep(0.5)  # allow extra entries to trickle in after first hit
+time.sleep(1.5)  # allow extra entries to trickle in after first hit
 
 print(f'Found {len(found)} _ship._tcp services')
 for name, sc in found:

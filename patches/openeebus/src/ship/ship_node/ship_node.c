@@ -17,6 +17,7 @@
 #include <pthread.h>
 #include <signal.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "ship_node_internal.h"
@@ -450,16 +451,33 @@ static void ShipNodeConnectToService(ShipNode* self, const MdnsEntry* found_entr
       }
       ShipConnectionDelete(outbound_sc);
     } else if (self->ship_connection != outbound_sc) {
-      /* HTTP callback accepted an inbound and overwrote ship_connection while our
-       * TCP connect was in progress.  Orphan outbound into cancel slot so that
-       * CloseShipConnection can free it when K40RF rejects its handshake. */
-      if (self->cancel_ship_connection == NULL) {
-        self->cancel_ship_connection = outbound_sc;
+      /* HTTP callback accepted an inbound while our outbound TCP was completing.
+       * Apply SKI tie-breaking: keep the connection from the device with the higher SKI. */
+      const char* local_ski = ServiceDetailsGetSki(self->local_service_details);
+      bool local_ski_higher = (local_ski != NULL && self->remote_ski != NULL &&
+                               strcmp(local_ski, self->remote_ski) > 0);
+      if (local_ski_higher) {
+        /* We have higher SKI: keep our outbound, discard the inbound. */
+        SHIP_NODE_DEBUG_PRINTF("%s(), Tie-break outbound: localSKI > remoteSKI — keeping outbound\n", __func__);
+        if (self->cancel_ship_connection == NULL) {
+          self->cancel_ship_connection = self->ship_connection;
+        } else {
+          SHIP_CONNECTION_STOP(self->ship_connection);
+          ShipConnectionDelete(self->ship_connection);
+        }
+        self->ship_connection = outbound_sc;
+        /* connection_attempt_running stays true (set by the HTTP callback). */
       } else {
-        SHIP_CONNECTION_STOP(outbound_sc);
-        ShipConnectionDelete(outbound_sc);
+        /* Remote has higher SKI: keep the inbound, orphan our outbound. */
+        SHIP_NODE_DEBUG_PRINTF("%s(), Tie-break outbound: remoteSKI > localSKI — keeping inbound\n", __func__);
+        if (self->cancel_ship_connection == NULL) {
+          self->cancel_ship_connection = outbound_sc;
+        } else {
+          SHIP_CONNECTION_STOP(outbound_sc);
+          ShipConnectionDelete(outbound_sc);
+        }
+        /* connection_attempt_running already set true by the HTTP callback. */
       }
-      /* connection_attempt_running already set true by the HTTP callback. */
     } else {
       /* Normal case: outbound connected and is still the current connection. */
       self->connection_attempt_running = true;
@@ -548,7 +566,7 @@ int ShipNodeOnWebsocketServerConnectionCallback(const char* ski, WebsocketCreato
 
   /* Trusted inbound while an outbound attempt is running: cancel the outbound
    * and accept the inbound.  The cancelled connection will be freed by
-   * CloseShipConnection when its teardown callback fires. */
+   * CloseShipConnection when its teardown callback fires via cancel_ship_connection. */
   if (sn->connection_attempt_running && sn->ship_connection != NULL) {
     SHIP_NODE_DEBUG_PRINTF(
         "%s(), Trusted inbound from %s during outbound — cancelling outbound\n", __func__, ski);

@@ -27,6 +27,7 @@ extern "C" {
 #include "src/spine/entity/entity_local.h"
 #include "src/spine/model/entity_types.h"
 #include "src/use_case/actor/eg/lpc/eg_lpc.h"
+#include "src/use_case/actor/ma/mpc/ma_mpc.h"
 #include "src/use_case/model/load_limit_types.h"
 }
 
@@ -89,40 +90,20 @@ static void SR_OnRemoteServicesUpdate(
    * callback and triggering an outbound attempt from every mDNS update causes
    * spurious connections in the wrong direction. */
   auto* r = reinterpret_cast<WpServiceReader*>(o);
+  if (!r->self->pairing_mode_active_) return;
+  if (!r->self->remote_ski_.empty()) return;  /* already paired */
 
   size_t n = VectorGetSize(entries);
   for (size_t i = 0; i < n; i++) {
     const MdnsEntry* entry = (const MdnsEntry*)VectorGetElement(entries, i);
-    const char* ski   = MdnsEntryGetSki(entry);
+    const char* ski = MdnsEntryGetSki(entry);
     if (!ski || ski[0] == '\0') continue;
     if (r->self->local_ski_ == ski) continue;
-
-    /* Log all available device fields on first discovery of this SKI */
-    ESP_LOGI(TAG, "mDNS device: ski=%-40s  host=%s  brand=%s  model=%s  type=%s  id=%s  name=%s",
-             ski,
-             MdnsEntryGetHost(entry)   ? MdnsEntryGetHost(entry)   : "-",
-             MdnsEntryGetBrand(entry)  ? MdnsEntryGetBrand(entry)  : "-",
-             MdnsEntryGetModel(entry)  ? MdnsEntryGetModel(entry)  : "-",
-             MdnsEntryGetType(entry)   ? MdnsEntryGetType(entry)   : "-",
-             MdnsEntryGetId(entry)     ? MdnsEntryGetId(entry)     : "-",
-             MdnsEntryGetName(entry)   ? MdnsEntryGetName(entry)   : "-");
-
-    /* If this is our configured WP, build a label for the UI */
-    if (!r->self->remote_ski_.empty() && r->self->remote_ski_ == ski) {
-      std::string label;
-      if (MdnsEntryGetBrand(entry)) label += MdnsEntryGetBrand(entry);
-      if (MdnsEntryGetModel(entry)) { if (!label.empty()) label += " "; label += MdnsEntryGetModel(entry); }
-      if (MdnsEntryGetType(entry))  { if (!label.empty()) label += " ("; label += MdnsEntryGetType(entry); label += ")"; }
-      if (!label.empty()) r->self->device_label_ = label;
-    }
-
-    /* Pairing: show first unknown device in UI */
-    if (r->self->pairing_mode_active_ && r->self->remote_ski_.empty()) {
-      const char* host = MdnsEntryGetHost(entry) ? MdnsEntryGetHost(entry) : "?";
-      r->self->pairing_state_ = "WP sichtbar: " + std::string(ski) + " — warte auf Verbindung";
-      (void)host;
-      break;
-    }
+    const char* host = MdnsEntryGetHost(entry) ? MdnsEntryGetHost(entry) : "?";
+    ESP_LOGI("eebus_wp", "mDNS: WP sichtbar ski=%s host=%s — warte auf eingehende Verbindung",
+             ski, host);
+    r->self->pairing_state_ = "WP sichtbar: " + std::string(ski) + " — warte auf Verbindung";
+    break;
   }
 }
 
@@ -130,10 +111,10 @@ static void SR_OnShipIdUpdate(
     ServiceReaderObject* o, const char* ski, const char* ship_id)
 {
   auto* r = reinterpret_cast<WpServiceReader*>(o);
-  ESP_LOGI(TAG, "SHIP ID: ski=%s  ship_id=%s", ski, ship_id ? ship_id : "-");
-  /* ship_id format is typically "Brand-Model-Serial" — use as fallback label */
-  if (ship_id && ship_id[0] != '\0' && r->self->device_label_.empty()) {
+  ESP_LOGD("eebus_wp", "SHIP ID update ski=%s id=%s", ski, ship_id ? ship_id : "");
+  if (ship_id && ship_id[0] != '\0' && ski && r->self->remote_ski_ == ski) {
     r->self->device_label_ = ship_id;
+    ESP_LOGI("eebus_wp", "WP device name: %s", ship_id);
   }
 }
 
@@ -226,6 +207,29 @@ void EebusWpComponent::setup() {
 void EebusWpComponent::loop() {
   if (!service_ || !eg_lpc_) return;
 
+  /* Check if K40RF has sent us a heartbeat within 2× the declared timeout.
+   * EgLpcIsHeartbeatWithinDuration is broken (passes NULL remote entity →
+   * always returns false), so we track the last received heartbeat ourselves
+   * via on_heartbeat_received_() / last_heartbeat_ms_.
+   * Grace period: allow up to 2× timeout after connect before alarming —
+   * K40RF's heartbeat timer runs continuously and the first beat can arrive
+   * up to 1× timeout after our connection is established. */
+  const uint32_t hb_timeout_ms = kHeartbeatTimeoutSeconds * 2000u;
+  const bool grace   = connected_ && ((millis() - connected_since_ms_) < hb_timeout_ms);
+  const bool hb_ok   = (last_heartbeat_ms_ != 0) &&
+                       ((millis() - last_heartbeat_ms_) < hb_timeout_ms);
+  if (connected_ && !grace && !hb_ok) {
+    if (!heartbeat_alarm_) {
+      ESP_LOGW(TAG, "WP heartbeat overdue \xe2\x80\x94 connection may be stale");
+      heartbeat_alarm_ = true;
+    }
+  } else {
+    if (heartbeat_alarm_ && connected_) {
+      ESP_LOGI(TAG, "WP heartbeat recovered");
+    }
+    heartbeat_alarm_ = false;
+  }
+
   /* Pairing window timeout */
   uint32_t now = millis();
   if (pairing_mode_active_ && now >= pairing_deadline_ms_) {
@@ -297,22 +301,10 @@ void EebusWpComponent::set_limit(float watts) {
 void EebusWpComponent::on_entity_connect(const EntityAddressType* addr) {
   ESP_LOGI(TAG, "WP entity connected");
   connected_          = true;
+  heartbeat_alarm_    = false;
+  connected_since_ms_ = millis();
   have_remote_entity_ = true;
   if (addr) remote_entity_addr_ = *addr;
-
-  /* Lazy MaMpc init: add MPC client features AFTER K40rf accepted the LPC
-   * connection. K40rf does not see these features during the initial
-   * NodeManagement handshake, avoiding a rejection at first contact. */
-  if (!ma_mpc_) {
-    MA_MPC_LISTENER_INTERFACE(&mpc_listener_) = &kMpcListenerMethods;
-    mpc_listener_.self = this;
-    ma_mpc_ = MaMpcUseCaseCreate(local_entity_, MA_MPC_LISTENER_OBJECT(&mpc_listener_));
-    if (ma_mpc_) {
-      ESP_LOGI(TAG, "MaMpc use case created — awaiting K40rf measurement data");
-    } else {
-      ESP_LOGW(TAG, "MaMpcUseCaseCreate failed");
-    }
-  }
   pairing_state_      = "Verbunden mit WP";
 
   /* Configure failsafe on WP: if HEMS heartbeat stops, WP falls back
@@ -340,17 +332,13 @@ void EebusWpComponent::on_entity_connect(const EntityAddressType* addr) {
 void EebusWpComponent::on_entity_disconnect(const EntityAddressType* /*addr*/) {
   ESP_LOGW(TAG, "WP entity disconnected");
   connected_          = false;
+  mpc_connected_      = false;
+  last_heartbeat_ms_  = 0;
   have_remote_entity_ = false;
   active_limit_w_     = 0.0f;
   pairing_state_      = "Getrennt — suche WP...";
 
-  /* Do NOT stop the heartbeat here. The reference implementation (openeebus
-   * hems.c) never calls EgLpcStopHeartbeat: the heartbeat manager runs
-   * continuously from SetLocalFeature() → Start() onward. Stopping it freezes
-   * the published timestamp; when K40rf reconnects and subscribes to our
-   * DeviceDiagnosis feature it sees a stale timestamp, immediately detects a
-   * timeout, and goes to state=39 — BEFORE on_entity_connect fires to
-   * publish a fresh timestamp. Result: instant reconnect→disconnect loop. */
+  if (eg_lpc_) EgLpcStopHeartbeat(eg_lpc_);
 
   for (auto* t : disconnected_triggers_) t->trigger();
 }
@@ -519,8 +507,10 @@ bool EebusWpComponent::start_eebus_service_(
   /* Register remote WP SKI if configured */
   // (done after service start via EEBUS_SERVICE_REGISTER_REMOTE_SKI)
 
-  /* Create service — correct 4-argument signature from eebus_service.h */
-  service_ = EebusServiceCreate(cfg, "EnergyManagementSystem", tls_cert,
+  /* Role "auto" (kShipRoleAuto): HEMS can both initiate outbound and accept inbound.
+   * Simultaneous-connect races are resolved by SKI tie-breaking in ship_node.c,
+   * matching the ship-go v0.6.0 keepThisConnection approach. */
+  service_ = EebusServiceCreate(cfg, "auto", tls_cert,
                                  SERVICE_READER_OBJECT(&service_reader_));
   EebusServiceConfigDelete(cfg);
   if (!service_) { ESP_LOGE(TAG, "EebusServiceCreate failed"); return false; }
@@ -561,6 +551,14 @@ bool EebusWpComponent::start_eebus_service_(
 
   eg_lpc_ = EgLpcUseCaseCreate(local_entity_, EG_LP_LISTENER_OBJECT(&eg_listener_));
   if (!eg_lpc_) { ESP_LOGE(TAG, "EgLpcUseCaseCreate failed"); return false; }
+
+  /* MaMpc (Monitoring of Power Consumption): required so the WP can report its
+   * power draw to the HEMS and shows "EEBus verbunden" on its own display.
+   * The Go bridge (eebus-ha-bridge) registers this as its "Monitoring" use case. */
+  MA_MPC_LISTENER_INTERFACE(&mpc_listener_) = &kMpcListenerMethods;
+  mpc_listener_.self = this;
+  ma_mpc_ = MaMpcUseCaseCreate(local_entity_, MA_MPC_LISTENER_OBJECT(&mpc_listener_));
+  if (!ma_mpc_) { ESP_LOGW(TAG, "MaMpcUseCaseCreate failed — WP may not show EEBus verbunden"); }
 
   /* Register entity with device so it is advertised via SPINE/mDNS */
   DEVICE_LOCAL_ADD_ENTITY(device_local, local_entity_);

@@ -21,6 +21,7 @@
 #include <stdint.h>
 #include <time.h>
 
+#include "esp_log.h"
 #include "src/common/eebus_malloc.h"
 #include "src/spine/api/entity_local_interface.h"
 #include "src/spine/api/feature_local_interface.h"
@@ -131,15 +132,20 @@ void Tick(HeartbeatManagerObject* self) {
   if (hm->tick_cnt == 0) {
     hm->heartbeat_num++;
     UpdateHeartbeatData(hm);
-    /* Send at half the advertised timeout so the remote CS's deadline window is
-     * never at risk of a boundary race with our tick counter. The published
-     * heartbeat_timeout stays at the full value (the window the CS enforces);
-     * we just refresh at twice the required rate. */
-    hm->tick_cnt = (hm->heartbeat_timeout > 1u) ? (hm->heartbeat_timeout / 2u) : hm->heartbeat_timeout;
+    /* Use 3/4 of the declared timeout (45 s for a 60 s interval) so the next
+     * heartbeat arrives ~15 s before the remote's strict 1× deadline.
+     * Without this fix, beats land at T=0/30/90 — the T=90 beat races
+     * against the K40rf's T=30+60=90 disconnect timer and loses. */
+    hm->tick_cnt = (hm->heartbeat_timeout * 3u) / 4u;
+    if (hm->tick_cnt == 0u) {
+      hm->tick_cnt = 1u;
+    }
   }
 }
 
 void UpdateHeartbeatData(HeartbeatManager* self) {
+  ESP_LOGD("eebus_wp", "HEMS\xe2\x86\x92WP heartbeat (outbound): counter=%llu timeout=%us",
+           (unsigned long long)self->heartbeat_num, (unsigned)self->heartbeat_timeout);
   DeviceDiagnosisHeartbeatDataType heartbeat_data = {
       .timestamp         = &ABSOLUTE_OR_RELATIVE_TIME_NOW,
       .heartbeat_counter = &self->heartbeat_num,
@@ -154,15 +160,17 @@ EebusError Start(HeartbeatManagerObject* self) {
 
   hm->running = true;
 
-  /* Immediately publish a fresh heartbeat so a remote CS that subscribes
-   * right after Start() sees a current timestamp. Without this initial
-   * publish the remote CS receives whatever timestamp was last written
-   * (possibly very old) and may immediately consider the heartbeat overdue. */
+  /* Immediately publish a fresh heartbeat so remote entities that subscribe
+   * right after Start() see a current timestamp rather than the stale one
+   * from before the last Stop(). Without this, a remote LP that subscribes
+   * after a reconnect would see an old timestamp and conclude the EG
+   * heartbeat is overdue, causing it to immediately disconnect. */
   if (hm->local_feature != NULL) {
     hm->heartbeat_num++;
     UpdateHeartbeatData(hm);
-    /* Use half the timeout so the next periodic heartbeat fires well before
-     * the remote CS's 1×-timeout deadline, avoiding a boundary race. */
+    /* Use half the timeout so the next periodic heartbeat fires at timeout/2
+     * seconds — well before the remote LP's 1×-timeout deadline.
+     * Prevents the race where K40rf's timer and our tick both expire at T=timeout. */
     hm->tick_cnt = (hm->heartbeat_timeout > 1u) ? (hm->heartbeat_timeout / 2u) : hm->heartbeat_timeout;
   }
 

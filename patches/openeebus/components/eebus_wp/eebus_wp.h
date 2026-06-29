@@ -96,6 +96,7 @@ class EebusWpComponent : public Component {
 
   /* State accessors */
   bool        is_connected()    const { return connected_; }
+  bool        mpc_connected()   const { return mpc_connected_; }
   float       current_power_w() const { return current_power_w_; }
   float       active_limit_w()  const { return active_limit_w_; }
   std::string remote_ski()      const { return remote_ski_; }
@@ -108,6 +109,8 @@ class EebusWpComponent : public Component {
   void on_entity_disconnect(const EntityAddressType* addr);
   void on_power_limit_ack(float watts, bool active);
   void on_mpc_measurement(float watts);
+  void on_mpc_state_(bool connected) { mpc_connected_ = connected; }
+  void on_heartbeat_received_() { last_heartbeat_ms_ = millis(); }
 
   /* Public for ServiceReader vtable access */
   std::string pairing_state_       {};
@@ -116,6 +119,7 @@ class EebusWpComponent : public Component {
   std::string device_label_        {};
   bool        pairing_mode_active_ {false};
   uint32_t    pairing_deadline_ms_ {0};
+  uint32_t    connected_since_ms_  {0};
   void save_remote_ski_nvs_(const char* ski);
   void on_ship_data_exchange_(const char* ski);  /* called by vtable on kDataExchange */
 
@@ -137,8 +141,11 @@ class EebusWpComponent : public Component {
 
   /* Runtime */
   bool        connected_          {false};
+  bool        mpc_connected_      {false};
+  bool        heartbeat_alarm_    {false};
   float       current_power_w_    {0.0f};
   float       active_limit_w_     {0.0f};
+  uint32_t    last_heartbeat_ms_  {0};
 
   EntityAddressType remote_entity_addr_{};
   bool              have_remote_entity_{false};
@@ -184,10 +191,12 @@ extern "C" {
 static void MpcL_Destruct(MaMpcListenerObject*) {}
 
 static void MpcL_OnRemoteEntityConnect(MaMpcListenerObject* o, const EntityAddressType*) {
-  ESP_LOGI("eebus_wp", "MPC: K40rf measurement unit connected");
+  ESP_LOGW("eebus_wp", "MPC: K40rf measurement unit connected");
+  reinterpret_cast<EebusWpComponent::MpcListener*>(o)->self->on_mpc_state_(true);
 }
 static void MpcL_OnRemoteEntityDisconnect(MaMpcListenerObject* o, const EntityAddressType*) {
-  ESP_LOGI("eebus_wp", "MPC: K40rf measurement unit disconnected");
+  ESP_LOGW("eebus_wp", "MPC: K40rf measurement unit disconnected");
+  reinterpret_cast<EebusWpComponent::MpcListener*>(o)->self->on_mpc_state_(false);
 }
 static void MpcL_OnMeasurementReceive(
     MaMpcListenerObject* o,
@@ -230,7 +239,10 @@ static void EgL_OnPowerLimitReceive(
 }
 static void EgL_OnFailsafePowerLimitReceive(EgLpListenerObject*, const EntityAddressType*, const ScaledValue*) {}
 static void EgL_OnFailsafeDurationReceive(EgLpListenerObject*, const EntityAddressType*, const DurationType*) {}
-static void EgL_OnHeartbeatReceive(EgLpListenerObject*, const EntityAddressType*, uint64_t) {}
+static void EgL_OnHeartbeatReceive(EgLpListenerObject* o, const EntityAddressType*, uint64_t hb_counter) {
+  ESP_LOGD("eebus_wp", "WP\xe2\x86\x92HEMS heartbeat (inbound): counter=%" PRIu64, hb_counter);
+  reinterpret_cast<EebusWpComponent::EgListener*>(o)->self->on_heartbeat_received_();
+}
 
 static const EgLpListenerInterface kEgListenerMethods = {
   .destruct                        = EgL_Destruct,
