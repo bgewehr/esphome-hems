@@ -54,6 +54,18 @@ esp32:
       CONFIG_MBEDTLS_SSL_KEEP_PEER_CERTIFICATE: "y"
       # CONFIG_LWIP_MAX_SOCKETS wird von eebus_lpc (→16) und eebus_wp (→21)
       # automatisch gesetzt — kein manueller Eintrag hier nötig.
+      # PSRAM-Heap-Fix: EEBus-TLS-Sitzungspuffer (je ~16 KB I/O + Handshake-Kontext)
+      # erschöpfen bei längerem Betrieb den internen SRAM, der gleichzeitig vom
+      # W5500-SPI-DMA-Treiber für DMA-Alignment-Kopien (4-8 Byte pro SPI-Register-
+      # Transaktion) benötigt wird. Ohne freien internen SRAM schlägt heap_caps_-
+      # aligned_alloc(MALLOC_CAP_DMA) im ESP-IDF spi_master.c fehl und führt zu
+      # einem Crash in uninstall_priv_desc (NULL-memcpy).
+      # Lösung: Allokationen > 2 KB in den 8-MB-PSRAM auslagern, so dass der
+      # interne SRAM für DMA-kritische Operationen und kleine Puffer reserviert bleibt.
+      # Allokationen <= 2 KB (SPI-DMA-Kopien, Ethernet-Frames bis 1518 B, FreeRTOS-
+      # Strukturen) bleiben im schnellen internen SRAM.
+      CONFIG_SPIRAM_USE_MALLOC: "y"
+      CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL: "2048"
 
 # PSRAM konfigurieren – ESP32-S3-WROOM-1U-N16R8 hat 8 MB Octal PSRAM.
 # Ohne diese Konfiguration können DMA-Puffer für den W5500-SPI-Ethernet-Chip
@@ -179,6 +191,8 @@ select:
                 enable("ethernet"); enable("api"); enable("api.connection"); enable("web_server");
               }
             }
+            // Crash-Backtraces immer sichtbar halten, unabhängig vom gewählten Filter.
+            id(app_logger).set_log_level("esp32.crash", ESPHOME_LOG_LEVEL_ERROR);
 
 api:
   encryption:
