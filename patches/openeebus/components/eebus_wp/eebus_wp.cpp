@@ -319,13 +319,6 @@ void EebusWpComponent::on_entity_connect(const EntityAddressType* addr) {
   fs_duration.seconds = (int32_t)failsafe_duration_s_;
   EgLpcSetFailsafeDurationMinimum(eg_lpc_, addr, &fs_duration);
 
-  /* Start sending heartbeat — WP requires this periodically.
-   * openeebus drives the heartbeat automatically via its internal
-   * FreeRTOS 1-second tick timer (device_local.c DeviceLocal1sTickCallback).
-   * EgLpcStartHeartbeat() activates the HeartbeatManager for this entity. */
-  EgLpcStartHeartbeat(eg_lpc_);
-  ESP_LOGI(TAG, "Heartbeat started (interval: %u s)", kHeartbeatTimeoutSeconds);
-
   for (auto* t : connected_triggers_) t->trigger();
 }
 
@@ -338,7 +331,9 @@ void EebusWpComponent::on_entity_disconnect(const EntityAddressType* /*addr*/) {
   active_limit_w_     = 0.0f;
   pairing_state_      = "Getrennt — suche WP...";
 
-  if (eg_lpc_) EgLpcStopHeartbeat(eg_lpc_);
+  /* Do NOT stop the heartbeat on disconnect — eebus-go never stops it.
+   * Keeping it running ensures the feature data is always fresh for the
+   * next time K40RF connects and subscribes. */
 
   for (auto* t : disconnected_triggers_) t->trigger();
 }
@@ -379,7 +374,7 @@ bool EebusWpComponent::load_cert_nvs_(
     if (nvs_get_blob(h, NVS_KEY_CERT, nullptr, &clen) != ESP_OK || clen == 0) break;
     if (nvs_get_blob(h, NVS_KEY_KEY,  nullptr, &klen) != ESP_OK || klen == 0) break;
     *c = (uint8_t*)malloc(clen); *k = (uint8_t*)malloc(klen);
-    if (!*c || !*k) { free(*c); free(*k); break; }
+    if (!*c || !*k) { free(*c); *c = nullptr; free(*k); *k = nullptr; break; }
     if (nvs_get_blob(h, NVS_KEY_CERT, *c, &clen) != ESP_OK) break;
     if (nvs_get_blob(h, NVS_KEY_KEY,  *k, &klen) != ESP_OK) break;
     *cl = clen; *kl = klen; ok = true;
@@ -559,6 +554,14 @@ bool EebusWpComponent::start_eebus_service_(
   mpc_listener_.self = this;
   ma_mpc_ = MaMpcUseCaseCreate(local_entity_, MA_MPC_LISTENER_OBJECT(&mpc_listener_));
   if (!ma_mpc_) { ESP_LOGW(TAG, "MaMpcUseCaseCreate failed — WP may not show EEBus verbunden"); }
+
+  /* Start heartbeat immediately — matches eebus-go which calls StartHeartbeat()
+   * at service startup, before any device connects.  The DeviceDiagnosis feature
+   * data must be fresh when the K40RF subscribes (subscription response sends
+   * current data); if the data is stale (epoch timestamp), the K40RF marks the
+   * heartbeat as overdue and shows "EEBus nicht verbunden" permanently. */
+  EgLpcStartHeartbeat(eg_lpc_);
+  ESP_LOGI(TAG, "Heartbeat started (interval: %u s)", kHeartbeatTimeoutSeconds);
 
   /* Register entity with device so it is advertised via SPINE/mDNS */
   DEVICE_LOCAL_ADD_ENTITY(device_local, local_entity_);

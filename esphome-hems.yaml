@@ -80,7 +80,6 @@ select:
       - "WARN"
       - "INFO"
       - "DEBUG"
-      - "VERBOSE"
     initial_option: "WARN"
     optimistic: true
     restore_value: true
@@ -92,7 +91,6 @@ select:
             else if (x == "WARN") level = ESPHOME_LOG_LEVEL_WARN;
             else if (x == "INFO") level = ESPHOME_LOG_LEVEL_INFO;
             else if (x == "DEBUG") level = ESPHOME_LOG_LEVEL_DEBUG;
-            else if (x == "VERBOSE") level = ESPHOME_LOG_LEVEL_VERBOSE;
             id(app_logger).set_log_level(level);
 
   - platform: template
@@ -122,7 +120,6 @@ select:
             else if (current == "WARN") gl = ESPHOME_LOG_LEVEL_WARN;
             else if (current == "INFO") gl = ESPHOME_LOG_LEVEL_INFO;
             else if (current == "DEBUG") gl = ESPHOME_LOG_LEVEL_DEBUG;
-            else if (current == "VERBOSE") gl = ESPHOME_LOG_LEVEL_VERBOSE;
 
             // Alle bekannten Tags zuerst auf ERROR zurücksetzen, damit kein
             // vorheriger Filter-Zustand durchschlägt (level_for() prüft Tag-Map
@@ -134,8 +131,10 @@ select:
             suppress("ship"); suppress("spine"); suppress("openeebus"); suppress("mdns");
             suppress("esp-tls-mbedtls"); suppress("esp_https_server"); suppress("httpd");
             suppress("modbustcp_controller.sensor"); suppress("modbustcp");
+            suppress("http_request.idf");
             suppress("sensor"); suppress("template.sensor");
-            suppress("modbus_server");
+            suppress("modbus_server"); suppress("modbus-server-xemex");
+            suppress("enwg");
             suppress("mqtt");
             suppress("ethernet"); suppress("api"); suppress("api.connection"); suppress("web_server");
 
@@ -150,8 +149,9 @@ select:
               enable("ship"); enable("spine"); enable("openeebus"); enable("mdns");
               enable("esp-tls-mbedtls"); enable("esp_https_server"); enable("httpd");
               enable("modbustcp_controller.sensor"); enable("modbustcp");
+              enable("http_request.idf");
               enable("sensor"); enable("template.sensor");
-              enable("modbus_server"); enable("mqtt");
+              enable("modbus_server"); enable("modbus-server-xemex"); enable("enwg"); enable("mqtt");
               enable("ethernet"); enable("api"); enable("api.connection"); enable("web_server");
             } else {
               // Global auf ERROR, nur gewählte Tags auf Wunschlevel setzen.
@@ -165,12 +165,14 @@ select:
                 enable_eebus("eebus_http_srv"); enable_eebus("eebus_ws_srv"); enable_eebus("eebus_ws_cli");
                 enable_eebus("eebus_mdns");
                 enable_eebus("ship"); enable_eebus("spine"); enable_eebus("openeebus"); enable_eebus("mdns");
+                enable_eebus("enwg");
                 enable("esp-tls-mbedtls"); enable("esp_https_server"); enable("httpd");
               } else if (x == "Modbus TCP") {
                 enable("modbustcp_controller.sensor"); enable("modbustcp");
+                enable("http_request.idf");
                 enable("sensor"); enable("template.sensor");
               } else if (x == "Modbus RTU") {
-                enable("modbus_server");
+                enable("modbus_server"); enable("modbus-server-xemex");
               } else if (x == "MQTT") {
                 enable("mqtt");
               } else if (x == "Netzwerk") {

@@ -354,6 +354,14 @@ void WriteMessage(DataWriterObject* self, const uint8_t* msg, size_t msg_size) {
   uint8_t* const msg_copy = (uint8_t*)ArrayCopy(msg, msg_size, sizeof(msg[0]));
   MessageBufferInit(&queue_msg.msg_buf, msg_copy, msg_size);
 
+  /* bg-patch: guard against OOM — ArrayCopy returns NULL when heap is
+   * exhausted or too fragmented.  A NULL-data queue message would crash the
+   * consumer, so drop early. */
+  if (msg_copy == NULL) {
+    SHIP_LOGW("WriteMessage: OOM, dropping SPINE msg (%zu bytes)", msg_size);
+    return;
+  }
+
   /* bg-patch: use a finite timeout instead of kTimeoutInfinite.  WriteMessage
    * can be called from within the EEBus receive callback — if the queue is
    * full and we wait forever we deadlock the EEBus task on its own queue,
@@ -408,6 +416,10 @@ void ShipConnectionWebsocketCallback(WebsocketCallbackType type, const void* in,
     queue_msg.type = kShipConnectionQueueMsgTypeDataReceived;
 
     uint8_t* const msg_copy = (uint8_t*)ArrayCopy(in, size, sizeof(uint8_t));
+    if (msg_copy == NULL) {
+      SHIP_LOGW("WebsocketCallback: OOM, dropping received msg (%zu bytes)", size);
+      return;
+    }
     MessageBufferInit(&queue_msg.msg_buf, msg_copy, size);
     EEBUS_QUEUE_SEND(sc->msg_queue, &queue_msg, kTimeoutInfinite);
   } else if (type == kWebsocketCallbackTypeError) {

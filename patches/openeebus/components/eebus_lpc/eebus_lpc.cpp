@@ -353,7 +353,7 @@ void EebusLpcComponent::on_failsafe_limit_receive(float limit_w) {
 void EebusLpcComponent::on_heartbeat_receive(uint64_t counter) {
   last_heartbeat_ms_ = millis();
   heartbeat_lost_    = false;
-  ESP_LOGV(TAG, "Heartbeat %" PRIu64, counter);
+  ESP_LOGD(TAG, "Heartbeat %" PRIu64, counter);
 }
 
 /* =========================================================================
@@ -403,7 +403,7 @@ bool EebusLpcComponent::load_cert_nvs_(
     if (nvs_get_blob(h, NVS_KEY_CERT, nullptr, &clen) != ESP_OK || clen == 0) break;
     if (nvs_get_blob(h, NVS_KEY_KEY,  nullptr, &klen) != ESP_OK || klen == 0) break;
     *cert = (uint8_t*)malloc(clen); *key = (uint8_t*)malloc(klen);
-    if (!*cert || !*key) { free(*cert); free(*key); break; }
+    if (!*cert || !*key) { free(*cert); *cert = nullptr; free(*key); *key = nullptr; break; }
     if (nvs_get_blob(h, NVS_KEY_CERT, *cert, &clen) != ESP_OK) break;
     if (nvs_get_blob(h, NVS_KEY_KEY,  *key,  &klen) != ESP_OK) break;
     *cl = clen; *kl = klen; ok = true;
