@@ -21,8 +21,10 @@
 #include <stdint.h>
 #include <time.h>
 
-#include "esp_log.h"
 #include "src/common/eebus_malloc.h"
+
+/* ESPHome log bridge — defined in eebus_wp.cpp */
+extern void eebus_log_d(const char* tag, int line, const char* fmt, ...);
 #include "src/spine/api/entity_local_interface.h"
 #include "src/spine/api/feature_local_interface.h"
 #include "src/spine/api/heartbeat_manager_interface.h"
@@ -144,8 +146,8 @@ void Tick(HeartbeatManagerObject* self) {
 }
 
 void UpdateHeartbeatData(HeartbeatManager* self) {
-  ESP_LOGD("eebus_wp", "HEMS\xe2\x86\x92WP heartbeat (outbound): counter=%llu timeout=%us",
-           (unsigned long long)self->heartbeat_num, (unsigned)self->heartbeat_timeout);
+  eebus_log_d("eebus_wp", __LINE__, "HEMS\xe2\x86\x92WP heartbeat (outbound): counter=%llu timeout=%us",
+              (unsigned long long)self->heartbeat_num, (unsigned)self->heartbeat_timeout);
   DeviceDiagnosisHeartbeatDataType heartbeat_data = {
       .timestamp         = &ABSOLUTE_OR_RELATIVE_TIME_NOW,
       .heartbeat_counter = &self->heartbeat_num,

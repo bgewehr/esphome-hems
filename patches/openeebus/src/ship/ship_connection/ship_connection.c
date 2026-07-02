@@ -1079,10 +1079,16 @@ EebusError SmeHandshakeAccessMethodsHandle(ShipConnection* self, ShipMessageDese
   SHIP_LOGW("AccessMethods: exchange complete remote_id=%s (ski=%s)",
             self->remote_ship_id ? self->remote_ship_id : "?",
             self->remote_ski ? self->remote_ski : "?");
+  /* bg-patch: report ship_id HERE (after AccessMethods exchange populates
+   * remote_ship_id) instead of in SmeStateApproved where it is still empty. */
+  INFO_PROVIDER_REPORT_SERVICE_SHIP_ID(self->info_provider, self->remote_ski, self->remote_ship_id);
   return kEebusErrorOk;
 }
 
 void SmeStateApproved(ShipConnection* self) {
+  /* bg-patch: INFO_PROVIDER_REPORT_SERVICE_SHIP_ID moved to
+   * SmeHandshakeAccessMethodsHandle — remote_ship_id is empty here (state 37),
+   * it is only populated after the AccessMethods exchange in state 38. */
   self->data_reader
       = INFO_PROVIDER_SETUP_REMOTE_DEVICE(self->info_provider, self->remote_ski, DATA_WRITER_OBJECT(self));
   EEBUS_TIMER_STOP(self->wait_for_ready_timer);

@@ -322,6 +322,10 @@ void CloseShipConnection(ShipNode* self, ShipConnectionObject* sc, bool had_erro
   self->ship_connection = NULL;
 
   self->connection_attempt_running = false;
+  // After any connection close, suppress mDNS-triggered outbound attempts for
+  // ~25 min so the remote device (K40RF) has time to initiate inbound.
+  // Each mDNS cycle is 10-20 s; 100 cycles ≈ 25-33 min.
+  self->outbound_skip_remaining = 100;
 }
 
 void HandleConnectionClosed(InfoProviderObject* self, ShipConnectionObject* sc, bool had_error) {
@@ -338,10 +342,10 @@ void HandleConnectionClosed(InfoProviderObject* self, ShipConnectionObject* sc, 
 }
 
 void ReportServiceShipId(InfoProviderObject* self, const char* service_id, const char* ship_id) {
-  UNUSED(self);
-  UNUSED(service_id);
-  UNUSED(ship_id);
-  // TODO: Implement method
+  const ShipNode* const sn = SHIP_NODE(self);
+  if (sn->ship_node_reader != NULL) {
+    SHIP_NODE_READER_ON_SHIP_ID_UPDATE(sn->ship_node_reader, service_id, ship_id);
+  }
 }
 
 bool IsWaitingForTrustAllowed(InfoProviderObject* self, const char* ski) {
@@ -404,6 +408,14 @@ static bool ShipNodeFindService(ShipNode* self, MdnsEntry* found_entry) {
 
 static void ShipNodeConnectToService(ShipNode* self, const MdnsEntry* found_entry) {
   if (self->connection_attempt_running) {
+    return;
+  }
+
+  // Outbound cooldown: after any connection close we skip the first N mDNS
+  // cycles to avoid hammering the remote device (which resets its own inbound
+  // reconnect timer on each incoming attempt).
+  if (self->outbound_skip_remaining > 0) {
+    --self->outbound_skip_remaining;
     return;
   }
 
