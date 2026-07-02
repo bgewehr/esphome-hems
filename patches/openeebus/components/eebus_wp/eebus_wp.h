@@ -9,7 +9,7 @@
  * Heartbeat: openeebus drives the heartbeat automatically via its internal
  * FreeRTOS 1-second tick (DeviceLocal1sTickCallback → HEARTBEAT_MANAGER_TICK).
  * EgLpcStartHeartbeat() activates the HeartbeatManager; the timeout is set
- * at EntityLocalCreate() time (kHeartbeatTimeoutSeconds = 60 s).
+ * at EntityLocalCreate() time (kHeartbeatTimeoutSeconds = 60 s, SPINE spec standard).
  * WP raises a fault if no heartbeat is received within 2× the timeout.
  *
  * API for YAML lambdas:
@@ -89,6 +89,10 @@ class EebusWpComponent : public Component {
   void set_limit(float watts);
   void clear_limit() { set_limit(0.0f); }
 
+  /** Call from on_time_sync (SNTP or HA) to push a fresh heartbeat timestamp.
+   *  Prevents K40RF from seeing an epoch timestamp on its first subscription. */
+  void refresh_heartbeat();
+
   /* Pairing management */
   void enter_pairing_mode();
   void forget_pairing();
@@ -103,6 +107,12 @@ class EebusWpComponent : public Component {
   std::string local_ski()       const { return local_ski_; }
   std::string pairing_state()   const { return pairing_state_; }
   std::string device_label()    const { return device_label_; }
+  std::string active_use_cases() const {
+    std::string s;
+    if (connected_)     { s = "CS\xe2\x86\x92LPC"; }
+    if (mpc_connected_) { if (!s.empty()) s += " + "; s += "MU\xe2\x86\x92MPC"; }
+    return s.empty() ? std::string("(keine)") : s;
+  }
 
   /* Called from C vtable (public for WpServiceReader friend access) */
   void on_entity_connect(const EntityAddressType* addr);
@@ -143,6 +153,8 @@ class EebusWpComponent : public Component {
   bool        connected_          {false};
   bool        mpc_connected_      {false};
   bool        heartbeat_alarm_    {false};
+  bool        time_synced_        {false};
+  bool        service_started_    {false};
   float       current_power_w_    {0.0f};
   float       active_limit_w_     {0.0f};
   uint32_t    last_heartbeat_ms_  {0};
@@ -190,9 +202,14 @@ extern "C" {
 
 static void MpcL_Destruct(MaMpcListenerObject*) {}
 
-static void MpcL_OnRemoteEntityConnect(MaMpcListenerObject* o, const EntityAddressType*) {
+static void MpcL_OnRemoteEntityConnect(MaMpcListenerObject* o, const EntityAddressType* addr) {
+  auto* self = reinterpret_cast<EebusWpComponent::MpcListener*>(o)->self;
+  // K40RF announces MU/MPC on multiple SPINE entities; suppress duplicates.
+  if (self->mpc_connected()) return;
   ESP_LOGW("eebus_wp", "MPC: K40rf measurement unit connected");
-  reinterpret_cast<EebusWpComponent::MpcListener*>(o)->self->on_mpc_state_(true);
+  ESP_LOGI("eebus", "SPINE remote MA/MPC entity connected: ski=%s",
+           (addr && addr->device) ? addr->device : "?");
+  self->on_mpc_state_(true);
 }
 static void MpcL_OnRemoteEntityDisconnect(MaMpcListenerObject* o, const EntityAddressType*) {
   ESP_LOGW("eebus_wp", "MPC: K40rf measurement unit disconnected");
@@ -202,12 +219,18 @@ static void MpcL_OnMeasurementReceive(
     MaMpcListenerObject* o,
     MuMpcMeasurementNameId name_id,
     const ScaledValue* val,
-    const EntityAddressType*)
+    const EntityAddressType* entity_addr)
 {
   if (!val) return;
   float v = (float)val->value * powf(10.0f, (float)val->scale);
   const char* name = MuMpcMeasurementGetName(name_id);
-  ESP_LOGI("eebus_wp", "MPC measurement: %s = %.3f", name ? name : "unknown", (double)v);
+  /* Log raw ScaledValue (value * 10^scale) so diagnostics survive float truncation */
+  ESP_LOGI("eebus_wp", "MPC measurement [id=%d]: %s = %lld * 10^%d = %.3f W (from: %s)",
+           (int)name_id,
+           name ? name : "unknown",
+           (long long)val->value, (int)val->scale,
+           (double)v,
+           (entity_addr && entity_addr->device) ? entity_addr->device : "?");
   if (name_id == kMpcPowerTotal) {
     reinterpret_cast<EebusWpComponent::MpcListener*>(o)->self->on_mpc_measurement(v);
   }
@@ -225,6 +248,8 @@ static const MaMpcListenerInterface kMpcListenerMethods = {
 static void EgL_Destruct(EgLpListenerObject*) {}
 
 static void EgL_OnRemoteEntityConnect(EgLpListenerObject* o, const EntityAddressType* addr) {
+  ESP_LOGI("eebus", "SPINE remote EG/LPC entity connected: ski=%s",
+           (addr && addr->device) ? addr->device : "?");
   reinterpret_cast<EebusWpComponent::EgListener*>(o)->self->on_entity_connect(addr);
 }
 static void EgL_OnRemoteEntityDisconnect(EgLpListenerObject* o, const EntityAddressType* addr) {
