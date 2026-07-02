@@ -253,8 +253,20 @@ mqtt:
   topic_prefix: esphome/modbus-server-xemex
 
 time:
+  # SNTP syncs within ~1 s of WiFi connect — before K40RF completes its
+  # SHIP handshake (~5–10 s).  This ensures the first heartbeat timestamp
+  # K40RF receives is a valid 2026 date, not the 1970 epoch.
+  - platform: sntp
+    id: sntp_time
+    on_time_sync:
+      then:
+        - lambda: id(hems_wp).refresh_heartbeat();
+  # HA time keeps the clock accurate long-term and acts as SNTP fallback.
   - platform: homeassistant
     id: ha_time
+    on_time_sync:
+      then:
+        - lambda: id(hems_wp).refresh_heartbeat();
 
 globals:
   - id: water_liter_per_pulse
@@ -669,6 +681,7 @@ light:
     chipset: WS2812
     name: "${device_name} Status LED"
     id: status_led
+    icon: mdi:led-on
     web_server:
       sorting_group_id: sg_system
       sorting_weight: 3
