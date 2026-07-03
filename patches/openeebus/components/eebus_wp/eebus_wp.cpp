@@ -448,10 +448,6 @@ void EebusWpComponent::on_entity_connect(const EntityAddressType* addr) {
   fs_duration.seconds = (int32_t)failsafe_duration_s_;
   EgLpcSetFailsafeDurationMinimum(eg_lpc_, addr, &fs_duration);
 
-  // Send initial "no limit active" — K40RF only shows "EEBus verbunden" after
-  // receiving at least one ActiveConsumptionPowerLimit write from the HEMS.
-  clear_limit();
-
   for (auto* t : connected_triggers_) t->trigger();
 }
 

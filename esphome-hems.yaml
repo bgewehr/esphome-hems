@@ -825,6 +825,15 @@ text_sensor:
       if (id(manual_enwg_test).state)     return {"Active - Simulation 4200 W"};
       return {"Inactive - Normal Operation"};
 
+# ── Buttons ───────────────────────────────────────────────────────────────────
+button:
+  - platform: restart
+    name: "${device_name} Neustart"
+    icon: "mdi:restart"
+    web_server:
+      sorting_group_id: sg_system
+      sorting_weight: 10
+
 # ── Fronius Gen24 Plus 8.0: Modbus TCP Batterie-Entladesteuerung ──────────────
 # Ausgelagert in separate Datei für saubere Struktur (vermeidet YAML-Key-Duplikate)
 packages:
