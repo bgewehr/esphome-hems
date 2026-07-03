@@ -1,5 +1,6 @@
 # Usage: .\compile.ps1 [--upload]
-# Syncs patches/, compiles, and optionally uploads to the device.
+# Compiles and optionally uploads to the device.
+# All source (openeebus/, port/, components/) is local — no sync step needed.
 
 param(
     [switch]$Upload,
@@ -8,10 +9,6 @@ param(
 
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
-
-Write-Host "=== Syncing patches ===" -ForegroundColor Cyan
-python scripts/sync_patches.py
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host "=== Compiling ===" -ForegroundColor Cyan
 esphome compile esphome-hems.yaml
