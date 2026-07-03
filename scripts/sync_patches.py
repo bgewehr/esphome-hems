@@ -30,7 +30,7 @@ for match in sorted(ext_base.glob("*/openeebus/src")):
 
 if ext_src:
     hash_name = ext_src.parent.parent.name
-    print(f"{tag} Syncing patches/openeebus/src → external_components/{hash_name}/openeebus/src/")
+    print(f"{tag} Syncing patches/openeebus/src -> external_components/{hash_name}/openeebus/src/")
     for src_file in patches_src.rglob("*"):
         if not src_file.is_file():
             continue
@@ -45,7 +45,7 @@ else:
 
 # ── 2. eebus_wp component → build directory
 if tmp_wp.exists():
-    print(f"{tag} Syncing patches/openeebus/components/eebus_wp → {tmp_wp}")
+    print(f"{tag} Syncing patches/openeebus/components/eebus_wp -> {tmp_wp}")
     for src_file in patches_wp.iterdir():
         if src_file.is_file():
             shutil.copy2(str(src_file), str(tmp_wp / src_file.name))
