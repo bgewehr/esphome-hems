@@ -314,6 +314,7 @@ void EebusWpComponent::setup() {
   }
 
   free(cert); free(key);
+  startup_reconnect_at_ms_ = millis() + 10000;
   ESP_LOGI(TAG, "EEBus WP ready — heartbeat interval: %u s", kHeartbeatTimeoutSeconds);
 }
 
@@ -357,6 +358,18 @@ void EebusWpComponent::loop() {
     mdns_service_txt_item_set("_ship", "_tcp", "register", "false");
     ESP_LOGW(TAG, "mDNS: register TXT -> false (pairing timeout)");
     pairing_state_ = "Pairing-Fenster abgelaufen";
+  }
+
+  /* Startup reconnect pulse: fire once ~10 s after boot if we have a known
+   * K40RF SKI but it hasn't connected yet.  K40RF only initiates connection
+   * when it sees register=true in our mDNS TXT record; without this it waits
+   * its own scan interval (~23 min) before retrying. */
+  if (!startup_reconnect_done_ && !remote_ski_.empty() && !connected_ && !pairing_mode_active_) {
+    if (now >= startup_reconnect_at_ms_) {
+      startup_reconnect_done_ = true;
+      ESP_LOGW(TAG, "Startup reconnect pulse — entering pairing mode for fast K40RF reconnect");
+      enter_pairing_mode();
+    }
   }
 }
 
@@ -429,6 +442,7 @@ void EebusWpComponent::on_remote_use_case(int actor, int uc_name_id, const char*
 
 void EebusWpComponent::on_entity_connect(const EntityAddressType* addr) {
   ESP_LOGI(TAG, "WP entity connected");
+  startup_reconnect_done_ = true;
   connected_          = true;
   heartbeat_alarm_    = false;
   connected_since_ms_ = millis();

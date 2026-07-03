@@ -157,6 +157,8 @@ class EebusWpComponent : public Component {
   bool        heartbeat_alarm_    {false};
   bool        time_synced_        {false};
   bool        service_started_    {false};
+  bool        startup_reconnect_done_ {false};
+  uint32_t    startup_reconnect_at_ms_{0};
   float       current_power_w_    {0.0f};
   float       active_limit_w_     {0.0f};
   uint32_t    last_heartbeat_ms_  {0};
