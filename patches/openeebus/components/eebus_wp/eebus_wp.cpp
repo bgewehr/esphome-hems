@@ -20,6 +20,7 @@
 #include <mbedtls/pk.h>
 
 extern "C" {
+#include "mdns.h"
 #include "src/service/service/eebus_service.h"
 #include "src/service/api/eebus_service_config.h"
 #include "src/service/api/service_reader_interface.h"
@@ -41,27 +42,59 @@ extern "C" {
 
 static const char* spine_actor_name(int a) {
   switch (a) {
+    case 0:  return "Battery";
+    case 1:  return "BatterySystem";
     case 2:  return "CEM";
+    case 3:  return "ConfigurationAppliance";
     case 4:  return "Compressor";
     case 5:  return "ControllableSystem";
+    case 6:  return "DHWCircuit";
+    case 7:  return "EnergyBroker";
+    case 8:  return "EnergyConsumer";
     case 9:  return "EnergyGuard";
+    case 10: return "EVSE";
+    case 11: return "EV";
+    case 12: return "GridConnectionPoint";
     case 13: return "HeatPump";
+    case 14: return "HeatingCircuit";
+    case 15: return "HeatingZone";
+    case 16: return "HVACRoom";
+    case 17: return "Inverter";
     case 18: return "MonitoredUnit";
     case 19: return "MonitoringAppliance";
+    case 20: return "OutdoorTemperatureSensor";
+    case 21: return "PVString";
+    case 22: return "PVSystem";
+    case 23: return "SmartAppliance";
+    case 24: return "VisualizationAppliance";
     default: return "?";
   }
 }
 
 static const char* spine_uc_name(int n) {
   switch (n) {
+    case  0: return "configurationOfDhwSystemFunction";
+    case  1: return "configurationOfDhwTemperature";
+    case  4: return "configurationOfRoomHeatingSystemFunction";
+    case  5: return "configurationOfRoomHeatingTemperature";
+    case 12: return "flexibleLoad";
+    case 13: return "flexibleStart";
     case 14: return "limitationOfPowerConsumption";
+    case 15: return "limitationOfPowerProduction";
+    case 16: return "incentiveTableBasedPowerConsumptionManagement";
+    case 18: return "monitoringAndControlOfSmartGridReadyConditions";
+    case 20: return "monitoringOfDhwSystemFunction";
+    case 22: return "monitoringOfGridConnectionPoint";
     case 25: return "monitoringOfPowerConsumption";
+    case 26: return "monitoringOfPvString";
+    case 28: return "monitoringOfRoomHeatingSystemFunction";
     case 30: return "optimizationOfSelfConsumptionByHeatPumpCompressorFlexibility";
     default: return "?";
   }
 }
 
-static void spine_event_handler(const EventPayload* payload, void*) {
+static void spine_event_handler(const EventPayload* payload, void* ctx) {
+  auto* self = static_cast<esphome::eebus_wp::EebusWpComponent*>(ctx);
   if (!payload) return;
   const char* ski = payload->ski ? payload->ski : "?";
   switch (payload->event_type) {
@@ -71,19 +104,24 @@ static void spine_event_handler(const EventPayload* payload, void*) {
       const char* change = (payload->change_type == kElementChangeAdd)    ? "add"
                          : (payload->change_type == kElementChangeUpdate)  ? "update"
                          :                                                   "remove";
-      ESP_LOGD("eebus", "SPINE use-case %s from %s: actor=%d(%s) useCase=%d(%s)",
+      const char* uc_str    = spine_uc_name(f->use_case_name_id);
+      const char* actor_str = spine_actor_name(f->actor);
+      ESP_LOGI("eebus", "SPINE use-case %s from %s: actor=%d(%s) useCase=%d(%s)",
                change, ski,
-               (int)f->actor, spine_actor_name(f->actor),
-               (int)f->use_case_name_id, spine_uc_name(f->use_case_name_id));
+               (int)f->actor, actor_str,
+               (int)f->use_case_name_id, uc_str);
+      if (self && payload->change_type == kElementChangeAdd) {
+        self->on_remote_use_case(f->actor, f->use_case_name_id, uc_str, actor_str);
+      }
       break;
     }
     case kEventTypeEntityChange:
       if (payload->change_type == kElementChangeAdd)
-        ESP_LOGD("eebus", "SPINE entity added from %s", ski);
+        ESP_LOGI("eebus", "SPINE entity added from %s", ski);
       break;
     case kEventTypeDeviceChange:
       if (payload->change_type == kElementChangeAdd)
-        ESP_LOGD("eebus", "SPINE device discovered: ski=%s", ski);
+        ESP_LOGI("eebus", "SPINE device discovered: ski=%s", ski);
       break;
     default: break;
   }
@@ -316,6 +354,7 @@ void EebusWpComponent::loop() {
     pairing_mode_active_ = false;
     pairing_deadline_ms_ = 0;
     if (service_) EEBUS_SERVICE_SET_PAIRING_POSSIBLE(service_, false);
+    mdns_service_txt_item_set("_ship", "_tcp", "register", "false");
     pairing_state_ = "Pairing-Fenster abgelaufen";
   }
 }
@@ -381,8 +420,15 @@ void EebusWpComponent::set_limit(float watts) {
  * EgLpListenerInterface callbacks
  * ====================================================================== */
 
+void EebusWpComponent::on_remote_use_case(int actor, int uc_name_id, const char* uc_str, const char* actor_str) {
+  char buf[80];
+  snprintf(buf, sizeof(buf), " | %s(%d)/%s(%d)", actor_str, actor, uc_str, uc_name_id);
+  k40rf_uc_seen_ += buf;
+}
+
 void EebusWpComponent::on_entity_connect(const EntityAddressType* addr) {
   ESP_LOGI(TAG, "WP entity connected");
+  ESP_LOGI(TAG, "K40RF use-cases announced:%s", k40rf_uc_seen_.empty() ? " (none)" : k40rf_uc_seen_.c_str());
   connected_          = true;
   heartbeat_alarm_    = false;
   connected_since_ms_ = millis();
@@ -416,6 +462,7 @@ void EebusWpComponent::on_entity_disconnect(const EntityAddressType* /*addr*/) {
   last_heartbeat_ms_  = 0;
   have_remote_entity_ = false;
   active_limit_w_     = 0.0f;
+  k40rf_uc_seen_      = {};
   pairing_state_      = "Getrennt — suche WP...";
 
   /* Do NOT stop the heartbeat on disconnect — eebus-go never stops it.
@@ -646,7 +693,7 @@ bool EebusWpComponent::start_eebus_service_(
   DEVICE_LOCAL_ADD_ENTITY(device_local, local_entity_);
 
   /* Subscribe so remote SPINE announcements from K40RF appear in log under tag "eebus" */
-  EventSubscribe(kEventHandlerLevelApplication, spine_event_handler, nullptr);
+  EventSubscribe(kEventHandlerLevelApplication, spine_event_handler, this);
 
   /* Service start is deferred to refresh_heartbeat() (called on the first
    * on_time_sync event from SNTP or HA).  This guarantees K40RF cannot
@@ -667,6 +714,7 @@ void EebusWpComponent::on_ship_data_exchange_(const char* ski) {
     pairing_mode_active_ = false;
     pairing_deadline_ms_ = 0;
     if (service_) EEBUS_SERVICE_SET_PAIRING_POSSIBLE(service_, false);
+    mdns_service_txt_item_set("_ship", "_tcp", "register", "false");
     ESP_LOGI(TAG, "Pairing mode exited after successful connection");
   }
 }
@@ -676,6 +724,7 @@ void EebusWpComponent::enter_pairing_mode() {
   pairing_mode_active_ = true;
   pairing_deadline_ms_ = millis() + kPairingWindowMs;
   if (service_) EEBUS_SERVICE_SET_PAIRING_POSSIBLE(service_, true);
+  mdns_service_txt_item_set("_ship", "_tcp", "register", "true");
   pairing_state_ = "Pairing-Modus aktiv — warte auf Verbindung...";
 }
 

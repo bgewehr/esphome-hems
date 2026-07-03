@@ -113,6 +113,7 @@ class EebusWpComponent : public Component {
     if (mpc_connected_) { if (!s.empty()) s += " + "; s += "MU\xe2\x86\x92MPC"; }
     return s.empty() ? std::string("(keine)") : s;
   }
+  void on_remote_use_case(int actor, int uc_name_id, const char* uc_str, const char* actor_str);
 
   /* Called from C vtable (public for WpServiceReader friend access) */
   void on_entity_connect(const EntityAddressType* addr);
@@ -152,6 +153,7 @@ class EebusWpComponent : public Component {
   /* Runtime */
   bool        connected_          {false};
   bool        mpc_connected_      {false};
+  std::string k40rf_uc_seen_      {};
   bool        heartbeat_alarm_    {false};
   bool        time_synced_        {false};
   bool        service_started_    {false};

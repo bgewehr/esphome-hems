@@ -316,13 +316,14 @@ void* MdnsBrowserLoop(void* parameters) {
 EebusError RegisterService(ShipMdnsObject* self) {
   Mdns* const mdns = MDNS(self);
 
-  esp_err_t err = mdns_instance_name_set(mdns->service_name);
-  if (err != ESP_OK) {
-    MDNS_DEBUG_PRINTF("mdns_instance_name_set() failed: %d\n", err);
-    return kEebusErrorInit;
-  }
+  /* Note: mdns_instance_name_set() was deliberately removed.
+   * It set the DEVICE-WIDE mDNS instance name to the SHIP service name,
+   * which overrides ESPHome's own name and triggers a full re-announcement
+   * of all services.  The per-service instance name is already set correctly
+   * by the mdns_service_add() call below — no global override needed. */
 
   const char* register_str = mdns->autoaccept ? "true" : "false";
+  esp_err_t err;
 
   // Structure with TXT records
   mdns_txt_item_t service_txt_data[] = {
@@ -444,5 +445,9 @@ void Stop(ShipMdnsObject* self) {
 
 void SetAutoaccept(ShipMdnsObject* self, bool autoaccept) {
   Mdns* const mdns = MDNS(self);
+  if (mdns->autoaccept == autoaccept) return;
   mdns->autoaccept = autoaccept;
+  /* Update the live mDNS TXT record so remote devices see the change immediately */
+  const char* val = autoaccept ? "true" : "false";
+  mdns_service_txt_item_set(kShipServiceType, kShipServiceProtocol, "register", val);
 }
