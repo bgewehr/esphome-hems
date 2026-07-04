@@ -127,7 +127,7 @@ static void OnDataChange(MaMpcUseCase* self, const EventPayload* payload) {
 static void OnCompressorEntityConnected(EntityLocalObject* local_entity, EntityRemoteObject* entity) {
   FeatureInfoClient ts;
   if (FeatureInfoClientConstruct(&ts, kFeatureTypeTypeTimeSeries, local_entity, entity) != kEebusErrorOk) {
-    ESP_LOGW("eebus", "UC30: Compressor entity has no TimeSeries server feature");
+    ESP_LOGW("eebus", "UC30: FeatureInfoClientConstruct failed (no local TimeSeries client or no remote TimeSeries server)");
     return;
   }
   if (!HasSubscription(&ts)) Subscribe(&ts);

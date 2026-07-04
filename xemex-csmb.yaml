@@ -5,7 +5,7 @@ globals:
   - id: ladebegrenzung_addon
     type: float
     restore_value: true
-    initial_value: "43.5"
+    initial_value: "1.0"
 
 # TX=GPIO17 (DE/DI zum RS485-Chip), RX=GPIO18 (RO vom RS485-Chip)
 uart:
@@ -137,14 +137,18 @@ select:
     on_value:
       then:
         - lambda: |-
-            float amps = 6.0f;
-            if (x == "8 A (5.54 kW)") amps = 8.0f;
-            else if (x == "10 A (6.93 kW)") amps = 10.0f;
-            else if (x == "12 A (8.31 kW)") amps = 12.0f;
-            else if (x == "14 A (9.70 kW)") amps = 14.0f;
-            else if (x == "16 A (11.09 kW)") amps = 16.0f;
-            else if (x == "unbegrenzt") amps = 48.5f;
-            float addon = 50.0f - amps - 0.5f;
+            float addon;
+            if (x == "unbegrenzt") {
+              addon = 1.0f;  /* minimaler Puffer, Shell lädt bis ~49 A */
+            } else {
+              float amps = 6.0f;
+              if (x == "8 A (5.54 kW)") amps = 8.0f;
+              else if (x == "10 A (6.93 kW)") amps = 10.0f;
+              else if (x == "12 A (8.31 kW)") amps = 12.0f;
+              else if (x == "14 A (9.70 kW)") amps = 14.0f;
+              else if (x == "16 A (11.09 kW)") amps = 16.0f;
+              addon = 50.0f - amps - 2.0f;  /* 2.0 A Sicherheitspuffer */
+            }
             id(ladebegrenzung_addon) = addon;
             if (!id(hems_lpc).is_limit_active() &&
                 !id(grid_provider_switch).state &&

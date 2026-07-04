@@ -96,6 +96,7 @@ class EebusWpComponent : public Component {
   /* Pairing management */
   void enter_pairing_mode();
   void forget_pairing();
+  void set_mdns_register(bool val);
   bool is_pairing_mode() const { return pairing_mode_active_; }
 
   /* State accessors */
@@ -157,8 +158,7 @@ class EebusWpComponent : public Component {
   bool        heartbeat_alarm_    {false};
   bool        time_synced_        {false};
   bool        service_started_    {false};
-  bool        startup_reconnect_done_ {false};
-  uint32_t    startup_reconnect_at_ms_{0};
+  uint32_t    mdns_advert_at_ms_  {0};
   float       current_power_w_    {0.0f};
   float       active_limit_w_     {0.0f};
   uint32_t    last_heartbeat_ms_  {0};

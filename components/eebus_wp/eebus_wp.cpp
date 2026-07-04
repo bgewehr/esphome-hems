@@ -314,7 +314,7 @@ void EebusWpComponent::setup() {
   }
 
   free(cert); free(key);
-  startup_reconnect_at_ms_ = millis() + 10000;
+  mdns_advert_at_ms_ = millis() + 15000;  /* first mDNS advert after services are up */
   ESP_LOGI(TAG, "EEBus WP ready — heartbeat interval: %u s", kHeartbeatTimeoutSeconds);
 }
 
@@ -355,22 +355,28 @@ void EebusWpComponent::loop() {
     pairing_mode_active_ = false;
     pairing_deadline_ms_ = 0;
     if (service_) EEBUS_SERVICE_SET_PAIRING_POSSIBLE(service_, false);
-    mdns_service_txt_item_set("_ship", "_tcp", "register", "false");
-    ESP_LOGW(TAG, "mDNS: register TXT -> false (pairing timeout)");
+    set_mdns_register(false);
     pairing_state_ = "Pairing-Fenster abgelaufen";
+    /* resume 15 s reconnect loop if a known device still hasn't connected */
+    if (!remote_ski_.empty()) mdns_advert_at_ms_ = now + 15000;
   }
 
-  /* Startup reconnect pulse: fire once ~10 s after boot if we have a known
-   * K40RF SKI but it hasn't connected yet.  K40RF only initiates connection
-   * when it sees register=true in our mDNS TXT record; without this it waits
-   * its own scan interval (~23 min) before retrying. */
-  if (!startup_reconnect_done_ && !remote_ski_.empty() && !connected_ && !pairing_mode_active_) {
-    if (now >= startup_reconnect_at_ms_) {
-      startup_reconnect_done_ = true;
-      ESP_LOGW(TAG, "Startup reconnect pulse — entering pairing mode for fast K40RF reconnect");
-      enter_pairing_mode();
+  /* Periodic mDNS advertisement loop:
+   *   - known device not connected: register=false every 15 s (device-initiated reconnect)
+   *   - pairing active:             register=true  every  5 s (attract new devices)
+   * Starts 15 s after boot so all services are up before the first advert. */
+  if (!connected_ && mdns_advert_at_ms_ != 0 && now >= mdns_advert_at_ms_) {
+    if (pairing_mode_active_) {
+      set_mdns_register(true);
+      mdns_advert_at_ms_ = now + 5000;
+    } else if (!remote_ski_.empty()) {
+      set_mdns_register(false);
+      mdns_advert_at_ms_ = now + 15000;
+    } else {
+      mdns_advert_at_ms_ = 0;  /* no known device — stop until pairing activated */
     }
   }
+
 }
 
 /* =========================================================================
@@ -442,7 +448,6 @@ void EebusWpComponent::on_remote_use_case(int actor, int uc_name_id, const char*
 
 void EebusWpComponent::on_entity_connect(const EntityAddressType* addr) {
   ESP_LOGI(TAG, "WP entity connected");
-  startup_reconnect_done_ = true;
   connected_          = true;
   heartbeat_alarm_    = false;
   connected_since_ms_ = millis();
@@ -735,9 +740,15 @@ void EebusWpComponent::enter_pairing_mode() {
   pairing_mode_active_ = true;
   pairing_deadline_ms_ = millis() + kPairingWindowMs;
   if (service_) EEBUS_SERVICE_SET_PAIRING_POSSIBLE(service_, true);
-  mdns_service_txt_item_set("_ship", "_tcp", "register", "true");
-  ESP_LOGW(TAG, "mDNS: register TXT -> true");
+  /* immediate first advert; loop() will repeat every 5 s while pairing is active */
+  set_mdns_register(true);
+  mdns_advert_at_ms_ = millis() + 5000;
   pairing_state_ = "Pairing-Modus aktiv — warte auf Verbindung...";
+}
+
+void EebusWpComponent::set_mdns_register(bool val) {
+  mdns_service_txt_item_set("_ship", "_tcp", "register", val ? "true" : "false");
+  ESP_LOGW(TAG, "mDNS: register TXT -> %s", val ? "true" : "false");
 }
 
 void EebusWpComponent::forget_pairing() {

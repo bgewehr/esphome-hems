@@ -355,3 +355,23 @@ button:
       sorting_weight: 23
     on_press:
       - lambda: "id(hems_wp).clear_limit();"
+
+  - platform: template
+    name: "${device_name} WP mDNS register=true"
+    icon: "mdi:broadcast"
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: sg_eebus_wp
+      sorting_weight: 24
+    on_press:
+      - lambda: "id(hems_wp).set_mdns_register(true);"
+
+  - platform: template
+    name: "${device_name} WP mDNS register=false"
+    icon: "mdi:broadcast-off"
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: sg_eebus_wp
+      sorting_weight: 25
+    on_press:
+      - lambda: "id(hems_wp).set_mdns_register(false);"

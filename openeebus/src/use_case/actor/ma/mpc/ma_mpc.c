@@ -26,6 +26,7 @@
 #include "src/common/eebus_arguments.h"
 #include "src/spine/entity/entity_local.h"
 #include "src/spine/feature/feature_local.h"
+#include "src/spine/model/feature_types.h"
 #include "src/spine/model/usecase_information_types.h"
 #include "src/use_case/actor/ma/mpc/ma_mpc_events.h"
 #include "src/use_case/actor/ma/mpc/ma_mpc_internal.h"
@@ -111,6 +112,7 @@ EebusError AddFeatures(UseCaseObject* self, EntityLocalObject* entity) {
   const FeatureTypeType client_features[] = {
       kFeatureTypeTypeElectricalConnection,
       kFeatureTypeTypeMeasurement,
+      kFeatureTypeTypeTimeSeries,  /* UC30: subscribe to Compressor TimeSeries */
   };
 
   for (size_t i = 0; i < ARRAY_SIZE(client_features); ++i) {
