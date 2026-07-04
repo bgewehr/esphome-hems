@@ -109,10 +109,11 @@ class EebusWpComponent : public Component {
   std::string pairing_state()   const { return pairing_state_; }
   std::string device_label()    const { return device_label_; }
   std::string active_use_cases() const {
-    std::string s;
-    if (connected_)     { s = "CS\xe2\x86\x92LPC"; }
-    if (mpc_connected_) { if (!s.empty()) s += " + "; s += "MU\xe2\x86\x92MPC"; }
-    return s.empty() ? std::string("(keine)") : s;
+    if (!k40rf_uc_seen_.empty()) {
+      return k40rf_uc_seen_.size() > 3 ? k40rf_uc_seen_.substr(3) : k40rf_uc_seen_;
+    }
+    if (connected_ || mpc_connected_) return std::string("verbunden, UC ausstehend");
+    return std::string("(keine)");
   }
   void on_remote_use_case(int actor, int uc_name_id, const char* uc_str, const char* actor_str);
 
@@ -158,7 +159,9 @@ class EebusWpComponent : public Component {
   bool        heartbeat_alarm_    {false};
   bool        time_synced_        {false};
   bool        service_started_    {false};
-  uint32_t    mdns_advert_at_ms_  {0};
+  bool        startup_mdns_done_  {false};
+  uint32_t    startup_mdns_at_ms_ {0};
+  uint32_t    pairing_advert_at_ms_{0};
   float       current_power_w_    {0.0f};
   float       active_limit_w_     {0.0f};
   uint32_t    last_heartbeat_ms_  {0};

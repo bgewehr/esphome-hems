@@ -74,8 +74,13 @@ static const WebsocketInterface kWebsocketServerMethods = {
 
 static void Destruct(WebsocketObject* self) {
   WebsocketServerEsp32* const ws = WS_SERVER(self);
-  /* httpd is NOT owned — do not call httpd_stop.
-   * Just send a close frame if still open and release resources. */
+  /* Clear HTTP session context BEFORE sending the close frame or freeing resources.
+   * The SHIP layer calls WebsocketDelete() from a different FreeRTOS task than httpd.
+   * Without this, WsSessionFreeCtx() can fire after EEBUS_FREE(ws), accessing freed
+   * memory and crashing via the garbage ws->callback value (InstrFetchProhibited). */
+  if (ws->server != NULL && ws->fd >= 0) {
+    httpd_sess_set_ctx(ws->server, ws->fd, NULL, NULL);
+  }
   if (!ws->closed && ws->fd >= 0) {
     httpd_ws_frame_t frame = {
       .final   = true,

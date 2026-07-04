@@ -73,8 +73,9 @@ struct Mdns {
   int port;
   bool autoaccept;
   Vector* found_entries;
-  EebusThreadObject* thread;
-  SemaphoreHandle_t semaphore;
+  EebusThreadObject* thread;   /* unused — browser loop removed */
+  SemaphoreHandle_t semaphore; /* unused — browser loop removed */
+  mdns_browse_t* browse;       /* passive _ship._tcp event receiver */
 };
 
 /**
@@ -281,37 +282,22 @@ uint32_t GetUpdateIntervalMs(void) {
   return update_interval * 1000;
 }
 
-void* MdnsBrowserLoop(void* parameters) {
-  Mdns* const mdns = (Mdns*)parameters;
-
-  mdns_search_once_t* search = NULL;
-
-  while (!mdns->cancel) {
-    VectorFreeElements(mdns->found_entries);
-
-    search = mdns_query_async_new(
-        NULL,
-        kShipServiceType,
-        kShipServiceProtocol,
-        MDNS_TYPE_PTR,
-        kMdnsQueryTimeoutMs,
-        kMdnsQueryMaxResults,
-        MdnsQueryNotifyCallback
-    );
-
-    xSemaphoreTake(mdns->semaphore, portMAX_DELAY);
-
-    MdnsProcessSearchResult(mdns, search);
-    mdns_query_async_delete(search);
-    search = NULL;
-
-    if (!mdns->cancel) {
-      const TickType_t timeout = pdMS_TO_TICKS(GetUpdateIntervalMs());
-      xSemaphoreTake(mdns->semaphore, timeout);
-    }
+/* Passive mDNS browse callback — called by the mDNS stack whenever a
+ * _ship._tcp device is seen on the network.  We only log; the HEMS is a
+ * pure server and never initiates outgoing SHIP connections. */
+static void MdnsPassiveLogCallback(mdns_result_t* result) {
+  if (!result) return;
+  const char* ski = "?";
+  const char* reg = "?";
+  for (size_t i = 0; i < result->txt_count; i++) {
+    if (result->txt[i].key && strcmp(result->txt[i].key, "ski") == 0 && result->txt[i].value)
+      ski = result->txt[i].value;
+    if (result->txt[i].key && strcmp(result->txt[i].key, "register") == 0 && result->txt[i].value)
+      reg = result->txt[i].value;
   }
-
-  return NULL;
+  ESP_LOGW("eebus_mdns", "mDNS _ship._tcp: %s port=%d ski=%.8s... register=%s",
+           result->instance_name ? result->instance_name : "?",
+           result->port, ski, reg);
 }
 
 EebusError RegisterService(ShipMdnsObject* self) {
@@ -420,10 +406,9 @@ EebusError Start(ShipMdnsObject* self) {
     return ret;
   }
 
-  mdns->thread = EebusThreadCreate(MdnsBrowserLoop, mdns, 4096);
-  if (mdns->thread == NULL) {
-    MDNS_DEBUG_PRINTF("EebusThreadCreate() failed\n");
-    return kEebusErrorThread;
+  mdns->browse = mdns_browse_new(kShipServiceType, kShipServiceProtocol, MdnsPassiveLogCallback);
+  if (mdns->browse == NULL) {
+    ESP_LOGW("eebus_mdns", "mDNS passive browse unavailable — _ship._tcp events will not be logged");
   }
 
   return kEebusErrorOk;
@@ -432,13 +417,9 @@ EebusError Start(ShipMdnsObject* self) {
 void DeregisterService(ShipMdnsObject* self) {
   Mdns* const mdns = MDNS(self);
 
-  mdns->cancel = true;
-
-  if (mdns->thread != NULL) {
-    xSemaphoreGive(mdns->semaphore);
-    EEBUS_THREAD_JOIN(mdns->thread);
-    EebusThreadDelete(mdns->thread);
-    mdns->thread = NULL;
+  if (mdns->browse != NULL) {
+    mdns_browse_delete(kShipServiceType, kShipServiceProtocol);
+    mdns->browse = NULL;
   }
 
   mdns_free();

@@ -142,7 +142,15 @@ text_sensor:
       sorting_group_id: sg_eebus_cs
       sorting_weight: 3
     update_interval: 5s
-    lambda: "return id(hems_lpc).pairing_state();"
+    lambda: |-
+      std::string s = id(hems_lpc).pairing_state();
+      // SKI is already shown in "CS Pairing ausstehend" / "CS Gepaarte SKI" —
+      // strip the trailing ": <ski>" (40 hex chars) from Verbindungsstatus
+      auto pos = s.rfind(": ");
+      if (pos != std::string::npos && s.size() - pos >= 42) {
+        s = s.substr(0, pos);
+      }
+      return s;
 
   - platform: template
     name: "${device_name} CS Pairing ausstehend"
@@ -242,8 +250,11 @@ text_sensor:
       sorting_group_id: sg_eebus_cs
       sorting_weight: 7
     entity_category: diagnostic
-    update_interval: 60s
-    lambda: "return std::string(\"LPC\");"
+    update_interval: 5s
+    lambda: |-
+      if (id(hems_lpc).is_limit_active()) return std::string("LPC (aktiv)");
+      if (id(hems_lpc).is_paired())       return std::string("LPC (verbunden)");
+      return std::string("(keine)");
 
   # --- WP Use Cases (sg_eebus_wp) ---
   - platform: template

@@ -314,7 +314,7 @@ void EebusWpComponent::setup() {
   }
 
   free(cert); free(key);
-  mdns_advert_at_ms_ = millis() + 15000;  /* first mDNS advert after services are up */
+  startup_mdns_at_ms_ = millis() + 15000;  /* one-shot mDNS announce after services are up */
   ESP_LOGI(TAG, "EEBus WP ready — heartbeat interval: %u s", kHeartbeatTimeoutSeconds);
 }
 
@@ -356,25 +356,20 @@ void EebusWpComponent::loop() {
     pairing_deadline_ms_ = 0;
     if (service_) EEBUS_SERVICE_SET_PAIRING_POSSIBLE(service_, false);
     set_mdns_register(false);
+    pairing_advert_at_ms_ = 0;
     pairing_state_ = "Pairing-Fenster abgelaufen";
-    /* resume 15 s reconnect loop if a known device still hasn't connected */
-    if (!remote_ski_.empty()) mdns_advert_at_ms_ = now + 15000;
   }
 
-  /* Periodic mDNS advertisement loop:
-   *   - known device not connected: register=false every 15 s (device-initiated reconnect)
-   *   - pairing active:             register=true  every  5 s (attract new devices)
-   * Starts 15 s after boot so all services are up before the first advert. */
-  if (!connected_ && mdns_advert_at_ms_ != 0 && now >= mdns_advert_at_ms_) {
-    if (pairing_mode_active_) {
-      set_mdns_register(true);
-      mdns_advert_at_ms_ = now + 5000;
-    } else if (!remote_ski_.empty()) {
-      set_mdns_register(false);
-      mdns_advert_at_ms_ = now + 15000;
-    } else {
-      mdns_advert_at_ms_ = 0;  /* no known device — stop until pairing activated */
-    }
+  /* Boot: one-shot mDNS announce 15 s after boot (eebus-go pattern: checkAutoReannounce on start) */
+  if (!startup_mdns_done_ && now >= startup_mdns_at_ms_) {
+    startup_mdns_done_ = true;
+    if (!connected_) set_mdns_register(false);
+  }
+
+  /* Pairing: register=true every 5 s while pairing window is open */
+  if (pairing_mode_active_ && pairing_advert_at_ms_ != 0 && now >= pairing_advert_at_ms_) {
+    set_mdns_register(true);
+    pairing_advert_at_ms_ = now + 5000;
   }
 
 }
@@ -479,6 +474,8 @@ void EebusWpComponent::on_entity_disconnect(const EntityAddressType* /*addr*/) {
   active_limit_w_     = 0.0f;
   k40rf_uc_seen_      = {};
   pairing_state_      = "Getrennt — suche WP...";
+  /* Re-announce mDNS so K40RF reconnects immediately (eebus-go: checkAutoReannounce on disconnect) */
+  set_mdns_register(false);
 
   /* Do NOT stop the heartbeat on disconnect — eebus-go never stops it.
    * Keeping it running ensures the feature data is always fresh for the
@@ -740,9 +737,9 @@ void EebusWpComponent::enter_pairing_mode() {
   pairing_mode_active_ = true;
   pairing_deadline_ms_ = millis() + kPairingWindowMs;
   if (service_) EEBUS_SERVICE_SET_PAIRING_POSSIBLE(service_, true);
-  /* immediate first advert; loop() will repeat every 5 s while pairing is active */
+  /* immediate first advert; loop() repeats every 5 s while pairing window is open */
   set_mdns_register(true);
-  mdns_advert_at_ms_ = millis() + 5000;
+  pairing_advert_at_ms_ = millis() + 5000;
   pairing_state_ = "Pairing-Modus aktiv — warte auf Verbindung...";
 }
 
