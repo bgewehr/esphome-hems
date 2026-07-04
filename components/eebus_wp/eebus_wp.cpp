@@ -111,7 +111,11 @@ static void spine_event_handler(const EventPayload* payload, void* ctx) {
                (int)f->actor, actor_str,
                (int)f->use_case_name_id, uc_str);
       if (self && payload->change_type == kElementChangeAdd) {
-        self->on_remote_use_case(f->actor, f->use_case_name_id, uc_str, actor_str);
+        // Only track use cases from the WP's own device, not from other devices (e.g. CS §14a side)
+        const std::string& wp_ski = self->remote_ski();
+        if (wp_ski.empty() || wp_ski == ski) {
+          self->on_remote_use_case(f->actor, f->use_case_name_id, uc_str, actor_str);
+        }
       }
       break;
     }
@@ -435,9 +439,27 @@ void EebusWpComponent::set_limit(float watts) {
  * EgLpListenerInterface callbacks
  * ====================================================================== */
 
-void EebusWpComponent::on_remote_use_case(int actor, int uc_name_id, const char* uc_str, const char* actor_str) {
-  char buf[80];
-  snprintf(buf, sizeof(buf), " | %s(%d)/%s(%d)", actor_str, actor, uc_str, uc_name_id);
+void EebusWpComponent::on_remote_use_case(int actor, int uc_name_id, const char* /*uc_str*/, const char* /*actor_str*/) {
+  /* Official EEBus SPINE abbreviations (EEBus Initiative documentation) */
+  const char* a;
+  switch (actor) {
+    case  4: a = "Comp"; break;  /* Compressor */
+    case  5: a = "CS";   break;  /* ControllableSystem */
+    case  9: a = "EG";   break;  /* EnergyGuard */
+    case 18: a = "MU";   break;  /* MonitoredUnit */
+    case 19: a = "MA";   break;  /* MonitoringAppliance */
+    default: a = "?";    break;
+  }
+  const char* uc;
+  switch (uc_name_id) {
+    case 14: uc = "LPC";     break;  /* limitationOfPowerConsumption */
+    case 15: uc = "LPP";     break;  /* limitationOfPowerProduction */
+    case 25: uc = "MPC";     break;  /* monitoringOfPowerConsumption */
+    case 30: uc = "OSSHPCF"; break;  /* optimizationOfSelfConsumptionByHPCF */
+    default: uc = "?";       break;
+  }
+  char buf[24];
+  snprintf(buf, sizeof(buf), " | %s/%s", a, uc);
   k40rf_uc_seen_ += buf;
 }
 

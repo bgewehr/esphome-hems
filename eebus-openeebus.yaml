@@ -161,7 +161,8 @@ text_sensor:
     update_interval: 3s
     lambda: |-
       std::string ski = id(hems_lpc).pending_remote_ski();
-      return ski.empty() ? std::string("(keine)") : ski;
+      if (ski.empty() || ski == id(hems_lpc).paired_remote_ski()) return std::string("(keine)");
+      return ski;
 
   - platform: template
     name: "${device_name} CS Gepaarte SKI"
@@ -252,8 +253,7 @@ text_sensor:
     entity_category: diagnostic
     update_interval: 5s
     lambda: |-
-      if (id(hems_lpc).is_limit_active()) return std::string("LPC (aktiv)");
-      if (id(hems_lpc).is_paired())       return std::string("LPC (verbunden)");
+      if (id(hems_lpc).is_paired()) return std::string("CS/LPC");
       return std::string("(keine)");
 
   # --- WP Use Cases (sg_eebus_wp) ---

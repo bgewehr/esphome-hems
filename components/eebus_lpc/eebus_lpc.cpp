@@ -547,6 +547,8 @@ bool EebusLpcComponent::start_eebus_service_(
       CS_LP_LISTENER_OBJECT(&lpc_listener_));
   if (!cs_lpc_) { ESP_LOGE(TAG, "CsLpcUseCaseCreate failed"); return false; }
 
+  DEVICE_LOCAL_ADD_ENTITY(device_local, local_entity_);
+
   EEBUS_SERVICE_START(service_);
   // EEBUS_SERVICE_START returns void in this version of openeebus
 
