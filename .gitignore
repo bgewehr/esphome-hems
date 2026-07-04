@@ -15,3 +15,6 @@ __pycache__/
 
 # Editor/workspace files
 *.code-workspace
+
+tools/.fake_steuerbox_cert.pem
+tools/.fake_steuerbox_key.pem
