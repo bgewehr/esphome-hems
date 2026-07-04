@@ -90,7 +90,7 @@ class EebusWpComponent : public Component {
   void clear_limit() { set_limit(0.0f); }
 
   /** Call from on_time_sync (SNTP or HA) to push a fresh heartbeat timestamp.
-   *  Prevents K40RF from seeing an epoch timestamp on its first subscription. */
+   *  Prevents the remote CS device from seeing an epoch timestamp on its first subscription. */
   void refresh_heartbeat();
 
   /* Pairing management */
@@ -109,8 +109,8 @@ class EebusWpComponent : public Component {
   std::string pairing_state()   const { return pairing_state_; }
   std::string device_label()    const { return device_label_; }
   std::string active_use_cases() const {
-    if (!k40rf_uc_seen_.empty()) {
-      return k40rf_uc_seen_.size() > 3 ? k40rf_uc_seen_.substr(3) : k40rf_uc_seen_;
+    if (!remote_uc_seen_.empty()) {
+      return remote_uc_seen_.size() > 3 ? remote_uc_seen_.substr(3) : remote_uc_seen_;
     }
     if (connected_ || mpc_connected_) return std::string("verbunden, UC ausstehend");
     return std::string("(keine)");
@@ -155,7 +155,7 @@ class EebusWpComponent : public Component {
   /* Runtime */
   bool        connected_          {false};
   bool        mpc_connected_      {false};
-  std::string k40rf_uc_seen_      {};
+  std::string remote_uc_seen_     {};
   bool        heartbeat_alarm_    {false};
   bool        time_synced_        {false};
   bool        service_started_    {false};
@@ -211,15 +211,15 @@ static void MpcL_Destruct(MaMpcListenerObject*) {}
 
 static void MpcL_OnRemoteEntityConnect(MaMpcListenerObject* o, const EntityAddressType* addr) {
   auto* self = reinterpret_cast<EebusWpComponent::MpcListener*>(o)->self;
-  // K40RF announces MU/MPC on multiple SPINE entities; suppress duplicates.
+  // Remote CS device may announce MU/MPC on multiple SPINE entities; suppress duplicates.
   if (self->mpc_connected()) return;
-  ESP_LOGW("eebus_wp", "MPC: K40rf measurement unit connected");
+  ESP_LOGW("eebus_wp", "MPC: remote measurement unit connected");
   ESP_LOGI("eebus", "SPINE remote MA/MPC entity connected: ski=%s",
            (addr && addr->device) ? addr->device : "?");
   self->on_mpc_state_(true);
 }
 static void MpcL_OnRemoteEntityDisconnect(MaMpcListenerObject* o, const EntityAddressType*) {
-  ESP_LOGW("eebus_wp", "MPC: K40rf measurement unit disconnected");
+  ESP_LOGW("eebus_wp", "MPC: remote measurement unit disconnected");
   reinterpret_cast<EebusWpComponent::MpcListener*>(o)->self->on_mpc_state_(false);
 }
 static void MpcL_OnMeasurementReceive(

@@ -1,12 +1,11 @@
 """ESPHome external component: eebus_wp
 
 EEBus SHIP/SPINE LPC Energy Guard (EG) actor — sends power limits to the
-Bosch Compress 5800i via the K40RF EEBus Gateway.
+connected CS (Controllable System) device, e.g. a heat pump EEBus gateway.
 
-The HEMS acts as CEM/EG, the K40RF acts as CS (Controllable System).
-The K40RF is discovered automatically via mDNS (_ship._tcp).
+The HEMS acts as CEM/EG, the remote CS device is discovered automatically via mDNS (_ship._tcp).
 
-Use cases supported by Bosch K40RF:
+Typical EEBus use cases announced by CS devices:
   LPC  — Limitation of Power Consumption  (we send limits)
   MPC  — Monitoring of Power Consumption  (we read actual power)
   OHPCF — PV optimisation (via LPC + limit scheduling)
@@ -14,11 +13,11 @@ Use cases supported by Bosch K40RF:
 Example YAML:
     eebus_wp:
       id: hems_wp
-      remote_ski: "aabbcc..."   # SKI of K40RF — from web UI after pairing
+      remote_ski: "aabbcc..."   # SKI of remote CS device — from web UI after pairing
       on_wp_connected:
-        - logger.log: "K40RF connected"
+        - logger.log: "CS device connected"
       on_wp_disconnected:
-        - logger.log: "K40RF disconnected"
+        - logger.log: "CS device disconnected"
 """
 
 import os

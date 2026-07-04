@@ -148,13 +148,13 @@ static const char* NVS_KEY_CERT  = "cert_der";
 static const char* NVS_KEY_KEY   = "key_der";
 static const char* NVS_KEY_SKI   = "remote_ski";
 
-/* Outbound heartbeat timeout declared to K40RF in the DeviceDiagnosis heartbeat
+/* Outbound heartbeat timeout declared to the remote CS device in the DeviceDiagnosis heartbeat
  * data (SPINE spec standard for HEMS). heartbeat_manager sends every
  * timeout*3/4 = 45 s, well within the 60 s window. */
 static const uint32_t kHeartbeatTimeoutSeconds = 60;
 
-/* Inbound alarm: how long without a heartbeat from K40RF before we warn.
- * K40RF sends its own heartbeat every ~40 s; 3× that gives a safe margin. */
+/* Inbound alarm: how long without a heartbeat from the remote CS device before we warn.
+ * EEBus heartbeats are sent every ~40 s; 3× that gives a safe margin. */
 static const uint32_t kInboundHeartbeatAlarmMs = 120000u;
 
 /* Pairing window: how long the explicit pairing mode stays open */
@@ -193,9 +193,9 @@ static void SR_OnRemoteServicesUpdate(
     ServiceReaderObject* o, EebusServiceObject* svc, const Vector* entries)
 {
   (void)svc;
-  /* In EEBus, both the HEMS (EG role) and K40rf (CS role) connect to each other
+  /* In EEBus, both the HEMS (EG role) and the remote CS device connect to each other
    * via "auto" SHIP role.  Connection initiation happens via the startup
-   * EEBUS_SERVICE_REGISTER_REMOTE_SKI call (known SKI) or inbound from K40rf
+   * EEBUS_SERVICE_REGISTER_REMOTE_SKI call (known SKI) or inbound from the remote device
    * via IsWaitingForTrustAllowed (pairing).  Do NOT call REGISTER_REMOTE_SKI
    * here — the reference openeebus/examples/hems/hems.c does nothing in this
    * callback and triggering an outbound attempt from every mDNS update causes
@@ -286,7 +286,7 @@ static const ServiceReaderInterface kServiceReaderMethods = {
 void EebusWpComponent::setup() {
   ESP_LOGI(TAG, "Setting up EEBus WP controller");
 
-  /* Load paired K40RF SKI from NVS if not set in YAML secrets */
+  /* Load paired remote CS device SKI from NVS if not set in YAML secrets */
   if (remote_ski_.empty()) {
     remote_ski_ = load_remote_ski_nvs_();
     if (!remote_ski_.empty()) {
@@ -329,12 +329,12 @@ void EebusWpComponent::setup() {
 void EebusWpComponent::loop() {
   if (!service_ || !eg_lpc_) return;
 
-  /* Check if K40RF has sent us a heartbeat within 2× the declared timeout.
+  /* Check if the remote CS device has sent us a heartbeat within 2× the declared timeout.
    * EgLpcIsHeartbeatWithinDuration is broken (passes NULL remote entity →
    * always returns false), so we track the last received heartbeat ourselves
    * via on_heartbeat_received_() / last_heartbeat_ms_.
    * Grace period: allow up to 2× timeout after connect before alarming —
-   * K40RF's heartbeat timer runs continuously and the first beat can arrive
+   * the remote device's heartbeat timer runs continuously and the first beat can arrive
    * up to 1× timeout after our connection is established. */
   const uint32_t hb_timeout_ms = kInboundHeartbeatAlarmMs;
   const bool grace   = connected_ && ((millis() - connected_since_ms_) < hb_timeout_ms);
@@ -460,7 +460,7 @@ void EebusWpComponent::on_remote_use_case(int actor, int uc_name_id, const char*
   }
   char buf[24];
   snprintf(buf, sizeof(buf), " | %s/%s", a, uc);
-  k40rf_uc_seen_ += buf;
+  remote_uc_seen_ += buf;
 }
 
 void EebusWpComponent::on_entity_connect(const EntityAddressType* addr) {
@@ -494,14 +494,14 @@ void EebusWpComponent::on_entity_disconnect(const EntityAddressType* /*addr*/) {
   last_heartbeat_ms_  = 0;
   have_remote_entity_ = false;
   active_limit_w_     = 0.0f;
-  k40rf_uc_seen_      = {};
+  remote_uc_seen_     = {};
   pairing_state_      = "Getrennt — suche WP...";
-  /* Re-announce mDNS so K40RF reconnects immediately (eebus-go: checkAutoReannounce on disconnect) */
+  /* Re-announce mDNS so the remote device reconnects immediately (eebus-go: checkAutoReannounce on disconnect) */
   set_mdns_register(false);
 
   /* Do NOT stop the heartbeat on disconnect — eebus-go never stops it.
    * Keeping it running ensures the feature data is always fresh for the
-   * next time K40RF connects and subscribes. */
+   * next time the remote device connects and subscribes. */
 
   for (auto* t : disconnected_triggers_) t->trigger();
 }
@@ -726,11 +726,11 @@ bool EebusWpComponent::start_eebus_service_(
   /* Register entity with device so it is advertised via SPINE/mDNS */
   DEVICE_LOCAL_ADD_ENTITY(device_local, local_entity_);
 
-  /* Subscribe so remote SPINE announcements from K40RF appear in log under tag "eebus" */
+  /* Subscribe so remote SPINE announcements appear in log under tag "eebus" */
   EventSubscribe(kEventHandlerLevelApplication, spine_event_handler, this);
 
   /* Service start is deferred to refresh_heartbeat() (called on the first
-   * on_time_sync event from SNTP or HA).  This guarantees K40RF cannot
+   * on_time_sync event from SNTP or HA).  This guarantees the remote device cannot
    * subscribe while the stored DeviceDiagnosis heartbeat data still carries
    * an epoch timestamp — the root cause of its persistent "no connection"
    * display state. */

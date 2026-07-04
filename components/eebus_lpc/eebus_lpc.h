@@ -127,6 +127,13 @@ class EebusLpcComponent : public Component {
   bool        is_paired()            const { return !paired_remote_ski_.empty(); }
   bool        has_pending_pairing()  const { return !pending_remote_ski_.empty(); }
   bool        is_pairing_mode()      const { return pairing_mode_active_; }
+  std::string active_use_cases()     const {
+    if (!remote_uc_seen_.empty()) {
+      return remote_uc_seen_.size() > 3 ? remote_uc_seen_.substr(3) : remote_uc_seen_;
+    }
+    if (is_paired()) return std::string("verbunden, UC ausstehend");
+    return std::string("(keine)");
+  }
 
   /* -----------------------------------------------------------------------
    * Callbacks from openeebus C layer (called by vtable functions below)
@@ -140,6 +147,7 @@ class EebusLpcComponent : public Component {
   void on_power_limit_receive(float limit_w, bool is_active);
   void on_failsafe_limit_receive(float limit_w);
   void on_heartbeat_receive(uint64_t counter);
+  void on_remote_use_case(int actor, int uc_name_id, const char* uc_str, const char* actor_str);
 
  protected:
   bool load_or_generate_cert_();
@@ -167,6 +175,7 @@ class EebusLpcComponent : public Component {
   std::string paired_remote_ski_ {};    /* trusted, data exchange active */
   std::string pending_remote_ski_{};    /* connected but not yet trusted */
   std::string pairing_state_str_ {"Nicht verbunden"};
+  std::string remote_uc_seen_    {};    /* accumulated use-case announcements from remote EG */
 
   bool        limit_active_        {false};
   float       current_limit_w_     {0.0f};

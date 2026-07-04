@@ -252,9 +252,7 @@ text_sensor:
       sorting_weight: 7
     entity_category: diagnostic
     update_interval: 5s
-    lambda: |-
-      if (id(hems_lpc).is_paired()) return std::string("CS/LPC");
-      return std::string("(keine)");
+    lambda: "return id(hems_lpc).active_use_cases();"
 
   # --- WP Use Cases (sg_eebus_wp) ---
   - platform: template

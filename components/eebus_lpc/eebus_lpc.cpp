@@ -23,11 +23,26 @@ extern "C" {
 #include "src/service/api/service_reader_interface.h"
 #include "src/ship/tls_certificate/tls_certificate.h"
 #include "src/spine/entity/entity_local.h"
+#include "src/spine/events/events.h"
 #include "src/spine/model/entity_types.h"
 #include "src/use_case/actor/cs/lpc/cs_lpc.h"
 }
 
 #include "port/esp32/websocket/websocket_server_esp32.h"
+
+static void lpc_spine_event_handler(const EventPayload* payload, void* ctx) {
+  auto* self = static_cast<esphome::eebus_lpc::EebusLpcComponent*>(ctx);
+  if (!payload) return;
+  const char* ski = payload->ski ? payload->ski : "?";
+  if (payload->event_type != kEventTypeUseCaseChange) return;
+  const UseCaseFilterType* f = payload->use_case_filter;
+  if (!f) return;
+  if (payload->change_type != kElementChangeAdd) return;
+  /* Only track use cases announced by the paired remote EG */
+  const std::string& paired = self->paired_remote_ski();
+  if (!paired.empty() && paired != ski) return;
+  self->on_remote_use_case(f->actor, f->use_case_name_id, nullptr, nullptr);
+}
 
 namespace esphome {
 namespace eebus_lpc {
@@ -232,6 +247,7 @@ void EebusLpcComponent::on_remote_ski_disconnected(const char* ski) {
   ESP_LOGI(TAG, "Remote SKI disconnected: %s", ski);
   if (paired_remote_ski_ == ski)  paired_remote_ski_.clear();
   if (pending_remote_ski_ == ski) pending_remote_ski_.clear();
+  remote_uc_seen_ = {};
   /* pairing_mode_active_ stays — allow reconnect within the window */
 
   if (limit_active_) {
@@ -549,11 +565,36 @@ bool EebusLpcComponent::start_eebus_service_(
 
   DEVICE_LOCAL_ADD_ENTITY(device_local, local_entity_);
 
+  EventSubscribe(kEventHandlerLevelApplication, lpc_spine_event_handler, this);
+
   EEBUS_SERVICE_START(service_);
   // EEBUS_SERVICE_START returns void in this version of openeebus
 
   last_heartbeat_ms_ = millis();
   return true;
+}
+
+void EebusLpcComponent::on_remote_use_case(int actor, int uc_name_id, const char* /*uc_str*/, const char* /*actor_str*/) {
+  const char* a;
+  switch (actor) {
+    case  4: a = "Comp"; break;
+    case  5: a = "CS";   break;
+    case  9: a = "EG";   break;
+    case 18: a = "MU";   break;
+    case 19: a = "MA";   break;
+    default: a = "?";    break;
+  }
+  const char* uc;
+  switch (uc_name_id) {
+    case 14: uc = "LPC";     break;
+    case 15: uc = "LPP";     break;
+    case 25: uc = "MPC";     break;
+    case 30: uc = "OSSHPCF"; break;
+    default: uc = "?";       break;
+  }
+  char buf[24];
+  snprintf(buf, sizeof(buf), " | %s/%s", a, uc);
+  remote_uc_seen_ += buf;
 }
 
 void EebusLpcComponent::update_pairing_state_(const std::string& state) {
