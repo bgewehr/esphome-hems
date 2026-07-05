@@ -171,8 +171,10 @@ void EebusLpcComponent::loop() {
 
   uint32_t now = millis();
 
-  /* Heartbeat watchdog: if paired and no heartbeat within timeout, apply failsafe */
-  if (limit_active_ && !heartbeat_lost_ && last_heartbeat_ms_ > 0) {
+  /* Heartbeat watchdog: spec requires CS to enter failsafe on EG heartbeat loss,
+   * regardless of whether a limit is currently active. Guard on paired SKI so
+   * we don't fire before any EG has connected. */
+  if (!paired_remote_ski_.empty() && !heartbeat_lost_ && last_heartbeat_ms_ > 0) {
     if ((now - last_heartbeat_ms_) > kHeartbeatTimeoutSeconds * 1000u) {
       ESP_LOGW(TAG, "Heartbeat lost — applying failsafe %.0f W", failsafe_limit_w_);
       heartbeat_lost_ = true;
@@ -250,10 +252,14 @@ void EebusLpcComponent::on_remote_ski_disconnected(const char* ski) {
   remote_uc_seen_ = {};
   /* pairing_mode_active_ stays — allow reconnect within the window */
 
-  if (limit_active_) {
+  if (heartbeat_lost_) {
+    /* Failsafe is active — keep the limit running across the SHIP disconnect.
+     * The EG must explicitly send isLimitActive=false after reconnecting. */
+  } else if (limit_active_) {
     limit_active_ = false; current_limit_w_ = 0.0f;
     for (auto* t : limit_cleared_triggers_) t->trigger();
   }
+  if (!heartbeat_lost_) last_heartbeat_ms_ = 0; /* prevent stale timestamp after reconnect */
   update_pairing_state_("Getrennt");
 }
 
