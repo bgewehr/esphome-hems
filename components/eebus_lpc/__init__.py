@@ -208,7 +208,7 @@ async def to_code(config):
         cg.add_build_flag("-I" + os.path.dirname(idf_cjson[0]).replace("\\", "/"))
 
     # esp_websocket_client is required by the port/esp32 WebSocket client layer
-    # (used by eebus_wp for outbound SHIP connections to remote CS devices).
+    # (used by eebus_eg1 for outbound SHIP connections to remote CS devices).
     # In ESP-IDF 5.x it is a managed component — declare it so the IDF
     # Component Manager downloads and includes it in the build.
     from esphome.components.esp32 import (

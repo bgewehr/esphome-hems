@@ -78,22 +78,23 @@ select:
     restore_value: true
     optimistic: true
 
-eebus_wp:
+eebus_eg1:
   id: hems_eg1
-  ship_port: ${eebus_wp_ship_port}
-  remote_ski: !secret eebus_wp_remote_ski
+  ship_port: ${eebus_eg1_ship_port}
+  remote_ski: !secret eebus_eg1_remote_ski
+  instance_name: "EG1"
   device_brand: "DIY"
   device_type: "HEMS"
   device_model: "esphome-hems"
   failsafe_limit_w: ${eebus_failsafe_limit_w}
   failsafe_duration_s: ${eebus_failsafe_duration_s}
 
-  on_wp_connected:
+  on_eg1_connected:
     - lambda: |-
         ESP_LOGI("eebus", "EEBus EG1 (%s) verbunden — native Leistungslimitierung aktiv",
                  id(eg1_device_type).current_option().c_str());
 
-  on_wp_disconnected:
+  on_eg1_disconnected:
     - lambda: |-
         ESP_LOGI("eebus", "EEBus EG1 (%s) getrennt — Relais-Fallback verfügbar",
                  id(eg1_device_type).current_option().c_str());
