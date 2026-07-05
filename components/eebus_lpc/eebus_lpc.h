@@ -118,6 +118,7 @@ class EebusLpcComponent : public Component {
    * State accessors (for sensors / text_sensors in YAML)
    * -------------------------------------------------------------------- */
   bool        is_limit_active()      const { return limit_active_; }
+  bool        is_connected()         const { return connected_; }
   bool        is_heartbeat_lost()    const { return heartbeat_lost_; }
   float       current_limit_w()      const { return current_limit_w_; }
   float       failsafe_limit_w()     const { return failsafe_limit_w_; }
@@ -178,6 +179,7 @@ class EebusLpcComponent : public Component {
   std::string pairing_state_str_ {"Inaktiv"};
   std::string remote_uc_seen_    {};    /* accumulated use-case announcements from remote EG */
 
+  bool        connected_           {false};
   bool        limit_active_        {false};
   float       current_limit_w_     {0.0f};
   bool        heartbeat_lost_      {false};

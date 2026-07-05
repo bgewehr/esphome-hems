@@ -241,7 +241,7 @@ web_server:
       name: "EEBus CS (Steuerbox)"
       sorting_weight: 6
     - id: sg_eebus_eg1
-      name: "EEBus EG1"
+      name: "EEBus Energy Guard 1 (EG1)"
       sorting_weight: 7
     - id: sg_system
       name: "System"

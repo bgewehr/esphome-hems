@@ -353,6 +353,13 @@ void EebusWpComponent::loop() {
     heartbeat_alarm_ = false;
   }
 
+  /* Heartbeat test: restart heartbeat after 90 s pause */
+  if (heartbeat_test_until_ms_ != 0 && millis() >= heartbeat_test_until_ms_) {
+    heartbeat_test_until_ms_ = 0;
+    EgLpcStartHeartbeat(eg_lpc_);
+    ESP_LOGI(TAG, "Heartbeat test complete — outbound heartbeat resumed");
+  }
+
   /* Pairing window timeout */
   uint32_t now = millis();
   if (pairing_mode_active_ && now >= pairing_deadline_ms_) {
@@ -420,6 +427,18 @@ void EebusWpComponent::dump_config() {
 /* =========================================================================
  * Public API
  * ====================================================================== */
+
+void EebusWpComponent::start_heartbeat_test() {
+  if (!eg_lpc_) {
+    ESP_LOGW(TAG, "Heartbeat test: service not running");
+    return;
+  }
+  static const uint32_t kTestDurationMs = 90000u;
+  ESP_LOGW(TAG, "Heartbeat test: pausing outbound heartbeat for %u s — CS device will apply failsafe",
+           kTestDurationMs / 1000u);
+  EgLpcStopHeartbeat(eg_lpc_);
+  heartbeat_test_until_ms_ = millis() + kTestDurationMs;
+}
 
 void EebusWpComponent::set_limit(float watts) {
   if (!connected_ || !have_remote_entity_ || !eg_lpc_) {

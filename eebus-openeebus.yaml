@@ -181,7 +181,7 @@ binary_sensor:
     web_server:
       sorting_group_id: sg_eebus_cs
       sorting_weight: 2.5
-    lambda: "return !id(hems_lpc).is_heartbeat_lost();"
+    lambda: "return id(hems_lpc).is_connected() && !id(hems_lpc).is_heartbeat_lost();"
 
   # --- EG1 Heartbeat (sg_eebus_eg1, weight 2.5) ---
   - platform: template
@@ -199,7 +199,7 @@ interval:
     then:
       - binary_sensor.template.publish:
           id: cs_heartbeat_ok
-          state: !lambda "return !id(hems_lpc).is_heartbeat_lost();"
+          state: !lambda "return id(hems_lpc).is_connected() && !id(hems_lpc).is_heartbeat_lost();"
       - binary_sensor.template.publish:
           id: eg1_heartbeat_ok
           state: !lambda "return !id(hems_eg1).is_heartbeat_alarm();"
@@ -439,7 +439,7 @@ button:
     on_press:
       - lambda: "id(hems_eg1).forget_pairing();"
 
-  # --- EG1 Diagnose (sg_eebus_eg1, weights 20-25) ---
+  # --- EG1 Diagnose (sg_eebus_eg1, weight 20) ---
   - platform: template
     name: "${device_name} EG1 Failsafe testen"
     icon: "mdi:shield-check"
@@ -448,54 +448,4 @@ button:
       sorting_group_id: sg_eebus_eg1
       sorting_weight: 20
     on_press:
-      - lambda: "id(hems_eg1).set_limit(4200.0f);"
-
-  - platform: template
-    name: "${device_name} EG1 Normalbetrieb"
-    icon: "mdi:restore"
-    entity_category: diagnostic
-    web_server:
-      sorting_group_id: sg_eebus_eg1
-      sorting_weight: 21
-    on_press:
-      - lambda: "id(hems_eg1).clear_limit();"
-
-  - platform: template
-    name: "${device_name} EG1 Limit 4200 W"
-    icon: "mdi:lightning-bolt-circle"
-    entity_category: diagnostic
-    web_server:
-      sorting_group_id: sg_eebus_eg1
-      sorting_weight: 22
-    on_press:
-      - lambda: "id(hems_eg1).set_limit(4200.0f);"
-
-  - platform: template
-    name: "${device_name} EG1 Vollleistung freigeben"
-    icon: "mdi:check-circle"
-    entity_category: diagnostic
-    web_server:
-      sorting_group_id: sg_eebus_eg1
-      sorting_weight: 23
-    on_press:
-      - lambda: "id(hems_eg1).clear_limit();"
-
-  - platform: template
-    name: "${device_name} EG1 mDNS register=true"
-    icon: "mdi:broadcast"
-    entity_category: diagnostic
-    web_server:
-      sorting_group_id: sg_eebus_eg1
-      sorting_weight: 24
-    on_press:
-      - lambda: "id(hems_eg1).set_mdns_register(true);"
-
-  - platform: template
-    name: "${device_name} EG1 mDNS register=false"
-    icon: "mdi:broadcast-off"
-    entity_category: diagnostic
-    web_server:
-      sorting_group_id: sg_eebus_eg1
-      sorting_weight: 25
-    on_press:
-      - lambda: "id(hems_eg1).set_mdns_register(false);"
+      - lambda: "id(hems_eg1).start_heartbeat_test();"

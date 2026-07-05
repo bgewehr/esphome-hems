@@ -159,7 +159,7 @@ void EebusLpcComponent::setup() {
   free(cert); free(key);
   update_pairing_state_(remote_ski_.empty()
       ? "Kein Pairing — Pairing-Modus manuell aktivieren"
-      : "Warte auf Steuerbox");
+      : "Inaktiv");
   ESP_LOGI(TAG, "EEBus LPC CS ready — local SKI: %s", local_ski_.c_str());
 }
 
@@ -254,6 +254,7 @@ void EebusLpcComponent::on_remote_ski_connected(const char* ski) {
 
 void EebusLpcComponent::on_remote_ski_disconnected(const char* ski) {
   ESP_LOGI(TAG, "Remote SKI disconnected: %s", ski);
+  connected_ = false;
   if (paired_remote_ski_ == ski)  paired_remote_ski_.clear();
   if (pending_remote_ski_ == ski) pending_remote_ski_.clear();
   remote_uc_seen_ = {};
@@ -289,6 +290,7 @@ void EebusLpcComponent::on_ship_state_update(const char* ski, SmeState state) {
       if (service_) EEBUS_SERVICE_SET_PAIRING_POSSIBLE(service_, false);
       update_pairing_state_("Gepairt & verbunden: " + std::string(ski));
     }
+    connected_ = true;
     /* Reset heartbeat timer on every DataExchange — gives the EG a fresh 60 s
      * window before the watchdog fires, even if the device ran for a long time
      * before this connection. */

@@ -111,6 +111,11 @@ class EebusWpComponent : public Component {
   void set_mdns_register(bool val);
   bool is_pairing_mode() const { return pairing_mode_active_; }
 
+  /* Diagnostic test: stop outbound heartbeat for 90 s, then resume.
+   * The remote CS device will apply its failsafe after its own timeout window.
+   * After the pause the heartbeat is restarted with a fresh timestamp. */
+  void start_heartbeat_test();
+
   /* State accessors */
   bool        is_connected()      const { return connected_; }
   bool        is_heartbeat_alarm() const { return heartbeat_alarm_; }
@@ -170,6 +175,7 @@ class EebusWpComponent : public Component {
   bool        mpc_connected_      {false};
   std::string remote_uc_seen_     {};
   bool        heartbeat_alarm_    {false};
+  uint32_t    heartbeat_test_until_ms_ {0}; /* non-zero while failsafe test is active */
   bool        time_synced_        {false};
   bool        service_started_    {false};
   bool        failsafe_set_       {false};
