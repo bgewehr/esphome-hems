@@ -179,7 +179,7 @@ static void SR_OnRemoteSkiConnected(
 {
   auto* r = reinterpret_cast<WpServiceReader*>(o);
   ESP_LOGW("eebus_wp", "Remote SKI connected: %s", ski);
-  r->self->pairing_state_ = "Verbinde WP: " + std::string(ski);
+  r->self->pairing_state_ = "Verbinde: " + std::string(ski);
 }
 
 static void SR_OnRemoteSkiDisconnected(
@@ -224,7 +224,7 @@ static void SR_OnRemoteServicesUpdate(
     const char* host = MdnsEntryGetHost(entry) ? MdnsEntryGetHost(entry) : "?";
     ESP_LOGI("eebus_wp", "mDNS: WP sichtbar ski=%s host=%s — warte auf eingehende Verbindung",
              ski, host);
-    r->self->pairing_state_ = "WP sichtbar: " + std::string(ski) + " — warte auf Verbindung";
+    r->self->pairing_state_ = "Gerät sichtbar: " + std::string(ski) + " — warte auf Verbindung";
     break;
   }
 }
@@ -377,6 +377,27 @@ void EebusWpComponent::loop() {
     pairing_advert_at_ms_ = now + 5000;
   }
 
+  /* Failsafe setup retry: DeviceConfiguration key descriptions arrive after on_entity_connect,
+   * so the first attempt in on_entity_connect fails. Retry every 5 s until it succeeds. */
+  if (connected_ && have_remote_entity_ && !failsafe_set_ && now >= failsafe_retry_ms_) {
+    ScaledValue fs_limit;
+    fs_limit.value = (int64_t)failsafe_limit_w_;
+    fs_limit.scale = 0;
+    bool ok = (EgLpcSetFailsafeConsumptionActivePowerLimit(eg_lpc_, &remote_entity_addr_, &fs_limit) == kEebusErrorOk);
+
+    EebusDuration fs_duration;
+    memset(&fs_duration, 0, sizeof(fs_duration));
+    fs_duration.seconds = (int32_t)failsafe_duration_s_;
+    ok &= (EgLpcSetFailsafeDurationMinimum(eg_lpc_, &remote_entity_addr_, &fs_duration) == kEebusErrorOk);
+
+    if (ok) {
+      ESP_LOGI(TAG, "WP failsafe configured: %.0f W / %u s", failsafe_limit_w_, failsafe_duration_s_);
+      failsafe_set_ = true;
+    } else {
+      failsafe_retry_ms_ = now + 5000;
+    }
+  }
+
 }
 
 /* =========================================================================
@@ -471,21 +492,9 @@ void EebusWpComponent::on_entity_connect(const EntityAddressType* addr) {
   connected_since_ms_ = millis();
   have_remote_entity_ = true;
   if (addr) remote_entity_addr_ = *addr;
-  pairing_state_      = "Verbunden mit WP";
-
-  /* Configure failsafe on WP: if HEMS heartbeat stops, WP falls back
-   * to failsafe_limit_w_ for failsafe_duration_s_ seconds, then normal. */
-  ScaledValue fs_limit;
-  fs_limit.value = (int64_t)failsafe_limit_w_;
-  fs_limit.scale = 0;
-  if (EgLpcSetFailsafeConsumptionActivePowerLimit(eg_lpc_, addr, &fs_limit) != kEebusErrorOk)
-    ESP_LOGE(TAG, "SetFailsafeConsumptionActivePowerLimit failed — WP has no failsafe limit");
-
-  EebusDuration fs_duration;
-  memset(&fs_duration, 0, sizeof(fs_duration));
-  fs_duration.seconds = (int32_t)failsafe_duration_s_;
-  if (EgLpcSetFailsafeDurationMinimum(eg_lpc_, addr, &fs_duration) != kEebusErrorOk)
-    ESP_LOGE(TAG, "SetFailsafeDurationMinimum failed — WP failsafe duration not set");
+  pairing_state_      = "Verbunden";
+  failsafe_set_       = false;   /* loop() will retry until DeviceConfiguration data is available */
+  failsafe_retry_ms_  = 0;
 
   for (auto* t : connected_triggers_) t->trigger();
 }
@@ -498,7 +507,7 @@ void EebusWpComponent::on_entity_disconnect(const EntityAddressType* /*addr*/) {
   have_remote_entity_ = false;
   active_limit_w_     = 0.0f;
   remote_uc_seen_     = {};
-  pairing_state_      = "Getrennt — suche WP...";
+  pairing_state_      = "Getrennt — suche Gerät...";
   /* Re-announce mDNS so the remote device reconnects immediately (eebus-go: checkAutoReannounce on disconnect) */
   set_mdns_register(false);
 
@@ -794,7 +803,7 @@ void EebusWpComponent::refresh_heartbeat() {
     ESP_LOGD("eebus", "SPINE local use-case: actor=EnergyGuard(9) useCase=limitationOfPowerConsumption(14) [EG/LPC]");
     ESP_LOGD("eebus", "SPINE local use-case: actor=MonitoringAppliance(19) useCase=monitoringOfPowerConsumption(25) [MA/MPC]");
     EEBUS_SERVICE_START(service_);
-    pairing_state_ = "Suche WP via mDNS...";
+    pairing_state_ = "Suche Gerät via mDNS...";
     ESP_LOGI(TAG, "EEBus WP service started after time sync");
   }
 }

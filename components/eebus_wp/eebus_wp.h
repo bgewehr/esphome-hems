@@ -78,6 +78,18 @@ class EebusWpComponent : public Component {
   void set_failsafe_limit_w(float w)          { failsafe_limit_w_    = w; }
   void set_failsafe_duration_s(uint32_t s)    { failsafe_duration_s_ = s; }
 
+  /* Runtime update from UI — re-triggers failsafe negotiation with new value */
+  void update_failsafe_limit_w(float w) {
+    failsafe_limit_w_   = w;
+    failsafe_set_       = false;
+    failsafe_retry_ms_  = 0;
+  }
+  void update_failsafe_duration_s(uint32_t s) {
+    failsafe_duration_s_ = s;
+    failsafe_set_        = false;
+    failsafe_retry_ms_   = 0;
+  }
+
   /* Trigger registration */
   void add_on_wp_connected_trigger(WpConnectedTrigger* t)       { connected_triggers_.push_back(t); }
   void add_on_wp_disconnected_trigger(WpDisconnectedTrigger* t) { disconnected_triggers_.push_back(t); }
@@ -100,8 +112,9 @@ class EebusWpComponent : public Component {
   bool is_pairing_mode() const { return pairing_mode_active_; }
 
   /* State accessors */
-  bool        is_connected()    const { return connected_; }
-  bool        mpc_connected()   const { return mpc_connected_; }
+  bool        is_connected()      const { return connected_; }
+  bool        is_heartbeat_alarm() const { return heartbeat_alarm_; }
+  bool        mpc_connected()     const { return mpc_connected_; }
   float       current_power_w() const { return current_power_w_; }
   float       active_limit_w()  const { return active_limit_w_; }
   std::string remote_ski()      const { return remote_ski_; }
@@ -159,6 +172,8 @@ class EebusWpComponent : public Component {
   bool        heartbeat_alarm_    {false};
   bool        time_synced_        {false};
   bool        service_started_    {false};
+  bool        failsafe_set_       {false};
+  uint32_t    failsafe_retry_ms_  {0};
   bool        startup_mdns_done_  {false};
   uint32_t    startup_mdns_at_ms_ {0};
   uint32_t    pairing_advert_at_ms_{0};
@@ -271,8 +286,7 @@ static void EgL_OnPowerLimitReceive(
 }
 static void EgL_OnFailsafePowerLimitReceive(EgLpListenerObject*, const EntityAddressType*, const ScaledValue*) {}
 static void EgL_OnFailsafeDurationReceive(EgLpListenerObject*, const EntityAddressType*, const DurationType*) {}
-static void EgL_OnHeartbeatReceive(EgLpListenerObject* o, const EntityAddressType*, uint64_t hb_counter) {
-  ESP_LOGD("eebus_wp", "WP\xe2\x86\x92HEMS heartbeat (inbound): counter=%" PRIu64, hb_counter);
+static void EgL_OnHeartbeatReceive(EgLpListenerObject* o, const EntityAddressType*, uint64_t /*hb_counter*/) {
   reinterpret_cast<EebusWpComponent::EgListener*>(o)->self->on_heartbeat_received_();
 }
 

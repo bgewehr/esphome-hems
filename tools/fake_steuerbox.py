@@ -1141,6 +1141,55 @@ Prerequisites (first-time pairing):
             print("\n[Failsafe] Disconnecting — HEMS should KEEP failsafe limit active after disconnect.")
             print("[Failsafe] Check HEMS log: limit must NOT be cleared on SHIP disconnect.")
 
+            # Close the failsafe connection so the HEMS registers the disconnect.
+            try:
+                sock.close()
+            except Exception:
+                pass
+            sock = None
+
+            # ── Reset phase: reconnect and clear the limit ─────────────────
+            print("\n[Reset] Waiting 5 s then reconnecting to clear failsafe state...")
+            time.sleep(5)
+            try:
+                raw2 = socket.create_connection((args.host, args.port), timeout=15)
+                sock = ctx.wrap_socket(raw2, server_hostname=args.host)
+                ws_upgrade(sock, args.host, args.port)
+                ship_handshake(sock, local_id)
+                drain_incoming(sock, timeout=2.0, our_addr=our_addr, hems_addr=hems_addr)
+                time.sleep(0.5)
+                send_subscription_request(
+                    sock, our_addr, hems_addr,
+                    client_entity=[0], client_feature=0,
+                    server_entity=[0], server_feature=0,
+                    server_feature_type="NodeManagement",
+                    label="NMSub-reset",
+                )
+                time.sleep(0.5)
+                drain_incoming(sock, timeout=2.5, our_addr=our_addr, hems_addr=hems_addr)
+                time.sleep(0.5)
+                send_subscription_request(
+                    sock, our_addr, hems_addr,
+                    client_entity=[1], client_feature=2,
+                    server_entity=[1], server_feature=2,
+                    server_feature_type="LoadControl",
+                    label="LCSub-reset",
+                )
+                time.sleep(0.5)
+                drain_incoming(sock, timeout=1.0, our_addr=our_addr, hems_addr=hems_addr)
+                time.sleep(0.5)
+                send_binding_request(sock, our_addr=our_addr, hems_addr=hems_addr)
+                time.sleep(0.5)
+                drain_incoming(sock, timeout=1.5, our_addr=our_addr, hems_addr=hems_addr)
+                time.sleep(0.5)
+                send_lpc_limit(sock, args.limit, active=False, our_addr=our_addr, hems_addr=hems_addr)
+                time.sleep(0.5)
+                drain_incoming(sock, timeout=0.5, our_addr=our_addr, hems_addr=hems_addr)
+                print("[Reset] isLimitActive=false sent — HEMS should clear failsafe and return to Inaktiv.")
+                time.sleep(1)
+            except Exception as reset_exc:
+                print(f"[Reset] Reset phase failed: {reset_exc}")
+
         elif args.send_limit:
             # ── Manual one-shot limit ─────────────────────────────────────
             if not args.no_pause:

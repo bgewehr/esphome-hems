@@ -1,5 +1,5 @@
-# Native OpenEEBUS SHIP/SPINE integration.
-# Provides the CLS-Steuerbox LPC receiver and EEBus heat-pump (EG/LPC) control.
+﻿# Native OpenEEBUS SHIP/SPINE integration.
+# Provides the CLS-Steuerbox LPC receiver and EEBus EG1 (heat pump) control.
 
 eebus_lpc:
   id: hems_lpc
@@ -13,7 +13,8 @@ eebus_lpc:
   on_limit_active:
     - then:
         - lambda: |-
-            id(power_limit_events).publish_state(id(power_limit_events).state + 1);
+            float _ev = id(power_limit_events).state;
+            id(power_limit_events).publish_state(std::isnan(_ev) ? 1.0f : _ev + 1.0f);
             ESP_LOGW("eebus", "EEBUS LPC limit active: %.0f W", x);
         - text_sensor.template.publish:
             id: last_enwg_event
@@ -32,7 +33,7 @@ eebus_lpc:
             effect: "Paragraph14a Warning Flash"
         - switch.turn_on: relay_1
         - lambda: |-
-            id(hems_wp).set_limit(x);
+            id(hems_eg1).set_limit(x);
 
   on_limit_cleared:
     - then:
@@ -50,7 +51,7 @@ eebus_lpc:
             id: ct3addon
             value: !lambda "return id(ladebegrenzung_addon);"
         - lambda: |-
-            id(hems_wp).clear_limit();
+            id(hems_eg1).clear_limit();
         - light.turn_off:
             id: status_led
         - switch.turn_off: relay_1
@@ -61,7 +62,7 @@ eebus_lpc:
             ESP_LOGW("eebus", "Pairing request from SKI: %s", x.c_str());
 
 eebus_wp:
-  id: hems_wp
+  id: hems_eg1
   ship_port: ${eebus_wp_ship_port}
   remote_ski: !secret eebus_wp_remote_ski
   device_brand: "DIY"
@@ -71,14 +72,14 @@ eebus_wp:
   failsafe_duration_s: ${eebus_failsafe_duration_s}
 
   on_wp_connected:
-    - logger.log: "EEBus WP connected - native power limit control active"
+    - logger.log: "EEBus ${eebus_eg1_device} connected — native power limit control active"
 
   on_wp_disconnected:
-    - logger.log: "EEBus WP disconnected - relay fallback remains available"
+    - logger.log: "EEBus ${eebus_eg1_device} disconnected — relay fallback remains available"
 
   on_power_reading:
     - lambda: |-
-        ESP_LOGI("eebus", "WP power reading: %.0f W", x);
+        ESP_LOGI("eebus", "${eebus_eg1_device} power reading: %.0f W", x);
 
 sensor:
   # --- CS (sg_eebus_cs, weights 1-2) ---
@@ -106,32 +107,73 @@ sensor:
     update_interval: 5s
     lambda: |-
       if (!id(hems_lpc).is_limit_active()) return NAN;
-      return id(hems_lpc).current_limit_w() - id(hems_wp).current_power_w();
+      return id(hems_lpc).current_limit_w() - id(hems_eg1).current_power_w();
 
-  # --- WP (sg_eebus_wp, weights 1-2) ---
+  # --- EG1 (sg_eebus_eg1, weights 1-2) ---
   - platform: template
-    name: "${device_name} WP §14a Leistungslimit"
-    id: eebus_wp_active_limit
-    icon: "mdi:speedometer"
+    name: "${device_name} ${eebus_eg1_device} §14a Leistungslimit"
+    id: eebus_eg1_active_limit
+    icon: "mdi:transmission-tower"
     web_server:
-      sorting_group_id: sg_eebus_wp
+      sorting_group_id: sg_eebus_eg1
       sorting_weight: 1
     unit_of_measurement: "W"
     accuracy_decimals: 0
     update_interval: 5s
-    lambda: "return id(hems_wp).active_limit_w();"
+    lambda: "return id(hems_eg1).active_limit_w();"
 
   - platform: template
-    name: "${device_name} WP MPC Power"
-    id: eebus_wp_power
-    icon: "mdi:heat-pump"
+    name: "${device_name} ${eebus_eg1_device} MPC Leistung"
+    id: eebus_eg1_power
+    icon: "mdi:gauge"
     web_server:
-      sorting_group_id: sg_eebus_wp
+      sorting_group_id: sg_eebus_eg1
       sorting_weight: 2
     unit_of_measurement: "W"
     accuracy_decimals: 0
     update_interval: 5s
-    lambda: "return id(hems_wp).current_power_w();"
+    lambda: "return id(hems_eg1).current_power_w();"
+
+binary_sensor:
+  # --- CS Heartbeat (sg_eebus_cs, weight 2.5) ---
+  - platform: template
+    name: "${device_name} CS Heartbeat"
+    id: cs_heartbeat_ok
+    icon: "mdi:heart-pulse"
+    device_class: connectivity
+    web_server:
+      sorting_group_id: sg_eebus_cs
+      sorting_weight: 2.5
+    update_interval: 5s
+    lambda: "return !id(hems_lpc).is_heartbeat_lost();"
+
+  # --- EG1 Heartbeat (sg_eebus_eg1, weight 2.5) ---
+  - platform: template
+    name: "${device_name} ${eebus_eg1_device} Heartbeat"
+    id: eg1_heartbeat_ok
+    icon: "mdi:heart-pulse"
+    device_class: connectivity
+    web_server:
+      sorting_group_id: sg_eebus_eg1
+      sorting_weight: 2.5
+    update_interval: 5s
+    lambda: "return !id(hems_eg1).is_heartbeat_alarm();"
+
+sensor:
+  # --- §14a aktives Leistungslimit (sg_netz) — EEBus-Wert oder 4200 W bei DI1/Simulation ---
+  - platform: template
+    name: "${device_name} §14a Leistungslimit"
+    icon: "mdi:transmission-tower-export"
+    web_server:
+      sorting_group_id: sg_netz
+      sorting_weight: 4
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    update_interval: 5s
+    lambda: |-
+      if (id(hems_lpc).is_limit_active()) return id(hems_lpc).current_limit_w();
+      if (id(grid_provider_switch).state || id(manual_enwg_test).state) return 4200.0f;
+      return NAN;
 
 text_sensor:
   # --- CS (sg_eebus_cs, weights 3-6) ---
@@ -186,48 +228,54 @@ text_sensor:
     update_interval: 60s
     lambda: "return id(hems_lpc).local_ski();"
 
-  # --- WP (sg_eebus_wp, weights 3-5) ---
+  # --- EG1 (sg_eebus_eg1, weights 3-6) ---
   - platform: template
-    name: "${device_name} WP Verbindungsstatus"
-    icon: "mdi:heat-pump"
+    name: "${device_name} ${eebus_eg1_device} Verbindungsstatus"
+    icon: "mdi:lan-connect"
     web_server:
-      sorting_group_id: sg_eebus_wp
+      sorting_group_id: sg_eebus_eg1
       sorting_weight: 3
     update_interval: 5s
-    lambda: "return id(hems_wp).pairing_state();"
+    lambda: |-
+      std::string s = id(hems_eg1).pairing_state();
+      auto pos = s.rfind(": ");
+      if (pos != std::string::npos && s.size() - pos >= 42) {
+        s = s.substr(0, pos);
+      }
+      return s;
 
   - platform: template
-    name: "${device_name} WP Gerät"
+    name: "${device_name} ${eebus_eg1_device} Gerät"
     icon: "mdi:heat-pump-outline"
     web_server:
-      sorting_group_id: sg_eebus_wp
+      sorting_group_id: sg_eebus_eg1
       sorting_weight: 4
     update_interval: 10s
     lambda: |-
-      std::string label = id(hems_wp).device_label();
+      std::string label = id(hems_eg1).device_label();
       return label.empty() ? std::string("(unbekannt)") : label;
 
   - platform: template
-    name: "${device_name} WP Remote-SKI"
+    name: "${device_name} ${eebus_eg1_device} Remote-SKI"
     icon: "mdi:key-chain"
     web_server:
-      sorting_group_id: sg_eebus_wp
+      sorting_group_id: sg_eebus_eg1
       sorting_weight: 5
     entity_category: diagnostic
     update_interval: 30s
     lambda: |-
-      std::string ski = id(hems_wp).remote_ski();
+      std::string ski = id(hems_eg1).remote_ski();
       return ski.empty() ? std::string("(suche...)") : ski;
 
   - platform: template
-    name: "${device_name} WP Eigene SKI (Port 4713)"
-    icon: "mdi:key-variant"
+    name: "${device_name} ${eebus_eg1_device} Eigene SKI (Port 4713)"
+    icon: "mdi:key"
     web_server:
-      sorting_group_id: sg_eebus_wp
+      sorting_group_id: sg_eebus_eg1
       sorting_weight: 6
     entity_category: diagnostic
     update_interval: 60s
-    lambda: "return id(hems_wp).local_ski();"
+    lambda: "return id(hems_eg1).local_ski();"
 
   # --- §14a Steuerungskanal (sg_netz) ---
   - platform: template
@@ -254,16 +302,54 @@ text_sensor:
     update_interval: 5s
     lambda: "return id(hems_lpc).active_use_cases();"
 
-  # --- WP Use Cases (sg_eebus_wp) ---
+  # --- EG1 Use Cases (sg_eebus_eg1) ---
   - platform: template
-    name: "${device_name} WP Use Cases"
+    name: "${device_name} ${eebus_eg1_device} Use Cases"
     icon: "mdi:format-list-checks"
     web_server:
-      sorting_group_id: sg_eebus_wp
+      sorting_group_id: sg_eebus_eg1
       sorting_weight: 7
     entity_category: diagnostic
     update_interval: 60s
-    lambda: "return id(hems_wp).active_use_cases();"
+    lambda: "return id(hems_eg1).active_use_cases();"
+
+number:
+  # --- EG1 Failsafe Konfiguration (sg_eebus_eg1, weights 30-31) ---
+  - platform: template
+    name: "${device_name} ${eebus_eg1_device} Failsafe Limit"
+    id: eebus_eg1_failsafe_limit
+    icon: "mdi:shield-home"
+    web_server:
+      sorting_group_id: sg_eebus_eg1
+      sorting_weight: 30
+    entity_category: config
+    unit_of_measurement: "W"
+    min_value: 0
+    max_value: 20000
+    step: 100
+    initial_value: ${eebus_failsafe_limit_w}
+    restore_value: true
+    optimistic: true
+    on_value:
+      - lambda: "id(hems_eg1).update_failsafe_limit_w(x);"
+
+  - platform: template
+    name: "${device_name} ${eebus_eg1_device} Failsafe Dauer"
+    id: eebus_eg1_failsafe_duration
+    icon: "mdi:timer-outline"
+    web_server:
+      sorting_group_id: sg_eebus_eg1
+      sorting_weight: 31
+    entity_category: config
+    unit_of_measurement: "s"
+    min_value: 7200
+    max_value: 86400
+    step: 600
+    initial_value: ${eebus_failsafe_duration_s}
+    restore_value: true
+    optimistic: true
+    on_value:
+      - lambda: "id(hems_eg1).update_failsafe_duration_s((uint32_t)x);"
 
 button:
   # --- CS Pairing (sg_eebus_cs, weights 10-13) ---
@@ -304,83 +390,83 @@ button:
     on_press:
       - lambda: "id(hems_lpc).forget_pairing(id(hems_lpc).paired_remote_ski());"
 
-  # --- WP Pairing (sg_eebus_wp, weights 10-11) ---
+  # --- EG1 Pairing (sg_eebus_eg1, weights 10-11) ---
   - platform: template
-    name: "${device_name} WP Pairing-Modus starten"
+    name: "${device_name} ${eebus_eg1_device} Pairing-Modus starten"
     icon: "mdi:account-plus"
     web_server:
-      sorting_group_id: sg_eebus_wp
+      sorting_group_id: sg_eebus_eg1
       sorting_weight: 10
     on_press:
-      - lambda: "id(hems_wp).enter_pairing_mode();"
+      - lambda: "id(hems_eg1).enter_pairing_mode();"
 
   - platform: template
-    name: "${device_name} WP Pairing zurücksetzen"
+    name: "${device_name} ${eebus_eg1_device} Pairing zurücksetzen"
     icon: "mdi:lock-reset"
     entity_category: diagnostic
     web_server:
-      sorting_group_id: sg_eebus_wp
+      sorting_group_id: sg_eebus_eg1
       sorting_weight: 11
     on_press:
-      - lambda: "id(hems_wp).forget_pairing();"
+      - lambda: "id(hems_eg1).forget_pairing();"
 
-  # --- WP Diagnose (sg_eebus_wp, weights 20-23) ---
+  # --- EG1 Diagnose (sg_eebus_eg1, weights 20-25) ---
   - platform: template
-    name: "${device_name} WP Failsafe testen"
+    name: "${device_name} ${eebus_eg1_device} Failsafe testen"
     icon: "mdi:shield-check"
     entity_category: diagnostic
     web_server:
-      sorting_group_id: sg_eebus_wp
+      sorting_group_id: sg_eebus_eg1
       sorting_weight: 20
     on_press:
-      - lambda: "id(hems_wp).set_limit(4200.0f);"
+      - lambda: "id(hems_eg1).set_limit(4200.0f);"
 
   - platform: template
-    name: "${device_name} WP Normalbetrieb"
+    name: "${device_name} ${eebus_eg1_device} Normalbetrieb"
     icon: "mdi:restore"
     entity_category: diagnostic
     web_server:
-      sorting_group_id: sg_eebus_wp
+      sorting_group_id: sg_eebus_eg1
       sorting_weight: 21
     on_press:
-      - lambda: "id(hems_wp).clear_limit();"
+      - lambda: "id(hems_eg1).clear_limit();"
 
   - platform: template
-    name: "${device_name} WP Limit 4200 W"
+    name: "${device_name} ${eebus_eg1_device} Limit 4200 W"
     icon: "mdi:lightning-bolt-circle"
     entity_category: diagnostic
     web_server:
-      sorting_group_id: sg_eebus_wp
+      sorting_group_id: sg_eebus_eg1
       sorting_weight: 22
     on_press:
-      - lambda: "id(hems_wp).set_limit(4200.0f);"
+      - lambda: "id(hems_eg1).set_limit(4200.0f);"
 
   - platform: template
-    name: "${device_name} WP Vollleistung freigeben"
+    name: "${device_name} ${eebus_eg1_device} Vollleistung freigeben"
     icon: "mdi:check-circle"
     entity_category: diagnostic
     web_server:
-      sorting_group_id: sg_eebus_wp
+      sorting_group_id: sg_eebus_eg1
       sorting_weight: 23
     on_press:
-      - lambda: "id(hems_wp).clear_limit();"
+      - lambda: "id(hems_eg1).clear_limit();"
 
   - platform: template
-    name: "${device_name} WP mDNS register=true"
+    name: "${device_name} ${eebus_eg1_device} mDNS register=true"
     icon: "mdi:broadcast"
     entity_category: diagnostic
     web_server:
-      sorting_group_id: sg_eebus_wp
+      sorting_group_id: sg_eebus_eg1
       sorting_weight: 24
     on_press:
-      - lambda: "id(hems_wp).set_mdns_register(true);"
+      - lambda: "id(hems_eg1).set_mdns_register(true);"
 
   - platform: template
-    name: "${device_name} WP mDNS register=false"
+    name: "${device_name} ${eebus_eg1_device} mDNS register=false"
     icon: "mdi:broadcast-off"
     entity_category: diagnostic
     web_server:
-      sorting_group_id: sg_eebus_wp
+      sorting_group_id: sg_eebus_eg1
       sorting_weight: 25
     on_press:
-      - lambda: "id(hems_wp).set_mdns_register(false);"
+      - lambda: "id(hems_eg1).set_mdns_register(false);"

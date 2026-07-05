@@ -116,8 +116,12 @@ void SetLocalFeature(HeartbeatManagerObject* self, EntityLocalObject* entity, Fe
   hm->local_entity  = entity;
   hm->local_feature = feature;
 
-  UpdateHeartbeatData(hm);
-  Start(self);
+  if (!hm->running) {
+    Start(self);
+  }
+  /* If already running the periodic tick continues unchanged; the updated
+   * feature reference is used on the next fire. Re-calling Start() would
+   * reset tick_cnt and send a duplicate heartbeat on every re-subscribe. */
 }
 
 void Tick(HeartbeatManagerObject* self) {
@@ -146,8 +150,6 @@ void Tick(HeartbeatManagerObject* self) {
 }
 
 void UpdateHeartbeatData(HeartbeatManager* self) {
-  eebus_log_d("eebus_wp", __LINE__, "HEMS\xe2\x86\x92WP heartbeat (outbound): counter=%llu timeout=%us",
-              (unsigned long long)self->heartbeat_num, (unsigned)self->heartbeat_timeout);
   DeviceDiagnosisHeartbeatDataType heartbeat_data = {
       .timestamp         = &ABSOLUTE_OR_RELATIVE_TIME_NOW,
       .heartbeat_counter = &self->heartbeat_num,

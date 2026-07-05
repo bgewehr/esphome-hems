@@ -14,6 +14,8 @@ substitutions:
   eebus_wp_ship_port: "4713"
   eebus_failsafe_limit_w: "4200.0"
   eebus_failsafe_duration_s: "7200"
+  # EG1: Gerät das der HEMS als EnergyGuard steuert (WP = Wärmepumpe, WB = Wallbox, …)
+  eebus_eg1_device: "WP"
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
@@ -239,8 +241,8 @@ web_server:
     - id: sg_eebus_cs
       name: "EEBus CS (Steuerbox)"
       sorting_weight: 6
-    - id: sg_eebus_wp
-      name: "EEBus WP (Wärmepumpe)"
+    - id: sg_eebus_eg1
+      name: "EEBus EG1 (${eebus_eg1_device})"
       sorting_weight: 7
     - id: sg_system
       name: "System"
@@ -260,13 +262,13 @@ time:
     id: sntp_time
     on_time_sync:
       then:
-        - lambda: id(hems_wp).refresh_heartbeat();
+        - lambda: id(hems_eg1).refresh_heartbeat();
   # HA time keeps the clock accurate long-term and acts as SNTP fallback.
   - platform: homeassistant
     id: ha_time
     on_time_sync:
       then:
-        - lambda: id(hems_wp).refresh_heartbeat();
+        - lambda: id(hems_eg1).refresh_heartbeat();
 
 globals:
   - id: water_liter_per_pulse
@@ -478,7 +480,8 @@ switch:
     turn_on_action:
       - lambda: |-
           ESP_LOGW("enwg", "Simulation: Netzbetreiber aktiviert Leistungsbegrenzung 4200 W");
-          id(power_limit_events).publish_state(id(power_limit_events).state + 1);
+          float _ev = id(power_limit_events).state;
+          id(power_limit_events).publish_state(std::isnan(_ev) ? 1.0f : _ev + 1.0f);
       - text_sensor.template.publish:
           id: last_enwg_event
           state: !lambda 'return std::string("Aktiviert (Sim): ") + id(ha_time).now().strftime("%d.%m.%Y %H:%M:%S");'
@@ -496,7 +499,7 @@ switch:
           effect: "Paragraph14a Warning Flash"
       - switch.turn_on: relay_1
       - lambda: |-
-          id(hems_wp).set_limit(4200.0f);
+          id(hems_eg1).set_limit(4200.0f);
     turn_off_action:
       - lambda: |-
           ESP_LOGW("enwg", "Simulation: Netzbetreiber deaktiviert Leistungsbegrenzung");
@@ -516,7 +519,7 @@ switch:
           id: status_led
       - switch.turn_off: relay_1
       - lambda: |-
-          id(hems_wp).clear_limit();
+          id(hems_eg1).clear_limit();
 
 # ── Digitale Eingänge (opto-isoliert, active-low) ────────────────────────────
 binary_sensor:
@@ -541,7 +544,8 @@ binary_sensor:
     on_press:
       then:
         - lambda: |-
-            id(power_limit_events).publish_state(id(power_limit_events).state + 1);
+            float _ev = id(power_limit_events).state;
+            id(power_limit_events).publish_state(std::isnan(_ev) ? 1.0f : _ev + 1.0f);
             ESP_LOGW("enwg", "§14a EnWG: Netzbetreiber aktiviert Leistungsbegrenzung (DI1)");
         - text_sensor.template.publish:
             id: last_enwg_event
@@ -560,7 +564,7 @@ binary_sensor:
             effect: "Paragraph14a Warning Flash"
         - switch.turn_on: relay_1
         - lambda: |-
-            id(hems_wp).set_limit(4200.0f);
+            id(hems_eg1).set_limit(4200.0f);
     on_release:
       then:
         - lambda: |-
@@ -578,7 +582,7 @@ binary_sensor:
             id: ct3addon
             value: !lambda "return id(ladebegrenzung_addon);"
         - lambda: |-
-            id(hems_wp).clear_limit();
+            id(hems_eg1).clear_limit();
         - light.turn_off:
             id: status_led
         - switch.turn_off: relay_1

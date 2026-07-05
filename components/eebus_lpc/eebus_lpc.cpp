@@ -179,7 +179,13 @@ void EebusLpcComponent::loop() {
     if ((now - last_heartbeat_ms_) > kHeartbeatTimeoutSeconds * 1000u) {
       ESP_LOGW(TAG, "Heartbeat lost — applying failsafe %.0f W", failsafe_limit_w_);
       heartbeat_lost_ = true;
-      on_power_limit_receive(failsafe_limit_w_, true);
+      update_pairing_state_("Failsafe aktiv");
+      /* Apply limit directly — on_power_limit_receive would clear heartbeat_lost_. */
+      /* Always fire triggers so WP receives the updated failsafe value, even if
+       * a normal limit was already active (mirrors on_power_limit_receive's update branch). */
+      current_limit_w_ = failsafe_limit_w_;
+      limit_active_ = true;
+      for (auto* t : limit_active_triggers_) t->trigger(failsafe_limit_w_);
     }
   }
 
@@ -221,7 +227,7 @@ void EebusLpcComponent::on_remote_ski_connected(const char* ski) {
     /* Known stored SKI — register for persistent auto-connect */
     ESP_LOGI(TAG, "Known SKI — auto-trusting");
     EEBUS_SERVICE_REGISTER_REMOTE_SKI(service_, ski, true);
-    update_pairing_state_("Verbunden: " + std::string(ski));
+    update_pairing_state_((heartbeat_lost_ ? "Verbunden (Failsafe): " : "Verbunden: ") + std::string(ski));
   } else if (paired_remote_ski_ == ski) {
     /* SHIP DataExchange already completed via is_waiting_for_trust_allowed.
      * on_ship_state_update(kSmeStateApproved) set paired_remote_ski_ and
@@ -232,7 +238,7 @@ void EebusLpcComponent::on_remote_ski_connected(const char* ski) {
     remote_ski_ = ski;
     save_trusted_ski_(remote_ski_);
     EEBUS_SERVICE_REGISTER_REMOTE_SKI(service_, ski, true);
-    update_pairing_state_("Verbunden: " + std::string(ski));
+    update_pairing_state_((heartbeat_lost_ ? "Verbunden (Failsafe): " : "Verbunden: ") + std::string(ski));
   } else if (pairing_mode_active_ && millis() < pairing_deadline_ms_) {
     /* Unknown SKI, explicit pairing window still open — let the user approve */
     ESP_LOGW(TAG, "Unknown SKI wants to pair: %s", ski);
@@ -256,12 +262,14 @@ void EebusLpcComponent::on_remote_ski_disconnected(const char* ski) {
   if (heartbeat_lost_) {
     /* Failsafe is active — keep the limit running across the SHIP disconnect.
      * The EG must explicitly send isLimitActive=false after reconnecting. */
+    ESP_LOGW(TAG, "SHIP disconnect while failsafe active — keeping %.0f W limit", failsafe_limit_w_);
+    update_pairing_state_("Failsafe — Steuerbox getrennt");
   } else if (limit_active_) {
     limit_active_ = false; current_limit_w_ = 0.0f;
     for (auto* t : limit_cleared_triggers_) t->trigger();
   }
   if (!heartbeat_lost_) last_heartbeat_ms_ = 0; /* prevent stale timestamp after reconnect */
-  update_pairing_state_("Getrennt");
+  if (!heartbeat_lost_) update_pairing_state_("Inaktiv");
 }
 
 void EebusLpcComponent::on_ship_state_update(const char* ski, SmeState state) {
@@ -281,6 +289,10 @@ void EebusLpcComponent::on_ship_state_update(const char* ski, SmeState state) {
       if (service_) EEBUS_SERVICE_SET_PAIRING_POSSIBLE(service_, false);
       update_pairing_state_("Gepairt & verbunden: " + std::string(ski));
     }
+    /* Reset heartbeat timer on every DataExchange — gives the EG a fresh 60 s
+     * window before the watchdog fires, even if the device ran for a long time
+     * before this connection. */
+    last_heartbeat_ms_ = millis();
   } else if (state == kSmeHelloStateAbort || state == kSmeHelloStateRejected ||
              state == kSmeStateError) {
     if (pending_remote_ski_ == ski) pending_remote_ski_.clear();
@@ -344,6 +356,14 @@ void EebusLpcComponent::forget_pairing(const std::string& ski) {
   if (nvs_open(NVS_NS, NVS_READWRITE, &h) == ESP_OK) {
     nvs_erase_key(h, NVS_KEY_TSKI); nvs_commit(h); nvs_close(h);
   }
+  /* No Steuerbox relationship → clear any active failsafe or limit immediately. */
+  heartbeat_lost_    = false;
+  last_heartbeat_ms_ = 0;
+  if (limit_active_) {
+    limit_active_    = false;
+    current_limit_w_ = 0.0f;
+    for (auto* t : limit_cleared_triggers_) t->trigger();
+  }
   enter_pairing_mode();
 }
 
@@ -353,6 +373,7 @@ void EebusLpcComponent::forget_pairing(const std::string& ski) {
 
 void EebusLpcComponent::on_power_limit_receive(float limit_w, bool is_active) {
   ESP_LOGI(TAG, "LPC: %.0f W active=%s", limit_w, is_active ? "yes" : "no");
+  bool was_failsafe  = heartbeat_lost_;
   current_limit_w_   = limit_w;
   heartbeat_lost_    = false;
   last_heartbeat_ms_ = millis();
@@ -362,6 +383,7 @@ void EebusLpcComponent::on_power_limit_receive(float limit_w, bool is_active) {
     for (auto* t : limit_active_triggers_) t->trigger(limit_w);
   } else if (!is_active && limit_active_) {
     limit_active_ = false; current_limit_w_ = 0.0f;
+    if (was_failsafe) ESP_LOGW(TAG, "Failsafe ended — EG reconnected and released limit");
     for (auto* t : limit_cleared_triggers_) t->trigger();
   } else if (is_active) {
     for (auto* t : limit_active_triggers_) t->trigger(limit_w);
