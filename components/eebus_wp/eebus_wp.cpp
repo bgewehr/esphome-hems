@@ -111,9 +111,10 @@ static void spine_event_handler(const EventPayload* payload, void* ctx) {
                (int)f->actor, actor_str,
                (int)f->use_case_name_id, uc_str);
       if (self && payload->change_type == kElementChangeAdd) {
-        // Only track use cases from the WP's own device, not from other devices (e.g. CS §14a side)
+        /* Only track use cases from the paired remote CS device — reject when SKI
+         * unknown (not yet paired) or when the event comes from a different device */
         const std::string& wp_ski = self->remote_ski();
-        if (wp_ski.empty() || wp_ski == ski) {
+        if (!wp_ski.empty() && wp_ski == ski) {
           self->on_remote_use_case(f->actor, f->use_case_name_id, uc_str, actor_str);
         }
       }

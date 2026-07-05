@@ -38,9 +38,10 @@ static void lpc_spine_event_handler(const EventPayload* payload, void* ctx) {
   const UseCaseFilterType* f = payload->use_case_filter;
   if (!f) return;
   if (payload->change_type != kElementChangeAdd) return;
-  /* Only track use cases announced by the paired remote EG */
+  /* Only track use cases from the paired remote EG — reject when no EG is
+   * paired yet (empty) or when the event comes from a different device */
   const std::string& paired = self->paired_remote_ski();
-  if (!paired.empty() && paired != ski) return;
+  if (paired.empty() || paired != ski) return;
   self->on_remote_use_case(f->actor, f->use_case_name_id, nullptr, nullptr);
 }
 
