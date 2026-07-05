@@ -30,7 +30,7 @@ from esphome.const import CONF_ID, CONF_TRIGGER_ID
 
 DEPENDENCIES = ["network", "esp32"]
 CODEOWNERS   = ["@bgewehr"]
-MULTI_CONF   = False
+MULTI_CONF   = True
 
 eebus_eg1_ns      = cg.esphome_ns.namespace("eebus_eg1")
 EebusEg1Component = eebus_eg1_ns.class_("EebusEg1Component", cg.Component)

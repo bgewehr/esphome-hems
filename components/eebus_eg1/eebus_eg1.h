@@ -172,7 +172,8 @@ class EebusEg1Component : public Component {
   float       failsafe_limit_w_   {4200.0f};
   uint32_t    failsafe_duration_s_{7200};
 
-  /* Runtime */
+  /* Runtime — nvs_ns_ computed in setup() from ship_port_; migrates legacy "eebus_wp" namespace */
+  std::string nvs_ns_             {};
   bool        connected_          {false};
   bool        mpc_connected_      {false};
   std::string remote_uc_seen_     {};

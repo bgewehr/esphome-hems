@@ -144,11 +144,12 @@ extern "C" void eebus_log_d(const char* tag, int line, const char* fmt, ...) {
 namespace esphome {
 namespace eebus_eg1 {
 
-/* NVS namespace kept as "eebus_wp" to preserve certificate/SKI data across firmware updates */
-static const char* NVS_NS        = "eebus_wp";
+/* NVS key names (constant across all instances) */
 static const char* NVS_KEY_CERT  = "cert_der";
 static const char* NVS_KEY_KEY   = "key_der";
 static const char* NVS_KEY_SKI   = "remote_ski";
+/* Legacy NVS namespace used before multi-instance support — kept for migration only */
+static const char* NVS_NS_LEGACY = "eebus_wp";
 
 /* Outbound heartbeat timeout declared to the remote CS device in the DeviceDiagnosis heartbeat
  * data (SPINE spec standard for HEMS). heartbeat_manager sends every
@@ -287,6 +288,34 @@ static const ServiceReaderInterface kServiceReaderMethods = {
 
 void EebusEg1Component::setup() {
   ESP_LOGI(TAG, "Setting up EEBus EG1 controller");
+
+  /* Derive per-instance NVS namespace from SHIP port (e.g. "eg4713").
+   * Keeps instances isolated when MULTI_CONF is used.
+   * Auto-migrates cert+SKI from the legacy "eebus_wp" namespace on first boot. */
+  {
+    char ns_buf[16];
+    snprintf(ns_buf, sizeof(ns_buf), "eg%u", (unsigned)ship_port_);
+    nvs_ns_ = ns_buf;
+
+    uint8_t* mc = nullptr; size_t mcl = 0;
+    uint8_t* mk = nullptr; size_t mkl = 0;
+    if (!load_cert_nvs_(&mc, &mcl, &mk, &mkl)) {
+      /* No cert in port-based namespace — try legacy "eebus_wp" */
+      std::string new_ns = nvs_ns_;
+      nvs_ns_ = NVS_NS_LEGACY;
+      if (load_cert_nvs_(&mc, &mcl, &mk, &mkl)) {
+        std::string old_ski = load_remote_ski_nvs_();
+        nvs_ns_ = new_ns;
+        store_cert_nvs_(mc, mcl, mk, mkl);
+        if (!old_ski.empty()) save_remote_ski_nvs_(old_ski.c_str());
+        ESP_LOGI(TAG, "Migrated NVS cert+SKI from '%s' to '%s'", NVS_NS_LEGACY, nvs_ns_.c_str());
+        free(mc); free(mk); mc = nullptr; mk = nullptr; mcl = mkl = 0;
+      } else {
+        nvs_ns_ = new_ns;
+      }
+    }
+    if (mc) { free(mc); free(mk); }
+  }
 
   /* Load paired remote CS device SKI from NVS if not set in YAML secrets */
   if (remote_ski_.empty()) {
@@ -441,7 +470,7 @@ void EebusEg1Component::start_heartbeat_test() {
     ESP_LOGW(TAG, "Heartbeat test: service not running");
     return;
   }
-  static const uint32_t kTestDurationMs = 90000u;
+  static const uint32_t kTestDurationMs = 120000u;
   ESP_LOGW(TAG, "Heartbeat test: pausing outbound heartbeat for %u s — %s remote device will apply failsafe",
            kTestDurationMs / 1000u, instance_name_.c_str());
   EgLpcStopHeartbeat(eg_lpc_);
@@ -527,6 +556,7 @@ void EebusEg1Component::on_entity_connect(const EntityAddressType* addr) {
 }
 
 void EebusEg1Component::on_entity_disconnect(const EntityAddressType* /*addr*/) {
+  if (!connected_ && !have_remote_entity_) return;  /* guard: SPINE and SHIP both fire disconnect */
   ESP_LOGW(TAG, "%s entity disconnected", instance_name_.c_str());
   connected_          = false;
   mpc_connected_      = false;
@@ -562,7 +592,7 @@ bool EebusEg1Component::store_cert_nvs_(
     const uint8_t* c, size_t cl, const uint8_t* k, size_t kl)
 {
   nvs_handle_t h;
-  if (nvs_open(NVS_NS, NVS_READWRITE, &h) != ESP_OK) return false;
+  if (nvs_open(nvs_ns_.c_str(), NVS_READWRITE, &h) != ESP_OK) return false;
   bool ok = (nvs_set_blob(h, NVS_KEY_CERT, c, cl) == ESP_OK) &&
             (nvs_set_blob(h, NVS_KEY_KEY,  k, kl) == ESP_OK) &&
             (nvs_commit(h) == ESP_OK);
@@ -574,7 +604,7 @@ bool EebusEg1Component::load_cert_nvs_(
     uint8_t** c, size_t* cl, uint8_t** k, size_t* kl)
 {
   nvs_handle_t h;
-  if (nvs_open(NVS_NS, NVS_READONLY, &h) != ESP_OK) return false;
+  if (nvs_open(nvs_ns_.c_str(), NVS_READONLY, &h) != ESP_OK) return false;
   size_t clen = 0, klen = 0;
   bool ok = false;
   do {
@@ -599,7 +629,7 @@ void EebusEg1Component::save_remote_ski_nvs_(const char* ski) {
     return;
   }
   nvs_handle_t h;
-  if (nvs_open(NVS_NS, NVS_READWRITE, &h) != ESP_OK) return;
+  if (nvs_open(nvs_ns_.c_str(), NVS_READWRITE, &h) != ESP_OK) return;
   nvs_set_str(h, NVS_KEY_SKI, ski);
   nvs_commit(h);
   nvs_close(h);
@@ -607,7 +637,7 @@ void EebusEg1Component::save_remote_ski_nvs_(const char* ski) {
 
 std::string EebusEg1Component::load_remote_ski_nvs_() {
   nvs_handle_t h;
-  if (nvs_open(NVS_NS, NVS_READONLY, &h) != ESP_OK) return {};
+  if (nvs_open(nvs_ns_.c_str(), NVS_READONLY, &h) != ESP_OK) return {};
   size_t len = 0;
   std::string result;
   if (nvs_get_str(h, NVS_KEY_SKI, nullptr, &len) == ESP_OK && len > 1) {
