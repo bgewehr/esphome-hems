@@ -415,7 +415,7 @@ void EebusWpComponent::set_limit(float watts) {
   memset(&limit, 0, sizeof(limit));
 
   if (watts <= 0.0f) {
-    limit.value.value = 99999;
+    limit.value.value = 99999; /* placeholder — value is ignored when is_active=false */
     limit.value.scale = 0;
     limit.is_active   = false;
     ESP_LOGI(TAG, "Clearing WP power limit");
@@ -477,12 +477,14 @@ void EebusWpComponent::on_entity_connect(const EntityAddressType* addr) {
   ScaledValue fs_limit;
   fs_limit.value = (int64_t)failsafe_limit_w_;
   fs_limit.scale = 0;
-  EgLpcSetFailsafeConsumptionActivePowerLimit(eg_lpc_, addr, &fs_limit);
+  if (EgLpcSetFailsafeConsumptionActivePowerLimit(eg_lpc_, addr, &fs_limit) != kEebusErrorOk)
+    ESP_LOGE(TAG, "SetFailsafeConsumptionActivePowerLimit failed — WP has no failsafe limit");
 
   EebusDuration fs_duration;
   memset(&fs_duration, 0, sizeof(fs_duration));
   fs_duration.seconds = (int32_t)failsafe_duration_s_;
-  EgLpcSetFailsafeDurationMinimum(eg_lpc_, addr, &fs_duration);
+  if (EgLpcSetFailsafeDurationMinimum(eg_lpc_, addr, &fs_duration) != kEebusErrorOk)
+    ESP_LOGE(TAG, "SetFailsafeDurationMinimum failed — WP failsafe duration not set");
 
   for (auto* t : connected_triggers_) t->trigger();
 }
