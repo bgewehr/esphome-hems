@@ -470,6 +470,14 @@ void EebusEg1Component::loop() {
     }
   }
 
+  /* 5 s after entity connect: log a consolidated use-case summary so it is
+   * visible in the log even if the individual ADD messages scrolled past. */
+  if (uc_dump_at_ms_ != 0 && now >= uc_dump_at_ms_) {
+    uc_dump_at_ms_ = 0;
+    ESP_LOGW(TAG, "%s supported UCs: %s", instance_name_.c_str(),
+             remote_uc_seen_.empty() ? "(none)" : remote_uc_seen_.c_str() + 3);
+  }
+
   /* Retry power limit if ACK not received within 10 s (SPINE subscription race at connect) */
   if (connected_ && have_remote_entity_ && pending_limit_w_ >= 0.0f &&
       (now - pending_limit_ms_) >= 10000u) {
@@ -604,6 +612,7 @@ void EebusEg1Component::on_entity_connect(const EntityAddressType* addr) {
   pairing_state_      = "Verbunden";
   failsafe_set_       = false;   /* loop() will retry until DeviceConfiguration data is available */
   failsafe_retry_ms_  = 0;
+  uc_dump_at_ms_      = millis() + 5000;
 
   for (auto* t : connected_triggers_) t->trigger();
 }
@@ -618,6 +627,7 @@ void EebusEg1Component::on_entity_disconnect(const EntityAddressType* /*addr*/) 
   active_limit_w_     = 0.0f;  /* WP applies its own failsafe while disconnected — we don't control it */
   current_power_w_    = 0.0f;  /* stale reading no longer valid */
   pending_limit_w_    = -1.0f;
+  uc_dump_at_ms_      = 0;
   remote_uc_seen_     = {};
   pairing_state_      = "Getrennt — suche Gerät...";
   /* Re-announce mDNS so the remote device reconnects immediately (eebus-go: checkAutoReannounce on disconnect) */

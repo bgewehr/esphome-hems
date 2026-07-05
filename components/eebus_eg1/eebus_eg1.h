@@ -196,6 +196,7 @@ class EebusEg1Component : public Component {
   float       active_limit_w_     {0.0f};
   float       pending_limit_w_    {-1.0f};  /* -1 = no pending limit */
   uint32_t    pending_limit_ms_   {0};
+  uint32_t    uc_dump_at_ms_      {0};
   uint32_t    last_heartbeat_ms_  {0};
 
   EntityAddressType remote_entity_addr_{};
