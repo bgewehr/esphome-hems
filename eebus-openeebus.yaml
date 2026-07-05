@@ -134,32 +134,6 @@ sensor:
     update_interval: 5s
     lambda: "return id(hems_eg1).current_power_w();"
 
-binary_sensor:
-  # --- CS Heartbeat (sg_eebus_cs, weight 2.5) ---
-  - platform: template
-    name: "${device_name} CS Heartbeat"
-    id: cs_heartbeat_ok
-    icon: "mdi:heart-pulse"
-    device_class: connectivity
-    web_server:
-      sorting_group_id: sg_eebus_cs
-      sorting_weight: 2.5
-    update_interval: 5s
-    lambda: "return !id(hems_lpc).is_heartbeat_lost();"
-
-  # --- EG1 Heartbeat (sg_eebus_eg1, weight 2.5) ---
-  - platform: template
-    name: "${device_name} ${eebus_eg1_device} Heartbeat"
-    id: eg1_heartbeat_ok
-    icon: "mdi:heart-pulse"
-    device_class: connectivity
-    web_server:
-      sorting_group_id: sg_eebus_eg1
-      sorting_weight: 2.5
-    update_interval: 5s
-    lambda: "return !id(hems_eg1).is_heartbeat_alarm();"
-
-sensor:
   # --- §14a aktives Leistungslimit (sg_netz) — EEBus-Wert oder 4200 W bei DI1/Simulation ---
   - platform: template
     name: "${device_name} §14a Leistungslimit"
@@ -174,6 +148,39 @@ sensor:
       if (id(hems_lpc).is_limit_active()) return id(hems_lpc).current_limit_w();
       if (id(grid_provider_switch).state || id(manual_enwg_test).state) return 4200.0f;
       return NAN;
+
+binary_sensor:
+  # --- CS Heartbeat (sg_eebus_cs, weight 2.5) ---
+  - platform: template
+    name: "${device_name} CS Heartbeat"
+    id: cs_heartbeat_ok
+    icon: "mdi:heart-pulse"
+    device_class: connectivity
+    web_server:
+      sorting_group_id: sg_eebus_cs
+      sorting_weight: 2.5
+    lambda: "return !id(hems_lpc).is_heartbeat_lost();"
+
+  # --- EG1 Heartbeat (sg_eebus_eg1, weight 2.5) ---
+  - platform: template
+    name: "${device_name} ${eebus_eg1_device} Heartbeat"
+    id: eg1_heartbeat_ok
+    icon: "mdi:heart-pulse"
+    device_class: connectivity
+    web_server:
+      sorting_group_id: sg_eebus_eg1
+      sorting_weight: 2.5
+    lambda: "return !id(hems_eg1).is_heartbeat_alarm();"
+
+interval:
+  - interval: 5s
+    then:
+      - binary_sensor.template.publish:
+          id: cs_heartbeat_ok
+          state: !lambda "return !id(hems_lpc).is_heartbeat_lost();"
+      - binary_sensor.template.publish:
+          id: eg1_heartbeat_ok
+          state: !lambda "return !id(hems_eg1).is_heartbeat_alarm();"
 
 text_sensor:
   # --- CS (sg_eebus_cs, weights 3-6) ---
