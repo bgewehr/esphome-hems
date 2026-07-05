@@ -101,15 +101,21 @@ static void spine_event_handler(const EventPayload* payload, void* ctx) {
     case kEventTypeUseCaseChange: {
       const UseCaseFilterType* f = payload->use_case_filter;
       if (!f) break;
+      /* Capture into local ints immediately — PublishUseCaseSupportedEvent passes a
+       * pointer to a stack-local UseCaseFilterType.  When addr->entity==NULL it loops
+       * over all entities and calls EventPublish for each; the stack frame (and thus
+       * the filter struct) is shared across those calls, so by the time a later
+       * subscriber reads f->actor/uc_name_id the values may belong to a different
+       * use case.  Copying to local ints makes us immune to that reuse. */
+      const int actor_id = (int)f->actor;
+      const int uc_id    = (int)f->use_case_name_id;
       const char* change = (payload->change_type == kElementChangeAdd)    ? "add"
                          : (payload->change_type == kElementChangeUpdate)  ? "update"
                          :                                                   "remove";
-      const char* uc_str    = spine_uc_name(f->use_case_name_id);
-      const char* actor_str = spine_actor_name(f->actor);
+      const char* uc_str    = spine_uc_name(uc_id);
+      const char* actor_str = spine_actor_name(actor_id);
       ESP_LOGW("eebus", "SPINE use-case %s from %s: actor=%d(%s) useCase=%d(%s)",
-               change, ski,
-               (int)f->actor, actor_str,
-               (int)f->use_case_name_id, uc_str);
+               change, ski, actor_id, actor_str, uc_id, uc_str);
       if (self) {
         const std::string& eg_ski = self->remote_ski();
         if (!eg_ski.empty() && eg_ski == ski) {
@@ -117,7 +123,7 @@ static void spine_event_handler(const EventPayload* payload, void* ctx) {
           /* Treat ADD and UPDATE both as "use case present" — WP may re-announce
            * via UPDATE rather than ADD after a reconnect. */
           bool add = !rem;
-          self->on_remote_use_case(f->actor, f->use_case_name_id, uc_str, actor_str, add);
+          self->on_remote_use_case(actor_id, uc_id, uc_str, actor_str, add);
         }
       }
       break;
