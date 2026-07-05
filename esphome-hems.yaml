@@ -14,8 +14,7 @@ substitutions:
   eebus_wp_ship_port: "4713"
   eebus_failsafe_limit_w: "4200.0"
   eebus_failsafe_duration_s: "7200"
-  # EG1: Gerät das der HEMS als EnergyGuard steuert (WP = Wärmepumpe, WB = Wallbox, …)
-  eebus_eg1_device: "WP"
+  # EG1: Gerätetyp wird zur Laufzeit per Select (eg1_device_type) in eebus-openeebus.yaml gewählt
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
@@ -242,7 +241,7 @@ web_server:
       name: "EEBus CS (Steuerbox)"
       sorting_weight: 6
     - id: sg_eebus_eg1
-      name: "EEBus EG1 (${eebus_eg1_device})"
+      name: "EEBus EG1"
       sorting_weight: 7
     - id: sg_system
       name: "System"

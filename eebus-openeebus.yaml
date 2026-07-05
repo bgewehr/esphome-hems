@@ -61,6 +61,23 @@ eebus_lpc:
         - lambda: |-
             ESP_LOGW("eebus", "Pairing request from SKI: %s", x.c_str());
 
+select:
+  # --- EG1 Gerätetyp (sg_eebus_eg1, weight 0) — persists to NVS across reboots ---
+  - platform: template
+    name: "${device_name} EG1 Gerätetyp"
+    id: eg1_device_type
+    icon: "mdi:devices"
+    web_server:
+      sorting_group_id: sg_eebus_eg1
+      sorting_weight: 0
+    entity_category: config
+    options:
+      - "Wärmepumpe"
+      - "Wallbox"
+    initial_option: "Wärmepumpe"
+    restore_value: true
+    optimistic: true
+
 eebus_wp:
   id: hems_eg1
   ship_port: ${eebus_wp_ship_port}
@@ -72,14 +89,19 @@ eebus_wp:
   failsafe_duration_s: ${eebus_failsafe_duration_s}
 
   on_wp_connected:
-    - logger.log: "EEBus ${eebus_eg1_device} connected — native power limit control active"
+    - lambda: |-
+        ESP_LOGI("eebus", "EEBus EG1 (%s) verbunden — native Leistungslimitierung aktiv",
+                 id(eg1_device_type).current_option().c_str());
 
   on_wp_disconnected:
-    - logger.log: "EEBus ${eebus_eg1_device} disconnected — relay fallback remains available"
+    - lambda: |-
+        ESP_LOGI("eebus", "EEBus EG1 (%s) getrennt — Relais-Fallback verfügbar",
+                 id(eg1_device_type).current_option().c_str());
 
   on_power_reading:
     - lambda: |-
-        ESP_LOGI("eebus", "${eebus_eg1_device} power reading: %.0f W", x);
+        ESP_LOGI("eebus", "EG1 (%s) Leistungsmessung: %.0f W",
+                 id(eg1_device_type).current_option().c_str(), x);
 
 sensor:
   # --- CS (sg_eebus_cs, weights 1-2) ---
@@ -111,7 +133,7 @@ sensor:
 
   # --- EG1 (sg_eebus_eg1, weights 1-2) ---
   - platform: template
-    name: "${device_name} ${eebus_eg1_device} §14a Leistungslimit"
+    name: "${device_name} EG1 §14a Leistungslimit"
     id: eebus_eg1_active_limit
     icon: "mdi:transmission-tower"
     web_server:
@@ -123,7 +145,7 @@ sensor:
     lambda: "return id(hems_eg1).active_limit_w();"
 
   - platform: template
-    name: "${device_name} ${eebus_eg1_device} MPC Leistung"
+    name: "${device_name} EG1 MPC Leistung"
     id: eebus_eg1_power
     icon: "mdi:gauge"
     web_server:
@@ -163,7 +185,7 @@ binary_sensor:
 
   # --- EG1 Heartbeat (sg_eebus_eg1, weight 2.5) ---
   - platform: template
-    name: "${device_name} ${eebus_eg1_device} Heartbeat"
+    name: "${device_name} EG1 Heartbeat"
     id: eg1_heartbeat_ok
     icon: "mdi:heart-pulse"
     device_class: connectivity
@@ -237,7 +259,7 @@ text_sensor:
 
   # --- EG1 (sg_eebus_eg1, weights 3-6) ---
   - platform: template
-    name: "${device_name} ${eebus_eg1_device} Verbindungsstatus"
+    name: "${device_name} EG1 Verbindungsstatus"
     icon: "mdi:lan-connect"
     web_server:
       sorting_group_id: sg_eebus_eg1
@@ -252,7 +274,7 @@ text_sensor:
       return s;
 
   - platform: template
-    name: "${device_name} ${eebus_eg1_device} Gerät"
+    name: "${device_name} EG1 Gerät"
     icon: "mdi:heat-pump-outline"
     web_server:
       sorting_group_id: sg_eebus_eg1
@@ -263,7 +285,7 @@ text_sensor:
       return label.empty() ? std::string("(unbekannt)") : label;
 
   - platform: template
-    name: "${device_name} ${eebus_eg1_device} Remote-SKI"
+    name: "${device_name} EG1 Remote-SKI"
     icon: "mdi:key-chain"
     web_server:
       sorting_group_id: sg_eebus_eg1
@@ -275,7 +297,7 @@ text_sensor:
       return ski.empty() ? std::string("(suche...)") : ski;
 
   - platform: template
-    name: "${device_name} ${eebus_eg1_device} Eigene SKI (Port 4713)"
+    name: "${device_name} EG1 Eigene SKI (Port 4713)"
     icon: "mdi:key"
     web_server:
       sorting_group_id: sg_eebus_eg1
@@ -311,7 +333,7 @@ text_sensor:
 
   # --- EG1 Use Cases (sg_eebus_eg1) ---
   - platform: template
-    name: "${device_name} ${eebus_eg1_device} Use Cases"
+    name: "${device_name} EG1 Use Cases"
     icon: "mdi:format-list-checks"
     web_server:
       sorting_group_id: sg_eebus_eg1
@@ -323,7 +345,7 @@ text_sensor:
 number:
   # --- EG1 Failsafe Konfiguration (sg_eebus_eg1, weights 30-31) ---
   - platform: template
-    name: "${device_name} ${eebus_eg1_device} Failsafe Limit"
+    name: "${device_name} EG1 Failsafe Limit"
     id: eebus_eg1_failsafe_limit
     icon: "mdi:shield-home"
     web_server:
@@ -341,7 +363,7 @@ number:
       - lambda: "id(hems_eg1).update_failsafe_limit_w(x);"
 
   - platform: template
-    name: "${device_name} ${eebus_eg1_device} Failsafe Dauer"
+    name: "${device_name} EG1 Failsafe Dauer"
     id: eebus_eg1_failsafe_duration
     icon: "mdi:timer-outline"
     web_server:
@@ -399,7 +421,7 @@ button:
 
   # --- EG1 Pairing (sg_eebus_eg1, weights 10-11) ---
   - platform: template
-    name: "${device_name} ${eebus_eg1_device} Pairing-Modus starten"
+    name: "${device_name} EG1 Pairing-Modus starten"
     icon: "mdi:account-plus"
     web_server:
       sorting_group_id: sg_eebus_eg1
@@ -408,7 +430,7 @@ button:
       - lambda: "id(hems_eg1).enter_pairing_mode();"
 
   - platform: template
-    name: "${device_name} ${eebus_eg1_device} Pairing zurücksetzen"
+    name: "${device_name} EG1 Pairing zurücksetzen"
     icon: "mdi:lock-reset"
     entity_category: diagnostic
     web_server:
@@ -419,7 +441,7 @@ button:
 
   # --- EG1 Diagnose (sg_eebus_eg1, weights 20-25) ---
   - platform: template
-    name: "${device_name} ${eebus_eg1_device} Failsafe testen"
+    name: "${device_name} EG1 Failsafe testen"
     icon: "mdi:shield-check"
     entity_category: diagnostic
     web_server:
@@ -429,7 +451,7 @@ button:
       - lambda: "id(hems_eg1).set_limit(4200.0f);"
 
   - platform: template
-    name: "${device_name} ${eebus_eg1_device} Normalbetrieb"
+    name: "${device_name} EG1 Normalbetrieb"
     icon: "mdi:restore"
     entity_category: diagnostic
     web_server:
@@ -439,7 +461,7 @@ button:
       - lambda: "id(hems_eg1).clear_limit();"
 
   - platform: template
-    name: "${device_name} ${eebus_eg1_device} Limit 4200 W"
+    name: "${device_name} EG1 Limit 4200 W"
     icon: "mdi:lightning-bolt-circle"
     entity_category: diagnostic
     web_server:
@@ -449,7 +471,7 @@ button:
       - lambda: "id(hems_eg1).set_limit(4200.0f);"
 
   - platform: template
-    name: "${device_name} ${eebus_eg1_device} Vollleistung freigeben"
+    name: "${device_name} EG1 Vollleistung freigeben"
     icon: "mdi:check-circle"
     entity_category: diagnostic
     web_server:
@@ -459,7 +481,7 @@ button:
       - lambda: "id(hems_eg1).clear_limit();"
 
   - platform: template
-    name: "${device_name} ${eebus_eg1_device} mDNS register=true"
+    name: "${device_name} EG1 mDNS register=true"
     icon: "mdi:broadcast"
     entity_category: diagnostic
     web_server:
@@ -469,7 +491,7 @@ button:
       - lambda: "id(hems_eg1).set_mdns_register(true);"
 
   - platform: template
-    name: "${device_name} ${eebus_eg1_device} mDNS register=false"
+    name: "${device_name} EG1 mDNS register=false"
     icon: "mdi:broadcast-off"
     entity_category: diagnostic
     web_server:

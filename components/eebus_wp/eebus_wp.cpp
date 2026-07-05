@@ -203,7 +203,7 @@ static void SR_OnRemoteServicesUpdate(
    * spurious connections in the wrong direction. */
   auto* r = reinterpret_cast<WpServiceReader*>(o);
   size_t n = VectorGetSize(entries);
-  ESP_LOGD("eebus", "mDNS WP scan: %zu entr%s visible (periodic browser, ~15 s interval)",
+  ESP_LOGD("eebus", "mDNS EG1 scan: %zu entr%s visible (periodic browser, ~15 s interval)",
            n, n == 1 ? "y" : "ies");
   for (size_t i = 0; i < n; i++) {
     const MdnsEntry* entry = (const MdnsEntry*)VectorGetElement(entries, i);
@@ -222,7 +222,7 @@ static void SR_OnRemoteServicesUpdate(
     if (!ski || ski[0] == '\0') continue;
     if (r->self->local_ski_ == ski) continue;
     const char* host = MdnsEntryGetHost(entry) ? MdnsEntryGetHost(entry) : "?";
-    ESP_LOGI("eebus_wp", "mDNS: WP sichtbar ski=%s host=%s — warte auf eingehende Verbindung",
+    ESP_LOGI("eebus_wp", "mDNS: EG1 sichtbar ski=%s host=%s — warte auf eingehende Verbindung",
              ski, host);
     r->self->pairing_state_ = "Gerät sichtbar: " + std::string(ski) + " — warte auf Verbindung";
     break;
@@ -236,7 +236,7 @@ static void SR_OnShipIdUpdate(
   ESP_LOGD("eebus_wp", "SHIP ID update ski=%s id=%s", ski, ship_id ? ship_id : "");
   if (ship_id && ship_id[0] != '\0' && ski && r->self->remote_ski_ == ski) {
     r->self->device_label_ = ship_id;
-    ESP_LOGI("eebus_wp", "WP device name: %s", ship_id);
+    ESP_LOGI("eebus_wp", "EG1 device name: %s", ship_id);
   }
 }
 
@@ -256,7 +256,7 @@ static void SR_OnShipStateUpdate(
     }
     r->self->remote_ski_ = ski;
     r->self->pairing_state_ = "Gepairt: " + std::string(ski);
-    ESP_LOGW("eebus_wp", "WP pairing approved, remote SKI=%s", ski);
+    ESP_LOGW("eebus_wp", "EG1 pairing approved, remote SKI=%s", ski);
     r->self->save_remote_ski_nvs_(ski);
     r->self->on_ship_data_exchange_(ski);
   }
@@ -296,7 +296,7 @@ void EebusWpComponent::setup() {
         save_remote_ski_nvs_("");
         remote_ski_.clear();
       } else {
-        ESP_LOGW(TAG, "Loaded paired WP SKI from NVS: %s", remote_ski_.c_str());
+        ESP_LOGW(TAG, "Loaded paired EG1 SKI from NVS: %s", remote_ski_.c_str());
       }
     }
   }
@@ -320,7 +320,7 @@ void EebusWpComponent::setup() {
 
   free(cert); free(key);
   startup_mdns_at_ms_ = millis() + 15000;  /* one-shot mDNS announce after services are up */
-  ESP_LOGI(TAG, "EEBus WP ready — heartbeat interval: %u s", kHeartbeatTimeoutSeconds);
+  ESP_LOGI(TAG, "EEBus EG1 ready — heartbeat interval: %u s", kHeartbeatTimeoutSeconds);
 }
 
 /* =========================================================================
@@ -343,12 +343,12 @@ void EebusWpComponent::loop() {
                        ((millis() - last_heartbeat_ms_) < hb_timeout_ms);
   if (connected_ && !grace && !hb_ok) {
     if (!heartbeat_alarm_) {
-      ESP_LOGW(TAG, "WP heartbeat overdue \xe2\x80\x94 connection may be stale");
+      ESP_LOGW(TAG, "EG1 heartbeat overdue \xe2\x80\x94 connection may be stale");
       heartbeat_alarm_ = true;
     }
   } else {
     if (heartbeat_alarm_ && connected_) {
-      ESP_LOGI(TAG, "WP heartbeat recovered");
+      ESP_LOGI(TAG, "EG1 heartbeat recovered");
     }
     heartbeat_alarm_ = false;
   }
@@ -391,7 +391,7 @@ void EebusWpComponent::loop() {
     ok &= (EgLpcSetFailsafeDurationMinimum(eg_lpc_, &remote_entity_addr_, &fs_duration) == kEebusErrorOk);
 
     if (ok) {
-      ESP_LOGI(TAG, "WP failsafe configured: %.0f W / %u s", failsafe_limit_w_, failsafe_duration_s_);
+      ESP_LOGI(TAG, "EG1 failsafe configured: %.0f W / %u s", failsafe_limit_w_, failsafe_duration_s_);
       failsafe_set_ = true;
     } else {
       failsafe_retry_ms_ = now + 5000;
@@ -405,15 +405,15 @@ void EebusWpComponent::loop() {
  * ====================================================================== */
 
 void EebusWpComponent::dump_config() {
-  ESP_LOGCONFIG(TAG, "EEBus WP Component::");
+  ESP_LOGCONFIG(TAG, "EEBus EG1 Component::");
   ESP_LOGCONFIG(TAG, "  SHIP Port:      %d",   ship_port_);
   ESP_LOGCONFIG(TAG, "  Remote SKI:      %s",   remote_ski_.empty() ? "(auto-discover)" : remote_ski_.c_str());
   ESP_LOGCONFIG(TAG, "  Connected:      %s",   connected_ ? "yes" : "no");
   ESP_LOGCONFIG(TAG, "  Heartbeat:      every %u s", kHeartbeatTimeoutSeconds);
   ESP_LOGCONFIG(TAG, "  Failsafe:       %.0f W / %u s", failsafe_limit_w_, failsafe_duration_s_);
   ESP_LOGCONFIG(TAG, "  SPINE local:    device=EnergyManagementSystem entity=CEM(id=1) heartbeat=%us", kHeartbeatTimeoutSeconds);
-  ESP_LOGCONFIG(TAG, "  SPINE use-case: HEMS=EnergyGuard(9) <-> WP=ControllableSystem(5) / limitationOfPowerConsumption(14) [EG/LPC]");
-  ESP_LOGCONFIG(TAG, "  SPINE use-case: HEMS=MonitoringAppliance(19) <-> WP=MonitoredUnit(18) / monitoringOfPowerConsumption(25) [MA/MPC]");
+  ESP_LOGCONFIG(TAG, "  SPINE use-case: HEMS=EnergyGuard(9) <-> CS=ControllableSystem(5) / limitationOfPowerConsumption(14) [EG/LPC]");
+  ESP_LOGCONFIG(TAG, "  SPINE use-case: HEMS=MonitoringAppliance(19) <-> CS=MonitoredUnit(18) / monitoringOfPowerConsumption(25) [MA/MPC]");
   ESP_LOGCONFIG(TAG, "  SPINE negotiated: %s", active_use_cases().c_str());
 }
 
@@ -423,7 +423,7 @@ void EebusWpComponent::dump_config() {
 
 void EebusWpComponent::set_limit(float watts) {
   if (!connected_ || !have_remote_entity_ || !eg_lpc_) {
-    ESP_LOGW(TAG, "set_limit(%.0f W) — WP not connected", watts);
+    ESP_LOGW(TAG, "set_limit(%.0f W) — EG1 not connected", watts);
     return;
   }
 
@@ -440,12 +440,12 @@ void EebusWpComponent::set_limit(float watts) {
     limit.value.value = 99999; /* placeholder — value is ignored when is_active=false */
     limit.value.scale = 0;
     limit.is_active   = false;
-    ESP_LOGI(TAG, "Clearing WP power limit");
+    ESP_LOGI(TAG, "Clearing EG1 power limit");
   } else {
     limit.value.value = (int64_t)watts;
     limit.value.scale = 0;
     limit.is_active   = true;
-    ESP_LOGI(TAG, "Setting WP power limit: %.0f W", watts);
+    ESP_LOGI(TAG, "Setting EG1 power limit: %.0f W", watts);
   }
 
   EebusError err = EgLpcSetActiveConsumptionPowerLimit(eg_lpc_, &remote_entity_addr_, &limit);
@@ -486,7 +486,7 @@ void EebusWpComponent::on_remote_use_case(int actor, int uc_name_id, const char*
 }
 
 void EebusWpComponent::on_entity_connect(const EntityAddressType* addr) {
-  ESP_LOGI(TAG, "WP entity connected");
+  ESP_LOGI(TAG, "EG1 entity connected");
   connected_          = true;
   heartbeat_alarm_    = false;
   connected_since_ms_ = millis();
@@ -500,7 +500,7 @@ void EebusWpComponent::on_entity_connect(const EntityAddressType* addr) {
 }
 
 void EebusWpComponent::on_entity_disconnect(const EntityAddressType* /*addr*/) {
-  ESP_LOGW(TAG, "WP entity disconnected");
+  ESP_LOGW(TAG, "EG1 entity disconnected");
   connected_          = false;
   mpc_connected_      = false;
   last_heartbeat_ms_  = 0;
@@ -519,7 +519,7 @@ void EebusWpComponent::on_entity_disconnect(const EntityAddressType* /*addr*/) {
 }
 
 void EebusWpComponent::on_power_limit_ack(float watts, bool active) {
-  ESP_LOGD(TAG, "WP ACK limit %.0f W active=%s", watts, active ? "yes" : "no");
+  ESP_LOGD(TAG, "EG1 ACK limit %.0f W active=%s", watts, active ? "yes" : "no");
 }
 
 void EebusWpComponent::on_mpc_measurement(float watts) {
@@ -661,7 +661,7 @@ bool EebusWpComponent::start_eebus_service_(
 
   const char* local_ski = TLS_CERTIFICATE_GET_SKI(tls_cert);
   if (local_ski) local_ski_ = local_ski;
-  ESP_LOGI(TAG, "WP-EG local SKI: %s", local_ski ? local_ski : "(null)");
+  ESP_LOGI(TAG, "EG1 local SKI: %s", local_ski ? local_ski : "(null)");
 
   /* Build service config */
   EebusServiceConfig* cfg = EebusServiceConfigCreate(
@@ -692,7 +692,7 @@ bool EebusWpComponent::start_eebus_service_(
 
   if (!remote_ski_.empty() && remote_ski_ != "unknown" && remote_ski_.length() >= 40) {
     EEBUS_SERVICE_REGISTER_REMOTE_SKI(service_, remote_ski_.c_str(), true);
-    ESP_LOGI(TAG, "Registered remote WP SKI: %s", remote_ski_.c_str());
+    ESP_LOGI(TAG, "Registered remote EG1 SKI: %s", remote_ski_.c_str());
   } else {
     if (!remote_ski_.empty()) {
       ESP_LOGW(TAG, "Ignoring invalid remote SKI from config: '%s'", remote_ski_.c_str());
@@ -733,7 +733,7 @@ bool EebusWpComponent::start_eebus_service_(
   MA_MPC_LISTENER_INTERFACE(&mpc_listener_) = &kMpcListenerMethods;
   mpc_listener_.self = this;
   ma_mpc_ = MaMpcUseCaseCreate(local_entity_, MA_MPC_LISTENER_OBJECT(&mpc_listener_));
-  if (!ma_mpc_) { ESP_LOGW(TAG, "MaMpcUseCaseCreate failed — WP may not show EEBus verbunden"); }
+  if (!ma_mpc_) { ESP_LOGW(TAG, "MaMpcUseCaseCreate failed — EG1 may not show EEBus verbunden"); }
 
   /* Register entity with device so it is advertised via SPINE/mDNS */
   DEVICE_LOCAL_ADD_ENTITY(device_local, local_entity_);
@@ -746,7 +746,7 @@ bool EebusWpComponent::start_eebus_service_(
    * subscribe while the stored DeviceDiagnosis heartbeat data still carries
    * an epoch timestamp — the root cause of its persistent "no connection"
    * display state. */
-  ESP_LOGI(TAG, "EEBus WP setup complete — awaiting time sync before service start");
+  ESP_LOGI(TAG, "EEBus EG1 setup complete — awaiting time sync before service start");
   return true;
 }
 
@@ -755,7 +755,7 @@ bool EebusWpComponent::start_eebus_service_(
  * ====================================================================== */
 
 void EebusWpComponent::on_ship_data_exchange_(const char* ski) {
-  ESP_LOGW(TAG, "WP data exchange active — SKI persisted: %s", ski);
+  ESP_LOGW(TAG, "EG1 data exchange active — SKI persisted: %s", ski);
   if (pairing_mode_active_) {
     pairing_mode_active_ = false;
     pairing_deadline_ms_ = 0;
@@ -804,7 +804,7 @@ void EebusWpComponent::refresh_heartbeat() {
     ESP_LOGD("eebus", "SPINE local use-case: actor=MonitoringAppliance(19) useCase=monitoringOfPowerConsumption(25) [MA/MPC]");
     EEBUS_SERVICE_START(service_);
     pairing_state_ = "Suche Gerät via mDNS...";
-    ESP_LOGI(TAG, "EEBus WP service started after time sync");
+    ESP_LOGI(TAG, "EEBus EG1 service started after time sync");
   }
 }
 
