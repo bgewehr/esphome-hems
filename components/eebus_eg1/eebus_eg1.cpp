@@ -110,12 +110,13 @@ static void spine_event_handler(const EventPayload* payload, void* ctx) {
                change, ski,
                (int)f->actor, actor_str,
                (int)f->use_case_name_id, uc_str);
-      if (self && payload->change_type == kElementChangeAdd) {
-        /* Only track use cases from the paired remote CS device — reject when SKI
-         * unknown (not yet paired) or when the event comes from a different device */
+      if (self) {
         const std::string& eg_ski = self->remote_ski();
         if (!eg_ski.empty() && eg_ski == ski) {
-          self->on_remote_use_case(f->actor, f->use_case_name_id, uc_str, actor_str);
+          bool add = (payload->change_type == kElementChangeAdd);
+          bool rem = (payload->change_type == kElementChangeRemove);
+          if (add || rem)
+            self->on_remote_use_case(f->actor, f->use_case_name_id, uc_str, actor_str, add);
         }
       }
       break;
@@ -548,7 +549,7 @@ void EebusEg1Component::set_limit(float watts) {
  * EgLpListenerInterface callbacks
  * ====================================================================== */
 
-void EebusEg1Component::on_remote_use_case(int actor, int uc_name_id, const char* /*uc_str*/, const char* /*actor_str*/) {
+void EebusEg1Component::on_remote_use_case(int actor, int uc_name_id, const char* /*uc_str*/, const char* /*actor_str*/, bool add) {
   /* Official EEBus SPINE abbreviations (EEBus Initiative documentation) */
   const char* a;
   switch (actor) {
@@ -569,7 +570,16 @@ void EebusEg1Component::on_remote_use_case(int actor, int uc_name_id, const char
   }
   char buf[24];
   snprintf(buf, sizeof(buf), " | %s/%s", a, uc);
-  remote_uc_seen_ += buf;
+  if (add) {
+    if (remote_uc_seen_.find(buf) == std::string::npos)
+      remote_uc_seen_ += buf;
+  } else {
+    auto pos = remote_uc_seen_.find(buf);
+    if (pos != std::string::npos) {
+      remote_uc_seen_.erase(pos, strlen(buf));
+      ESP_LOGW(TAG, "Use case removed by remote: %s", buf + 3);  /* skip " | " */
+    }
+  }
 }
 
 void EebusEg1Component::on_entity_connect(const EntityAddressType* addr) {

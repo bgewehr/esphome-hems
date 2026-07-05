@@ -140,7 +140,7 @@ class EebusEg1Component : public Component {
     if (mpc_connected_) r += " | MU/MPC";
     return r.empty() ? std::string("(keine)") : r.substr(3);
   }
-  void on_remote_use_case(int actor, int uc_name_id, const char* uc_str, const char* actor_str);
+  void on_remote_use_case(int actor, int uc_name_id, const char* uc_str, const char* actor_str, bool add);
 
   /* Called from C vtable (public for Eg1ServiceReader friend access) */
   void on_entity_connect(const EntityAddressType* addr);
