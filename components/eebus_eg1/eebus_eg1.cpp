@@ -106,7 +106,7 @@ static void spine_event_handler(const EventPayload* payload, void* ctx) {
                          :                                                   "remove";
       const char* uc_str    = spine_uc_name(f->use_case_name_id);
       const char* actor_str = spine_actor_name(f->actor);
-      ESP_LOGI("eebus", "SPINE use-case %s from %s: actor=%d(%s) useCase=%d(%s)",
+      ESP_LOGW("eebus", "SPINE use-case %s from %s: actor=%d(%s) useCase=%d(%s)",
                change, ski,
                (int)f->actor, actor_str,
                (int)f->use_case_name_id, uc_str);
