@@ -168,6 +168,7 @@ class EebusEg1Component : public Component {
   std::string load_remote_ski_nvs_();
   bool start_eebus_service_(const uint8_t* cert, size_t cl,
                              const uint8_t* key,  size_t kl);
+  void subscribe_semp_();
 
   /* Config */
   uint16_t    ship_port_          {4713};
@@ -201,12 +202,14 @@ class EebusEg1Component : public Component {
 
   EntityAddressType remote_entity_addr_{};
   bool              have_remote_entity_{false};
+  bool              semp_subscribe_pending_{false};
 
   /* openeebus objects */
-  EebusServiceObject*  service_      {nullptr};
-  EntityLocalObject*   local_entity_ {nullptr};
-  EgLpUseCaseObject*   eg_lpc_       {nullptr};
-  MaMpcUseCaseObject*  ma_mpc_       {nullptr};
+  EebusServiceObject*  service_            {nullptr};
+  EntityLocalObject*   local_entity_       {nullptr};
+  EgLpUseCaseObject*   eg_lpc_             {nullptr};
+  MaMpcUseCaseObject*  ma_mpc_             {nullptr};
+  FeatureLocalObject*  local_semp_feature_ {nullptr};
 
   /* Trigger lists */
   std::vector<Eg1ConnectedTrigger*>    connected_triggers_;

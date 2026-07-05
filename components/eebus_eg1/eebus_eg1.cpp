@@ -25,8 +25,12 @@ extern "C" {
 #include "src/service/api/eebus_service_config.h"
 #include "src/service/api/service_reader_interface.h"
 #include "src/common/eebus_device_info.h"
+#include "src/common/vector.h"
 #include "src/ship/api/mdns_entry.h"
 #include "src/ship/tls_certificate/tls_certificate.h"
+#include "src/spine/api/device_local_interface.h"
+#include "src/spine/api/device_remote_interface.h"
+#include "src/spine/api/entity_remote_interface.h"
 #include "src/spine/entity/entity_local.h"
 #include "src/spine/model/entity_types.h"
 #include "src/spine/model/node_management_types.h"
@@ -484,6 +488,12 @@ void EebusEg1Component::loop() {
              remote_uc_seen_.empty() ? "(none)" : remote_uc_seen_.c_str() + 3);
   }
 
+  /* Subscribe to SEMP data once the OSSHPCF use case has been announced */
+  if (semp_subscribe_pending_ && connected_ && local_semp_feature_) {
+    semp_subscribe_pending_ = false;
+    subscribe_semp_();
+  }
+
   /* Retry power limit if ACK not received within 10 s (SPINE subscription race at connect) */
   if (connected_ && have_remote_entity_ && pending_limit_w_ >= 0.0f &&
       (now - pending_limit_ms_) >= 10000u) {
@@ -599,6 +609,8 @@ void EebusEg1Component::on_remote_use_case(int actor, int uc_name_id, const char
       remote_uc_seen_ += buf;
       ESP_LOGW(TAG, "Use case added by remote: %s", buf + 3);  /* skip " | " */
     }
+    if (actor == 4 && uc_name_id == 30)
+      semp_subscribe_pending_ = true;
   } else {
     auto pos = remote_uc_seen_.find(buf);
     if (pos != std::string::npos) {
@@ -606,6 +618,39 @@ void EebusEg1Component::on_remote_use_case(int actor, int uc_name_id, const char
       ESP_LOGW(TAG, "Use case removed by remote: %s", buf + 3);  /* skip " | " */
     }
   }
+}
+
+void EebusEg1Component::subscribe_semp_() {
+  if (!local_semp_feature_ || !service_ || remote_ski_.empty()) return;
+
+  DeviceLocalObject* local_dev = EEBUS_SERVICE_GET_LOCAL_DEVICE(service_);
+  if (!local_dev) return;
+
+  DeviceRemoteObject* remote_dev = DEVICE_LOCAL_GET_REMOTE_DEVICE_WITH_SKI(local_dev, remote_ski_.c_str());
+  if (!remote_dev) {
+    ESP_LOGW(TAG, "OSSHPCF subscribe: remote device not found (SKI=%s)", remote_ski_.c_str());
+    return;
+  }
+
+  const Vector* entities = DEVICE_REMOTE_GET_ENTITIES(remote_dev);
+  size_t n = entities ? VectorGetSize(entities) : 0;
+  for (size_t i = 0; i < n; i++) {
+    auto* ent = static_cast<EntityRemoteObject*>(VectorGetElement(entities, i));
+    if (!ent) continue;
+    FeatureRemoteObject* semp = ENTITY_REMOTE_GET_FEATURE_WITH_TYPE_AND_ROLE(
+        ent, kFeatureTypeTypeSmartEnergyManagementPs, kRoleTypeServer);
+    if (!semp) continue;
+    const FeatureAddressType* addr = FEATURE_GET_ADDRESS(FEATURE_OBJECT(semp));
+    if (!addr) continue;
+    if (FEATURE_LOCAL_INTERFACE(local_semp_feature_)->has_subscription_to_remote(local_semp_feature_, addr)) {
+      ESP_LOGD(TAG, "OSSHPCF: already subscribed to SEMP");
+      return;
+    }
+    EebusError err = FEATURE_LOCAL_INTERFACE(local_semp_feature_)->subscribe_to_remote(local_semp_feature_, addr);
+    ESP_LOGW(TAG, "OSSHPCF: subscribed to remote SEMP (entity %zu) err=%d", i, (int)err);
+    return;
+  }
+  ESP_LOGW(TAG, "OSSHPCF: no SEMP server feature found on remote device (%zu entities)", n);
 }
 
 void EebusEg1Component::on_entity_connect(const EntityAddressType* addr) {
@@ -630,11 +675,12 @@ void EebusEg1Component::on_entity_disconnect(const EntityAddressType* /*addr*/) 
   mpc_connected_      = false;
   last_heartbeat_ms_  = 0;
   have_remote_entity_ = false;
-  active_limit_w_     = 0.0f;  /* WP applies its own failsafe while disconnected — we don't control it */
-  current_power_w_    = 0.0f;  /* stale reading no longer valid */
-  pending_limit_w_    = -1.0f;
-  uc_dump_at_ms_      = 0;
-  remote_uc_seen_     = {};
+  active_limit_w_          = 0.0f;  /* WP applies its own failsafe while disconnected — we don't control it */
+  current_power_w_         = 0.0f;  /* stale reading no longer valid */
+  pending_limit_w_         = -1.0f;
+  uc_dump_at_ms_           = 0;
+  remote_uc_seen_          = {};
+  semp_subscribe_pending_  = false;
   pairing_state_      = "Getrennt — suche Gerät...";
   /* Re-announce mDNS so the remote device reconnects immediately (eebus-go: checkAutoReannounce on disconnect) */
   set_mdns_register(false);
@@ -866,6 +912,13 @@ bool EebusEg1Component::start_eebus_service_(
   mpc_listener_.self = this;
   ma_mpc_ = MaMpcUseCaseCreate(local_entity_, MA_MPC_LISTENER_OBJECT(&mpc_listener_));
   if (!ma_mpc_) { ESP_LOGW(TAG, "MaMpcUseCaseCreate failed — %s may not show EEBus verbunden", instance_name_.c_str()); }
+
+  /* Add a local SmartEnergyManagementPs client feature so we can subscribe to the remote
+   * Compressor entity's SEMP server when OSSHPCF use case is active. */
+  local_semp_feature_ = ENTITY_LOCAL_ADD_FEATURE_WITH_TYPE_AND_ROLE(
+      local_entity_, kFeatureTypeTypeSmartEnergyManagementPs, kRoleTypeClient);
+  if (!local_semp_feature_)
+    ESP_LOGW(TAG, "SEMP client feature init failed — OSSHPCF data unavailable");
 
   /* Register entity with device so it is advertised via SPINE/mDNS */
   DEVICE_LOCAL_ADD_ENTITY(device_local, local_entity_);
