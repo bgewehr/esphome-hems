@@ -113,10 +113,11 @@ static void spine_event_handler(const EventPayload* payload, void* ctx) {
       if (self) {
         const std::string& eg_ski = self->remote_ski();
         if (!eg_ski.empty() && eg_ski == ski) {
-          bool add = (payload->change_type == kElementChangeAdd);
           bool rem = (payload->change_type == kElementChangeRemove);
-          if (add || rem)
-            self->on_remote_use_case(f->actor, f->use_case_name_id, uc_str, actor_str, add);
+          /* Treat ADD and UPDATE both as "use case present" — WP may re-announce
+           * via UPDATE rather than ADD after a reconnect. */
+          bool add = !rem;
+          self->on_remote_use_case(f->actor, f->use_case_name_id, uc_str, actor_str, add);
         }
       }
       break;
@@ -580,8 +581,10 @@ void EebusEg1Component::on_remote_use_case(int actor, int uc_name_id, const char
   char buf[24];
   snprintf(buf, sizeof(buf), " | %s/%s", a, uc);
   if (add) {
-    if (remote_uc_seen_.find(buf) == std::string::npos)
+    if (remote_uc_seen_.find(buf) == std::string::npos) {
       remote_uc_seen_ += buf;
+      ESP_LOGW(TAG, "Use case added by remote: %s", buf + 3);  /* skip " | " */
+    }
   } else {
     auto pos = remote_uc_seen_.find(buf);
     if (pos != std::string::npos) {
