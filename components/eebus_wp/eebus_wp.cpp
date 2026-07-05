@@ -390,17 +390,19 @@ void EebusWpComponent::loop() {
     ScaledValue fs_limit;
     fs_limit.value = (int64_t)failsafe_limit_w_;
     fs_limit.scale = 0;
-    bool ok = (EgLpcSetFailsafeConsumptionActivePowerLimit(eg_lpc_, &remote_entity_addr_, &fs_limit) == kEebusErrorOk);
+    EebusError err_limit = EgLpcSetFailsafeConsumptionActivePowerLimit(eg_lpc_, &remote_entity_addr_, &fs_limit);
 
     EebusDuration fs_duration;
     memset(&fs_duration, 0, sizeof(fs_duration));
     fs_duration.seconds = (int32_t)failsafe_duration_s_;
-    ok &= (EgLpcSetFailsafeDurationMinimum(eg_lpc_, &remote_entity_addr_, &fs_duration) == kEebusErrorOk);
+    EebusError err_dur = EgLpcSetFailsafeDurationMinimum(eg_lpc_, &remote_entity_addr_, &fs_duration);
 
-    if (ok) {
+    if (err_limit == kEebusErrorOk && err_dur == kEebusErrorOk) {
       ESP_LOGI(TAG, "EG1 failsafe configured: %.0f W / %u s", failsafe_limit_w_, failsafe_duration_s_);
       failsafe_set_ = true;
     } else {
+      ESP_LOGD(TAG, "EG1 failsafe not ready: limit_err=%d dur_err=%d — DeviceConfig keys pending, retry in 5s",
+               (int)err_limit, (int)err_dur);
       failsafe_retry_ms_ = now + 5000;
     }
   }
