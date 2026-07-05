@@ -469,6 +469,13 @@ void EebusEg1Component::loop() {
     }
   }
 
+  /* Retry power limit if ACK not received within 10 s (SPINE subscription race at connect) */
+  if (connected_ && have_remote_entity_ && pending_limit_w_ >= 0.0f &&
+      (now - pending_limit_ms_) >= 10000u) {
+    ESP_LOGW(TAG, "%s limit %.0f W unacknowledged — retrying", instance_name_.c_str(), pending_limit_w_);
+    set_limit(pending_limit_w_);
+  }
+
 }
 
 /* =========================================================================
@@ -542,7 +549,9 @@ void EebusEg1Component::set_limit(float watts) {
     return;
   }
 
-  active_limit_w_ = watts > 0.0f ? watts : 0.0f;
+  active_limit_w_  = watts > 0.0f ? watts : 0.0f;
+  pending_limit_w_ = active_limit_w_;
+  pending_limit_ms_ = millis();
 }
 
 /* =========================================================================
@@ -605,6 +614,7 @@ void EebusEg1Component::on_entity_disconnect(const EntityAddressType* /*addr*/) 
   have_remote_entity_ = false;
   active_limit_w_     = 0.0f;  /* WP applies its own failsafe while disconnected — we don't control it */
   current_power_w_    = 0.0f;  /* stale reading no longer valid */
+  pending_limit_w_    = -1.0f;
   remote_uc_seen_     = {};
   pairing_state_      = "Getrennt — suche Gerät...";
   /* Re-announce mDNS so the remote device reconnects immediately (eebus-go: checkAutoReannounce on disconnect) */
@@ -618,8 +628,14 @@ void EebusEg1Component::on_entity_disconnect(const EntityAddressType* /*addr*/) 
 }
 
 void EebusEg1Component::on_power_limit_ack(float watts, bool active) {
-  ESP_LOGD(TAG, "%s ACK limit %.0f W active=%s", instance_name_.c_str(), watts, active ? "yes" : "no");
-  active_limit_w_ = active ? watts : 0.0f;
+  if (active) {
+    ESP_LOGD(TAG, "%s ACK limit %.0f W active=yes", instance_name_.c_str(), watts);
+    active_limit_w_ = watts;
+  } else {
+    ESP_LOGD(TAG, "%s ACK limit cleared (active=no)", instance_name_.c_str());
+    active_limit_w_ = 0.0f;
+  }
+  pending_limit_w_ = -1.0f;  /* ACK received — cancel any pending retry */
 }
 
 void EebusEg1Component::on_mpc_measurement(float watts) {
