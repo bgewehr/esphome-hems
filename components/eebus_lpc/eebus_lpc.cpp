@@ -269,8 +269,10 @@ void EebusLpcComponent::on_remote_ski_disconnected(const char* ski) {
     limit_active_ = false; current_limit_w_ = 0.0f;
     for (auto* t : limit_cleared_triggers_) t->trigger();
   }
-  if (!heartbeat_lost_) last_heartbeat_ms_ = 0; /* prevent stale timestamp after reconnect */
-  if (!heartbeat_lost_) update_pairing_state_("Inaktiv");
+  if (!heartbeat_lost_) {
+    last_heartbeat_ms_ = 0; /* prevent stale timestamp after reconnect */
+    update_pairing_state_("Inaktiv");
+  }
 }
 
 void EebusLpcComponent::on_ship_state_update(const char* ski, SmeState state) {
@@ -450,7 +452,7 @@ bool EebusLpcComponent::load_cert_nvs_(
     if (nvs_get_blob(h, NVS_KEY_CERT, nullptr, &clen) != ESP_OK || clen == 0) break;
     if (nvs_get_blob(h, NVS_KEY_KEY,  nullptr, &klen) != ESP_OK || klen == 0) break;
     *cert = (uint8_t*)malloc(clen); *key = (uint8_t*)malloc(klen);
-    if (!*cert || !*key) { free(*cert); free(*key); break; }
+    if (!*cert || !*key) { free(*cert); *cert = nullptr; free(*key); *key = nullptr; break; }
     if (nvs_get_blob(h, NVS_KEY_CERT, *cert, &clen) != ESP_OK) break;
     if (nvs_get_blob(h, NVS_KEY_KEY,  *key,  &klen) != ESP_OK) break;
     *cl = clen; *kl = klen; ok = true;
@@ -557,7 +559,7 @@ bool EebusLpcComponent::start_eebus_service_(
   service_reader_.self = this;
 
   /* Create service — 4-argument signature */
-  service_ = EebusServiceCreate(cfg, "EnergyManagementSystem", tls_cert,
+  service_ = EebusServiceCreate(cfg, "auto", tls_cert,
                                  SERVICE_READER_OBJECT(&service_reader_.obj));
   EebusServiceConfigDelete(cfg);
   if (!service_) { ESP_LOGE(TAG, "EebusServiceCreate failed"); return false; }
