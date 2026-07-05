@@ -93,6 +93,11 @@ eebus_eg1:
     - lambda: |-
         ESP_LOGI("eebus", "EEBus EG1 (%s) verbunden — native Leistungslimitierung aktiv",
                  id(eg1_device_type).current_option().c_str());
+        if (id(hems_lpc).is_limit_active()) {
+          float lim = id(hems_lpc).current_limit_w();
+          ESP_LOGW("eebus", "EG1 reconnect: re-applying active LPC limit %.0f W", lim);
+          id(hems_eg1).set_limit(lim);
+        }
 
   on_eg1_disconnected:
     - lambda: |-

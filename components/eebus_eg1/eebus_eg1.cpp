@@ -593,7 +593,8 @@ void EebusEg1Component::on_entity_disconnect(const EntityAddressType* /*addr*/) 
   mpc_connected_      = false;
   last_heartbeat_ms_  = 0;
   have_remote_entity_ = false;
-  active_limit_w_     = 0.0f;
+  active_limit_w_     = 0.0f;  /* WP applies its own failsafe while disconnected — we don't control it */
+  current_power_w_    = 0.0f;  /* stale reading no longer valid */
   remote_uc_seen_     = {};
   pairing_state_      = "Getrennt — suche Gerät...";
   /* Re-announce mDNS so the remote device reconnects immediately (eebus-go: checkAutoReannounce on disconnect) */
@@ -608,6 +609,7 @@ void EebusEg1Component::on_entity_disconnect(const EntityAddressType* /*addr*/) 
 
 void EebusEg1Component::on_power_limit_ack(float watts, bool active) {
   ESP_LOGD(TAG, "%s ACK limit %.0f W active=%s", instance_name_.c_str(), watts, active ? "yes" : "no");
+  active_limit_w_ = active ? watts : 0.0f;
 }
 
 void EebusEg1Component::on_mpc_measurement(float watts) {
@@ -869,8 +871,14 @@ void EebusEg1Component::set_mdns_register(bool val) {
 
 void EebusEg1Component::forget_pairing() {
   ESP_LOGW(TAG, "Pairing forgotten");
+  std::string old_ski = remote_ski_;
   save_remote_ski_nvs_("");
   remote_ski_.clear();
+  device_label_.clear();
+  /* Drop the existing connection — triggers on_entity_disconnect which resets all UI state */
+  if (service_ && !old_ski.empty()) {
+    EEBUS_SERVICE_UNREGISTER_REMOTE_SKI(service_, old_ski.c_str());
+  }
   enter_pairing_mode();
 }
 
