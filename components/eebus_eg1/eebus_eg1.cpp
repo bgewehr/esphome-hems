@@ -128,6 +128,27 @@ static void spine_event_handler(const EventPayload* payload, void* ctx) {
       if (payload->change_type == kElementChangeAdd)
         ESP_LOGI("eebus", "SPINE device discovered: ski=%s", ski);
       break;
+    case kEventTypeDataChange: {
+      /* Passive observer — log SmartEnergyManagementPs (OSSHPCF) data at WARN
+       * so it is visible during testing even without verbose logging enabled.
+       * All other data changes are logged at DEBUG for diagnostics. */
+      struct { FunctionType fn; const char* name; } static const kSemp[] = {
+        { kFunctionTypeSmartEnergyManagementPsData,                        "SempData" },
+        { kFunctionTypeSmartEnergyManagementPsConfigurationRequestCall,    "SempCfgReq" },
+        { kFunctionTypeSmartEnergyManagementPsPriceData,                   "SempPriceData" },
+        { kFunctionTypeSmartEnergyManagementPsPriceCalculationRequestCall, "SempPriceCalcReq" },
+      };
+      for (const auto& e : kSemp) {
+        if (payload->function_type == e.fn) {
+          ESP_LOGW("eebus_eg1", "OSSHPCF msg from %s: %s (fn=%d) — data=%s",
+                   ski, e.name, (int)payload->function_type,
+                   payload->function_data ? "present" : "null");
+          break;
+        }
+      }
+      ESP_LOGD("eebus_eg1", "SPINE data change from %s: fn=%d", ski, (int)payload->function_type);
+      break;
+    }
     default: break;
   }
 }
