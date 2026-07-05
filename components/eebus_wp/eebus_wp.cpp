@@ -392,9 +392,14 @@ void EebusWpComponent::loop() {
     fs_limit.scale = 0;
     EebusError err_limit = EgLpcSetFailsafeConsumptionActivePowerLimit(eg_lpc_, &remote_entity_addr_, &fs_limit);
 
+    /* EebusDurationCompare() is field-by-field (not normalized) —
+     * {.seconds=7200} compares as hours=0 < hours=2 and fails the 2h..24h range check.
+     * Must decompose into hours/minutes/seconds. */
     EebusDuration fs_duration;
     memset(&fs_duration, 0, sizeof(fs_duration));
-    fs_duration.seconds = (int32_t)failsafe_duration_s_;
+    fs_duration.hours   = (int32_t)(failsafe_duration_s_ / 3600u);
+    fs_duration.minutes = (int32_t)((failsafe_duration_s_ % 3600u) / 60u);
+    fs_duration.seconds = (int32_t)(failsafe_duration_s_ % 60u);
     EebusError err_dur = EgLpcSetFailsafeDurationMinimum(eg_lpc_, &remote_entity_addr_, &fs_duration);
 
     if (err_limit == kEebusErrorOk && err_dur == kEebusErrorOk) {
