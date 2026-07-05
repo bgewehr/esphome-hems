@@ -334,14 +334,24 @@ text_sensor:
 
   # --- EG1 Use Cases (sg_eebus_eg1) ---
   - platform: template
-    name: "${device_name} EG1 Use Cases"
+    name: "${device_name} EG1 Aktive UC"
     icon: "mdi:format-list-checks"
     web_server:
       sorting_group_id: sg_eebus_eg1
       sorting_weight: 7
     entity_category: diagnostic
-    update_interval: 60s
+    update_interval: 5s
     lambda: "return id(hems_eg1).active_use_cases();"
+
+  - platform: template
+    name: "${device_name} EG1 Unterstützte UC"
+    icon: "mdi:format-list-bulleted"
+    web_server:
+      sorting_group_id: sg_eebus_eg1
+      sorting_weight: 8
+    entity_category: diagnostic
+    update_interval: 60s
+    lambda: "return id(hems_eg1).supported_use_cases();"
 
 number:
   # --- EG1 Failsafe Konfiguration (sg_eebus_eg1, weights 30-31) ---

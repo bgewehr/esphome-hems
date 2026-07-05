@@ -127,12 +127,17 @@ class EebusEg1Component : public Component {
   std::string local_ski()          const { return local_ski_; }
   std::string pairing_state()      const { return pairing_state_; }
   std::string device_label()       const { return device_label_; }
-  std::string active_use_cases()   const {
-    if (!remote_uc_seen_.empty()) {
+  std::string supported_use_cases() const {
+    if (!remote_uc_seen_.empty())
       return remote_uc_seen_.size() > 3 ? remote_uc_seen_.substr(3) : remote_uc_seen_;
-    }
-    if (connected_ || mpc_connected_) return std::string("verbunden, UC ausstehend");
+    if (connected_ || mpc_connected_) return std::string("(ausstehend)");
     return std::string("(keine)");
+  }
+  std::string active_use_cases() const {
+    std::string r;
+    if (connected_)     r += " | CS/LPC";
+    if (mpc_connected_) r += " | MU/MPC";
+    return r.empty() ? std::string("(keine)") : r.substr(3);
   }
   void on_remote_use_case(int actor, int uc_name_id, const char* uc_str, const char* actor_str);
 
