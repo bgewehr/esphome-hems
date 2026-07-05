@@ -112,9 +112,10 @@ class EebusEg1Component : public Component {
   void set_mdns_register(bool val);
   bool is_pairing_mode() const { return pairing_mode_active_; }
 
-  /* Diagnostic test: stop outbound heartbeat for 90 s, then resume.
-   * The remote CS device will apply its failsafe after its own timeout window.
-   * After the pause the heartbeat is restarted with a fresh timestamp. */
+  /* Diagnostic test: stop outbound heartbeat and block reconnect for 120 s.
+   * The remote CS device will apply its failsafe after its heartbeat timeout (2× 60 s),
+   * and cannot reconnect until the test period ends.
+   * After the pause the heartbeat is restarted and the SKI re-registered. */
   void start_heartbeat_test();
 
   /* State accessors */

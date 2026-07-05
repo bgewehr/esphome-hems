@@ -404,11 +404,16 @@ void EebusEg1Component::loop() {
     heartbeat_alarm_ = false;
   }
 
-  /* Heartbeat test: restart heartbeat after 90 s pause */
+  /* Heartbeat test: resume heartbeat and re-enable reconnect after test period */
   if (heartbeat_test_until_ms_ != 0 && millis() >= heartbeat_test_until_ms_) {
     heartbeat_test_until_ms_ = 0;
     EgLpcStartHeartbeat(eg_lpc_);
-    ESP_LOGI(TAG, "Heartbeat test complete — outbound heartbeat resumed");
+    if (service_ && !remote_ski_.empty()) {
+      EEBUS_SERVICE_REGISTER_REMOTE_SKI(service_, remote_ski_.c_str(), true);
+      ESP_LOGI(TAG, "Heartbeat test complete — reconnect re-enabled for %s", remote_ski_.c_str());
+    } else {
+      ESP_LOGI(TAG, "Heartbeat test complete — outbound heartbeat resumed");
+    }
   }
 
   /* Pairing window timeout */
@@ -492,10 +497,15 @@ void EebusEg1Component::start_heartbeat_test() {
     return;
   }
   static const uint32_t kTestDurationMs = 120000u;
-  ESP_LOGW(TAG, "Heartbeat test: pausing outbound heartbeat for %u s — %s remote device will apply failsafe",
-           kTestDurationMs / 1000u, instance_name_.c_str());
+  ESP_LOGW(TAG, "Heartbeat test: stopping heartbeat and blocking %s reconnect for %u s",
+           instance_name_.c_str(), kTestDurationMs / 1000u);
   EgLpcStopHeartbeat(eg_lpc_);
   heartbeat_test_until_ms_ = millis() + kTestDurationMs;
+  /* Unregister clears remote_ski in ship_node so SkiMatches() fails for any
+   * inbound attempt from the WP — it cannot reconnect until we re-register. */
+  if (service_ && !remote_ski_.empty()) {
+    EEBUS_SERVICE_UNREGISTER_REMOTE_SKI(service_, remote_ski_.c_str());
+  }
 }
 
 void EebusEg1Component::set_limit(float watts) {
