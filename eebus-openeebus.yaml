@@ -193,7 +193,7 @@ binary_sensor:
     web_server:
       sorting_group_id: sg_eebus_eg1
       sorting_weight: 2.5
-    lambda: "return !id(hems_eg1).is_heartbeat_alarm();"
+    lambda: "return id(hems_eg1).is_connected() && !id(hems_eg1).is_heartbeat_alarm();"
 
 interval:
   - interval: 5s
@@ -203,7 +203,7 @@ interval:
           state: !lambda "return id(hems_lpc).is_connected() && !id(hems_lpc).is_heartbeat_lost();"
       - binary_sensor.template.publish:
           id: eg1_heartbeat_ok
-          state: !lambda "return !id(hems_eg1).is_heartbeat_alarm();"
+          state: !lambda "return id(hems_eg1).is_connected() && !id(hems_eg1).is_heartbeat_alarm();"
 
 text_sensor:
   # --- CS (sg_eebus_cs, weights 3-6) ---
