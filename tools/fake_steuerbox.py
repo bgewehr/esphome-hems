@@ -30,6 +30,9 @@ Usage:
   python tools/fake_steuerbox.py 192.168.178.24 --scenario
   python tools/fake_steuerbox.py 192.168.178.24 --scenario --limit 6000 --hold 120
 
+  # Failsafe scenario: activate limit, go silent, verify HEMS applies 4200 W failsafe after 60 s
+  python tools/fake_steuerbox.py 192.168.178.24 --failsafe --limit 6000
+
 Before connecting (first-time pairing):
   1. Open HEMS web UI at http://<hems-ip>
   2. Press "CS Pairing-Modus starten" to open the 5-min pairing window
@@ -380,6 +383,47 @@ def spine_send(
         f"cmd={payload_json[:300]}"
     )
     ws_send(sock, raw)
+
+
+def _is_heartbeat_read(parsed: dict) -> bool:
+    """Return True if the SPINE message is a DeviceDiagnosis heartbeat READ."""
+    dg = _extract_datagram(parsed)
+    if not dg:
+        return False
+    classifier = None
+    for entry in dg.get("header", []):
+        if isinstance(entry, dict) and "cmdClassifier" in entry:
+            classifier = entry["cmdClassifier"]
+    if classifier != "read":
+        return False
+    return "deviceDiagnosisHeartbeatData" in json.dumps(parsed)
+
+
+def drain_no_heartbeat(sock, duration: float, our_addr=None, hems_addr=None):
+    """Drain incoming frames for `duration` seconds, replying normally to
+    everything EXCEPT heartbeat reads — simulating the EG going silent."""
+    deadline = time.monotonic() + duration
+    sock.settimeout(1.0)
+    try:
+        while time.monotonic() < deadline:
+            try:
+                raw = ws_recv(sock)
+                msg_type = raw[0]
+                tag = {MSG_CTRL: "CTRL", MSG_DATA: "DATA"}.get(msg_type, f"0x{msg_type:02x}")
+                try:
+                    parsed = json.loads(raw[1:])
+                    if msg_type == MSG_DATA and _is_heartbeat_read(parsed):
+                        print(f"  <- [{tag}] (heartbeat read — suppressed, EG is silent)")
+                    else:
+                        print(f"  <- [{tag}] {json.dumps(parsed)[:200]}")
+                        if msg_type == MSG_DATA and our_addr and hems_addr:
+                            _handle_spine_read(sock, parsed, our_addr, hems_addr)
+                except Exception:
+                    pass
+            except (TimeoutError, OSError):
+                pass
+    finally:
+        sock.settimeout(None)
 
 
 def drain_incoming(sock, timeout: float = 1.0, our_addr=None, hems_addr=None):
@@ -884,6 +928,14 @@ def main():
         help="After pairing: send the LPC limit once (manual mode, no auto-revoke)",
     )
     ap.add_argument(
+        "--failsafe", action="store_true",
+        help=(
+            "Failsafe scenario: activate --limit W, then go silent (no heartbeat replies). "
+            "After 60 s the HEMS watchdog applies the 4200 W failsafe. "
+            "Use --limit >4200 to make the transition visible."
+        ),
+    )
+    ap.add_argument(
         "--no-pause", action="store_true",
         help="Skip 'press Enter' prompts",
     )
@@ -897,7 +949,7 @@ def main():
     cert_pem, key_pem, our_ski = load_or_generate_cert()
     print(f"Fake Steuerbox SKI: {our_ski} (persistent — same each run)")
 
-    if args.scenario:
+    if args.scenario or args.failsafe:
         # Automatically trigger pairing mode on the HEMS via HTTP API
         try:
             import urllib.request
@@ -1037,6 +1089,57 @@ Prerequisites (first-time pairing):
             print("\n[§14a] Limit revoked. Check HEMS log for 'EEBUS LPC limit cleared'.")
             time.sleep(1.0)
             print("\n[Scenario] Complete — disconnecting.")
+
+        elif args.failsafe:
+            # ── Failsafe scenario ─────────────────────────────────────────
+            # Subscribe + bind + activate limit, then go silent (no heartbeat replies).
+            # After kHeartbeatTimeoutSeconds (60 s) the HEMS watchdog fires and
+            # applies failsafe_limit_w_ (default 4200 W). Use --limit >4200 to
+            # make the transition from active limit → failsafe visible in the HEMS UI.
+            HEMS_HB_TIMEOUT = 60  # must match kHeartbeatTimeoutSeconds in eebus_lpc.cpp
+
+            send_subscription_request(
+                sock, our_addr, hems_addr,
+                client_entity=[1], client_feature=2,
+                server_entity=[1], server_feature=2,
+                server_feature_type="LoadControl",
+                label="LCSubscription",
+            )
+            time.sleep(0.5)
+            drain_incoming(sock, timeout=1.0, our_addr=our_addr, hems_addr=hems_addr)
+            time.sleep(0.5)
+
+            send_binding_request(sock, our_addr=our_addr, hems_addr=hems_addr)
+            time.sleep(0.5)
+            drain_incoming(sock, timeout=1.5, our_addr=our_addr, hems_addr=hems_addr)
+            time.sleep(0.5)
+
+            send_lpc_limit(sock, args.limit, active=True, our_addr=our_addr, hems_addr=hems_addr)
+            time.sleep(0.5)
+            drain_incoming(sock, timeout=0.5, our_addr=our_addr, hems_addr=hems_addr)
+
+            silence_s = HEMS_HB_TIMEOUT + 30  # 30 s margin after expected failsafe trigger
+            print(f"\n[Failsafe] Limit {args.limit:.0f} W active. Now going silent (no heartbeat replies).")
+            print(f"[Failsafe] HEMS watchdog triggers after {HEMS_HB_TIMEOUT} s — failsafe_limit_w_ = 4200 W.")
+            print(f"[Failsafe] Staying connected (silent) for {silence_s} s total...\n")
+
+            t0 = time.monotonic()
+            triggered_logged = False
+            step = 5
+            while True:
+                elapsed = int(time.monotonic() - t0)
+                remaining = silence_s - elapsed
+                if remaining <= 0:
+                    break
+                if elapsed >= HEMS_HB_TIMEOUT and not triggered_logged:
+                    print(f"\n[Failsafe] >>> {HEMS_HB_TIMEOUT} s elapsed — HEMS should now show failsafe limit (4200 W).")
+                    print(f"[Failsafe]     Check HEMS log for: 'Heartbeat lost — applying failsafe 4200 W'")
+                    triggered_logged = True
+                print(f"  ... {remaining:3d} s remaining  (elapsed {elapsed} s)")
+                drain_no_heartbeat(sock, duration=float(step), our_addr=our_addr, hems_addr=hems_addr)
+
+            print("\n[Failsafe] Disconnecting — HEMS should KEEP failsafe limit active after disconnect.")
+            print("[Failsafe] Check HEMS log: limit must NOT be cleared on SHIP disconnect.")
 
         elif args.send_limit:
             # ── Manual one-shot limit ─────────────────────────────────────
