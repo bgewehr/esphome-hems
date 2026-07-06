@@ -123,8 +123,8 @@ static void spine_event_handler(const EventPayload* payload, void* ctx) {
                          :                                                   "remove";
       const char* uc_str    = spine_uc_name(uc_id);
       const char* actor_str = spine_actor_name(actor_id);
-      ESP_LOGW("eebus", "SPINE use-case %s from %s: actor=%d(%s) useCase=%d(%s)",
-               change, ski, actor_id, actor_str, uc_id, uc_str);
+      ESP_LOGW("eebus", "%s SPINE use-case %s from %s: actor=%d(%s) useCase=%d(%s)",
+               self ? self->instance_name() : "?", change, ski, actor_id, actor_str, uc_id, uc_str);
       if (self) {
         const std::string& eg_ski = self->remote_ski();
         if (!eg_ski.empty() && eg_ski == ski) {
@@ -139,11 +139,11 @@ static void spine_event_handler(const EventPayload* payload, void* ctx) {
     }
     case kEventTypeEntityChange:
       if (payload->change_type == kElementChangeAdd)
-        ESP_LOGI("eebus", "SPINE entity added from %s", ski);
+        ESP_LOGI("eebus", "%s SPINE entity added from %s", self ? self->instance_name() : "?", ski);
       break;
     case kEventTypeDeviceChange:
       if (payload->change_type == kElementChangeAdd)
-        ESP_LOGI("eebus", "SPINE device discovered: ski=%s", ski);
+        ESP_LOGI("eebus", "%s SPINE device discovered: ski=%s", self ? self->instance_name() : "?", ski);
       break;
     case kEventTypeDataChange: {
       /* Passive observer — log SmartEnergyManagementPs (OSSHPCF) data at WARN
@@ -648,7 +648,7 @@ void EebusEgComponent::on_remote_use_case(int actor, int uc_name_id, const char*
   if (add) {
     if (remote_uc_seen_.find(buf) == std::string::npos) {
       remote_uc_seen_ += buf;
-      ESP_LOGW(TAG, "Use case added by remote: %s", buf + 3);  /* skip " | " */
+      ESP_LOGW(TAG, "%s use case added by remote: %s", instance_name_.c_str(), buf + 3);  /* skip " | " */
     }
     if (actor == 4 && uc_name_id == 30)
       semp_subscribe_pending_ = true;
@@ -656,7 +656,7 @@ void EebusEgComponent::on_remote_use_case(int actor, int uc_name_id, const char*
     auto pos = remote_uc_seen_.find(buf);
     if (pos != std::string::npos) {
       remote_uc_seen_.erase(pos, strlen(buf));
-      ESP_LOGW(TAG, "Use case removed by remote: %s", buf + 3);  /* skip " | " */
+      ESP_LOGW(TAG, "%s use case removed by remote: %s", instance_name_.c_str(), buf + 3);  /* skip " | " */
     }
   }
 }
@@ -684,14 +684,14 @@ void EebusEgComponent::subscribe_semp_() {
     const FeatureAddressType* addr = FEATURE_GET_ADDRESS(FEATURE_OBJECT(semp));
     if (!addr) continue;
     if (FEATURE_LOCAL_INTERFACE(local_semp_feature_)->has_subscription_to_remote(local_semp_feature_, addr)) {
-      ESP_LOGD(TAG, "OSSHPCF: already subscribed to SEMP");
+      ESP_LOGD(TAG, "%s OSSHPCF: already subscribed to SEMP", instance_name_.c_str());
       return;
     }
     EebusError err = FEATURE_LOCAL_INTERFACE(local_semp_feature_)->subscribe_to_remote(local_semp_feature_, addr);
-    ESP_LOGW(TAG, "OSSHPCF: subscribed to remote SEMP (entity %zu) err=%d", i, (int)err);
+    ESP_LOGW(TAG, "%s OSSHPCF: subscribed to remote SEMP (entity %zu) err=%d", instance_name_.c_str(), i, (int)err);
     return;
   }
-  ESP_LOGW(TAG, "OSSHPCF: no SEMP server feature found on remote device (%zu entities)", n);
+  ESP_LOGW(TAG, "%s OSSHPCF: no SEMP server feature found on remote device (%zu entities)", instance_name_.c_str(), n);
 }
 
 void EebusEgComponent::on_entity_connect(const EntityAddressType* addr) {

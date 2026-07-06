@@ -302,9 +302,10 @@ static const MaMpcListenerInterface kMpcListenerMethods = {
 static void EgL_Destruct(EgLpListenerObject*) {}
 
 static void EgL_OnRemoteEntityConnect(EgLpListenerObject* o, const EntityAddressType* addr) {
-  ESP_LOGI("eebus", "SPINE remote EG/LPC entity connected: ski=%s",
-           (addr && addr->device) ? addr->device : "?");
-  reinterpret_cast<EebusEgComponent::EgListener*>(o)->self->on_entity_connect(addr);
+  auto* self = reinterpret_cast<EebusEgComponent::EgListener*>(o)->self;
+  ESP_LOGI("eebus", "%s SPINE remote EG/LPC entity connected: ski=%s",
+           self->instance_name(), (addr && addr->device) ? addr->device : "?");
+  self->on_entity_connect(addr);
 }
 static void EgL_OnRemoteEntityDisconnect(EgLpListenerObject* o, const EntityAddressType* addr) {
   reinterpret_cast<EebusEgComponent::EgListener*>(o)->self->on_entity_disconnect(addr);
