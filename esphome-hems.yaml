@@ -2,8 +2,6 @@ substitutions:
   name: "esphome-hems"
   friendly_name: "ESPHome HEMS"
   device_name: "ESPHome HEMS"
-  fronius_ip: !secret fronius_ip
-  fronius_port: "502"
 
 esphome:
   name: ${name}

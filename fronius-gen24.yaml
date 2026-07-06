@@ -14,6 +14,10 @@
 # Battery: BYD HVS/HVM — max discharge power configurable via ESPHome UI (id: battery_max_discharge_w, default 18176 W)
 # ══════════════════════════════════════════════════════════════════════════════
 
+substitutions:
+  fronius_ip: !secret fronius_ip
+  fronius_port: "502"
+
 web_server:
   sorting_groups:
     - id: sg_fronius

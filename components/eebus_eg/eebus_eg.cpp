@@ -9,7 +9,10 @@
 #include <cstdarg>
 #include <cstring>
 #include <ctime>
+#include <set>
 #include <vector>
+
+#include <mbedtls/sha1.h>
 
 #include "esphome/core/log.h"
 
@@ -194,10 +197,9 @@ static const uint32_t kHeartbeatTimeoutSeconds = 60;
  * EEBus heartbeats are sent every ~40 s; 3× that gives a safe margin. */
 static const uint32_t kInboundHeartbeatAlarmMs = 120000u;
 
-/* Tracks raw cert DER bytes already claimed by EG instances in this boot.
- * Pure byte comparison — no TLS library needed in setup() context. Detects shared certs
- * that arose from multiple instances inheriting the same legacy cert on migration. */
-static std::vector<std::vector<uint8_t>> s_claimed_cert_bytes;
+/* Per-boot SKI registry — populated by start_eebus_service_() (TLS) and read by Check 1 in
+ * setup() (mbedtls). Detects duplicate SKIs regardless of whether DER cert bytes differ. */
+static std::set<std::string> s_claimed_eg_skis;
 
 /* Pairing window: how long the explicit pairing mode stays open */
 static const uint32_t kPairingWindowMs = 300000;  /* 5 minutes */
@@ -405,21 +407,41 @@ void EebusEgComponent::setup() {
    * Both checks clear NVS and regenerate a unique cert. */
   bool is_secondary_migrator = false;
 
-  /* Check 1: compare raw cert DER bytes against all certs already registered in this boot.
-   * Does not require TLS library initialization — pure byte comparison. */
+  /* Check 1: compute own SKI via mbedtls (no TLS service needed) and compare against
+   * s_claimed_eg_skis populated by start_eebus_service_() of already-started EG instances.
+   * Catches duplicate SKIs regardless of whether the DER cert bytes are identical. */
   {
-    std::vector<uint8_t> cert_vec(cert, cert + cl);
-    bool already_claimed = false;
-    for (const auto& claimed : s_claimed_cert_bytes) {
-      if (claimed == cert_vec) { already_claimed = true; break; }
+    mbedtls_x509_crt crt_tmp;
+    mbedtls_x509_crt_init(&crt_tmp);
+    bool ski_ok = false;
+    if (mbedtls_x509_crt_parse_der(&crt_tmp, cert, cl) == 0) {
+      uint8_t pk_buf[100]; uint8_t* pk_p = pk_buf + sizeof(pk_buf);
+      int pk_len = mbedtls_pk_write_pubkey(&pk_p, pk_buf, &crt_tmp.pk);
+      if (pk_len > 0) {
+        uint8_t sha[20];
+        mbedtls_sha1_context sha1;
+        mbedtls_sha1_init(&sha1);
+        mbedtls_sha1_starts(&sha1);
+        mbedtls_sha1_update(&sha1, pk_p, (size_t)pk_len);
+        mbedtls_sha1_finish(&sha1, sha);
+        mbedtls_sha1_free(&sha1);
+        char ski_hex[41];
+        for (int i = 0; i < 20; i++) snprintf(ski_hex + 2 * i, 3, "%02x", sha[i]);
+        ski_hex[40] = '\0';
+        ski_ok = true;
+        if (s_claimed_eg_skis.count(ski_hex)) {
+          is_secondary_migrator = true;
+          ESP_LOGW(TAG, "%s: SKI %s already claimed by another EG — regenerating cert",
+                   instance_name_.c_str(), ski_hex);
+        } else {
+          s_claimed_eg_skis.insert(ski_hex);
+          ESP_LOGD(TAG, "%s: SKI %s claimed (boot set)", instance_name_.c_str(), ski_hex);
+        }
+      }
     }
-    if (already_claimed) {
-      is_secondary_migrator = true;
-      ESP_LOGW(TAG, "%s: cert bytes identical to another EG instance — regenerating unique cert",
-               instance_name_.c_str());
-    } else {
-      s_claimed_cert_bytes.push_back(cert_vec);
-    }
+    mbedtls_x509_crt_free(&crt_tmp);
+    if (!ski_ok)
+      ESP_LOGE(TAG, "%s: mbedtls cert parse for SKI check failed", instance_name_.c_str());
   }
 
   /* Check 2: NVS byte comparison against 'eebus_wp' cert + claimed_by port marker.
@@ -935,8 +957,36 @@ bool EebusEgComponent::start_eebus_service_(
   if (!tls_cert) { ESP_LOGE(TAG, "TlsCertificateParse failed"); return false; }
 
   const char* local_ski = TLS_CERTIFICATE_GET_SKI(tls_cert);
-  if (local_ski) local_ski_ = local_ski;
-  ESP_LOGI(TAG, "%s local SKI: %s", instance_name_.c_str(), local_ski ? local_ski : "(null)");
+  if (local_ski) {
+    local_ski_ = local_ski;
+    s_claimed_eg_skis.insert(std::string(local_ski));  /* authoritative TLS-based registration */
+  } else {
+    /* Fallback: compute SKI from cert bytes via mbedtls when TLS macro returns null. */
+    mbedtls_x509_crt crt_fb;
+    mbedtls_x509_crt_init(&crt_fb);
+    if (mbedtls_x509_crt_parse_der(&crt_fb, cert_der, cert_len) == 0) {
+      uint8_t pk_buf[100]; uint8_t* pk_p = pk_buf + sizeof(pk_buf);
+      int pk_len = mbedtls_pk_write_pubkey(&pk_p, pk_buf, &crt_fb.pk);
+      if (pk_len > 0) {
+        uint8_t sha[20];
+        mbedtls_sha1_context sha1;
+        mbedtls_sha1_init(&sha1);
+        mbedtls_sha1_starts(&sha1);
+        mbedtls_sha1_update(&sha1, pk_p, (size_t)pk_len);
+        mbedtls_sha1_finish(&sha1, sha);
+        mbedtls_sha1_free(&sha1);
+        char ski_hex[41];
+        for (int i = 0; i < 20; i++) snprintf(ski_hex + 2 * i, 3, "%02x", sha[i]);
+        ski_hex[40] = '\0';
+        local_ski_ = ski_hex;
+        s_claimed_eg_skis.insert(local_ski_);
+        ESP_LOGW(TAG, "%s: TLS_CERTIFICATE_GET_SKI null — mbedtls SKI: %s",
+                 instance_name_.c_str(), ski_hex);
+      }
+    }
+    mbedtls_x509_crt_free(&crt_fb);
+  }
+  ESP_LOGI(TAG, "%s local SKI: %s", instance_name_.c_str(), local_ski_.c_str());
 
   /* Build service config */
   EebusServiceConfig* cfg = EebusServiceConfigCreate(
@@ -1062,16 +1112,16 @@ void EebusEgComponent::set_mdns_register(bool val) {
 }
 
 void EebusEgComponent::forget_pairing() {
-  ESP_LOGW(TAG, "Pairing forgotten");
+  ESP_LOGW(TAG, "%s: pairing cleared", instance_name_.c_str());
   std::string old_ski = remote_ski_;
   save_remote_ski_nvs_("");
   remote_ski_.clear();
   device_label_.clear();
+  pairing_state_ = "Inaktiv";
   /* Drop the existing connection — triggers on_entity_disconnect which resets all UI state */
   if (service_ && !old_ski.empty()) {
     EEBUS_SERVICE_UNREGISTER_REMOTE_SKI(service_, old_ski.c_str());
   }
-  enter_pairing_mode();
 }
 
 void EebusEgComponent::refresh_heartbeat() {
