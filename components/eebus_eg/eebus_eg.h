@@ -249,8 +249,15 @@ static void MpcL_Destruct(MaMpcListenerObject*) {}
 
 static void MpcL_OnRemoteEntityConnect(MaMpcListenerObject* o, const EntityAddressType* addr) {
   auto* self = reinterpret_cast<EebusEgComponent::MpcListener*>(o)->self;
-  // Remote CS device may announce MU/MPC on multiple SPINE entities; suppress duplicates.
   if (self->mpc_connected()) return;
+  /* Guard: only accept MPC from a device whose entity connect was accepted (connected_==true).
+   * Without this, the SPINE/use-case layer fires independently of the SHIP-level rejection in
+   * SR_OnShipStateUpdate/on_entity_connect, leaking mpc_connected_=true for unpaired devices. */
+  if (!self->is_connected()) {
+    ESP_LOGW("eebus_eg", "%s: MPC entity connect ignored — SHIP entity not accepted",
+             self->instance_name());
+    return;
+  }
   ESP_LOGW("eebus_eg", "MPC: remote measurement unit connected");
   ESP_LOGI("eebus", "SPINE remote MA/MPC entity connected: ski=%s",
            (addr && addr->device) ? addr->device : "?");
@@ -267,6 +274,8 @@ static void MpcL_OnMeasurementReceive(
     const EntityAddressType* entity_addr)
 {
   if (!val) return;
+  auto* self = reinterpret_cast<EebusEgComponent::MpcListener*>(o)->self;
+  if (!self->is_connected()) return;  /* drop measurements from unaccepted SHIP sessions */
   float v = (float)val->value * powf(10.0f, (float)val->scale);
   const char* name = MuMpcMeasurementGetName(name_id);
   /* Log raw ScaledValue (value * 10^scale) so diagnostics survive float truncation */
@@ -277,7 +286,7 @@ static void MpcL_OnMeasurementReceive(
            (double)v,
            (entity_addr && entity_addr->device) ? entity_addr->device : "?");
   if (name_id == kMpcPowerTotal) {
-    reinterpret_cast<EebusEgComponent::MpcListener*>(o)->self->on_mpc_measurement(v);
+    self->on_mpc_measurement(v);
   }
 }
 
