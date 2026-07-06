@@ -162,7 +162,7 @@ class EebusEgComponent : public Component {
   void on_ship_data_exchange_(const char* ski);  /* called by vtable on kDataExchange */
 
  protected:
-  bool load_or_generate_cert_();
+  bool load_or_generate_cert_(uint8_t** cert_out, size_t* cl_out, uint8_t** key_out, size_t* kl_out);
   bool store_cert_nvs_(const uint8_t* c, size_t cl, const uint8_t* k, size_t kl);
   bool load_cert_nvs_(uint8_t** c, size_t* cl, uint8_t** k, size_t* kl);
   std::string load_remote_ski_nvs_();
