@@ -1169,7 +1169,7 @@ void EebusEgComponent::refresh_heartbeat() {
     ESP_LOGD("eebus", "SPINE local use-case: actor=EnergyGuard(9) useCase=limitationOfPowerConsumption(14) [EG/LPC]");
     ESP_LOGD("eebus", "SPINE local use-case: actor=MonitoringAppliance(19) useCase=monitoringOfPowerConsumption(25) [MA/MPC]");
     EEBUS_SERVICE_START(service_);
-    pairing_state_ = "Suche Gerät via mDNS...";
+    pairing_state_ = remote_ski_.empty() ? "Inaktiv" : "Suche Gerät via mDNS...";
     ESP_LOGI(TAG, "EEBus %s service started after time sync", instance_name_.c_str());
   }
 }
