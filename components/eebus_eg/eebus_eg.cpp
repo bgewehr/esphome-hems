@@ -497,10 +497,11 @@ void EebusEgComponent::loop() {
     pairing_state_ = "Pairing-Fenster abgelaufen";
   }
 
-  /* Boot: one-shot mDNS de-announce 15 s after boot (avoid stale register=true from prior run) */
+  /* Boot: one-shot mDNS de-announce 15 s after boot (avoid stale register=true from prior run).
+   * Only fires if service was started — inactive EGs (no remote_ski, no pairing) never register. */
   if (!startup_mdns_done_ && (int32_t)(now - startup_mdns_at_ms_) >= 0) {
     startup_mdns_done_ = true;
-    if (!connected_) set_mdns_register(false);
+    if (!connected_ && service_started_) set_mdns_register(false);
   }
 
   /* Pairing: register=true every 5 s while pairing window is open */
