@@ -153,7 +153,7 @@ class EebusEgComponent : public Component {
   void on_heartbeat_received_() { last_heartbeat_ms_ = millis(); }
 
   /* Public for ServiceReader vtable access */
-  std::string pairing_state_       {};
+  std::string pairing_state_       {"Inaktiv"};
   std::string remote_ski_          {};
   std::string local_ski_           {};
   std::string device_label_        {};
