@@ -244,8 +244,8 @@ static void SR_OnRemoteServicesUpdate(
    * spurious connections in the wrong direction. */
   auto* r = reinterpret_cast<EgServiceReader*>(o);
   size_t n = VectorGetSize(entries);
-  ESP_LOGD("eebus", "mDNS EG1 scan: %zu entr%s visible (periodic browser, ~15 s interval)",
-           n, n == 1 ? "y" : "ies");
+  ESP_LOGD("eebus", "%s mDNS scan: %zu entr%s visible (periodic browser, ~15 s interval)",
+           r->self->instance_name(), n, n == 1 ? "y" : "ies");
   for (size_t i = 0; i < n; i++) {
     const MdnsEntry* entry = (const MdnsEntry*)VectorGetElement(entries, i);
     const char* ski  = MdnsEntryGetSki(entry);
@@ -277,7 +277,7 @@ static void SR_OnShipIdUpdate(
   ESP_LOGD("eebus_eg", "SHIP ID update ski=%s id=%s", ski, ship_id ? ship_id : "");
   if (ship_id && ship_id[0] != '\0' && ski && r->self->remote_ski_ == ski) {
     r->self->device_label_ = ship_id;
-    ESP_LOGI("eebus_eg", "EG1 device name: %s", ship_id);
+    ESP_LOGI("eebus_eg", "%s device name: %s", r->self->instance_name(), ship_id);
   }
 }
 
@@ -981,12 +981,24 @@ bool EebusEgComponent::start_eebus_service_(
   }
   ESP_LOGI(TAG, "%s local SKI: %s", instance_name_.c_str(), local_ski_.c_str());
 
-  /* Build service config */
+  /* Build service config — ship_id must be unique per instance so the WP does
+   * not auto-trust EG2 because its SHIP ID matches EG1's paired identity.
+   * Parse instance_name_ ("EG1" → "HEMS-EG-01", "EG2" → "HEMS-EG-02"). */
+  std::string _ship_prefix;
+  int _ship_num = 0;
+  for (char c : instance_name_) {
+    if (std::isdigit((unsigned char)c)) _ship_num = _ship_num * 10 + (c - '0');
+    else _ship_prefix += c;
+  }
+  if (_ship_num == 0) _ship_num = 1;
+  char _ship_id_buf[32];
+  snprintf(_ship_id_buf, sizeof(_ship_id_buf), "HEMS-%s-%02d", _ship_prefix.c_str(), _ship_num);
+  std::string ship_id(_ship_id_buf);
   EebusServiceConfig* cfg = EebusServiceConfigCreate(
       "DIY",
       device_brand_.c_str(),
       device_model_.c_str(),
-      "HEMS-EG1-01",
+      ship_id.c_str(),
       "EnergyManagementSystem",
       ship_port_);
   if (!cfg) { ESP_LOGE(TAG, "EebusServiceConfigCreate failed"); return false; }
