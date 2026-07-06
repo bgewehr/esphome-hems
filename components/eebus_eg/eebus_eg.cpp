@@ -376,13 +376,17 @@ void EebusEgComponent::setup() {
       free(sha1);
     }
     if (s_first_cert_sha1_set && memcmp(cert_sha1, s_first_cert_sha1, 20) == 0) {
-      /* Duplicate cert — erase from NVS so next boot generates a unique one. */
+      /* Duplicate cert — erase cert AND paired remote SKI from NVS so next boot
+       * generates a unique identity.  The remote SKI must also be cleared because
+       * it was established while this instance shared another instance's identity;
+       * keeping it would let the old remote device re-connect to the new identity. */
       ESP_LOGW(TAG, "%s: cert identical to another instance — cleared for next boot",
                instance_name_.c_str());
       free(cert); free(key);
       nvs_handle_t h_er;
       if (nvs_open(nvs_ns_.c_str(), NVS_READWRITE, &h_er) == ESP_OK) {
         nvs_erase_key(h_er, NVS_KEY_CERT); nvs_erase_key(h_er, NVS_KEY_KEY);
+        nvs_erase_key(h_er, NVS_KEY_SKI);
         nvs_commit(h_er); nvs_close(h_er);
       }
       mark_failed(); return;
