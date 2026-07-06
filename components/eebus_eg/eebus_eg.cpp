@@ -1104,6 +1104,11 @@ void EebusEgComponent::enter_pairing_mode() {
   ESP_LOGW(TAG, "Pairing mode activated (window: %u s)", kPairingWindowMs / 1000);
   pairing_mode_active_ = true;
   pairing_deadline_ms_ = millis() + kPairingWindowMs;
+  if (!service_started_ && service_ && time_synced_) {
+    service_started_ = true;
+    EEBUS_SERVICE_START(service_);
+    ESP_LOGI(TAG, "%s service started on pairing mode activation", instance_name_.c_str());
+  }
   if (service_) EEBUS_SERVICE_SET_PAIRING_POSSIBLE(service_, true);
   /* immediate first advert; loop() repeats every 5 s while pairing window is open */
   set_mdns_register(true);
@@ -1161,7 +1166,7 @@ void EebusEgComponent::refresh_heartbeat() {
     time_synced_ = true;
     EgLpcStartHeartbeat(eg_lpc_);  /* store valid timestamp before any subscriber arrives */
   }
-  if (!service_started_ && service_) {
+  if (!service_started_ && service_ && (!remote_ski_.empty() || pairing_mode_active_)) {
     service_started_ = true;
     /* Startup announcement logged here (after time sync) so esphome logs captures it */
     ESP_LOGD("eebus", "SPINE local: device=EnergyManagementSystem entity=CEM(id=1) heartbeat=%us",

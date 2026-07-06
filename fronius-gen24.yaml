@@ -11,7 +11,7 @@
 # Prüfe im Fronius Web-UI unter: Kommunikation → Modbus → Register-Map
 # SunSpec-Registerbasis kann bei unterschiedlicher FW abweichen.
 #
-# Battery: BYD HVS/HVM — max discharge power configurable via ESPHome UI (id: battery_max_discharge_w, default 18176 W)
+# Battery: BYD HVS/HVM or Fronius Reserva — max discharge power configurable via ESPHome UI (id: battery_max_discharge_w, default 18176 W)
 # ══════════════════════════════════════════════════════════════════════════════
 
 substitutions:
