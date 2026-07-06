@@ -3,7 +3,7 @@
  * Licensed under the Apache License, Version 2.0
  */
 
-#include "eebus_eg1.h"
+#include "eebus_eg.h"
 
 #include <cmath>
 #include <cstdarg>
@@ -98,7 +98,7 @@ static const char* spine_uc_name(int n) {
 }
 
 static void spine_event_handler(const EventPayload* payload, void* ctx) {
-  auto* self = static_cast<esphome::eebus_eg1::EebusEg1Component*>(ctx);
+  auto* self = static_cast<esphome::eebus_eg::EebusEgComponent*>(ctx);
   if (!payload) return;
   const char* ski = payload->ski ? payload->ski : "?";
   switch (payload->event_type) {
@@ -152,13 +152,13 @@ static void spine_event_handler(const EventPayload* payload, void* ctx) {
       };
       for (const auto& e : kSemp) {
         if (payload->function_type == e.fn) {
-          ESP_LOGW("eebus_eg1", "OSSHPCF msg from %s: %s (fn=%d) — data=%s",
+          ESP_LOGW("eebus_eg", "OSSHPCF msg from %s: %s (fn=%d) — data=%s",
                    ski, e.name, (int)payload->function_type,
                    payload->function_data ? "present" : "null");
           break;
         }
       }
-      ESP_LOGD("eebus_eg1", "SPINE data change from %s: fn=%d", ski, (int)payload->function_type);
+      ESP_LOGD("eebus_eg", "SPINE data change from %s: fn=%d", ski, (int)payload->function_type);
       break;
     }
     default: break;
@@ -175,7 +175,7 @@ extern "C" void eebus_log_d(const char* tag, int line, const char* fmt, ...) {
 }
 
 namespace esphome {
-namespace eebus_eg1 {
+namespace eebus_eg {
 
 /* NVS key names (constant across all instances) */
 static const char* NVS_KEY_CERT  = "cert_der";
@@ -200,9 +200,9 @@ static const uint32_t kPairingWindowMs = 300000;  /* 5 minutes */
  * ServiceReader C vtable — bridges SHIP pairing events to C++ component
  * ====================================================================== */
 
-struct Eg1ServiceReader {
+struct EgServiceReader {
   ServiceReaderObject obj;   /* must be first */
-  EebusEg1Component*  self;
+  EebusEgComponent*  self;
 };
 
 extern "C" {
@@ -212,16 +212,16 @@ static void SR_Destruct(ServiceReaderObject*) {}
 static void SR_OnRemoteSkiConnected(
     ServiceReaderObject* o, EebusServiceObject* /*svc*/, const char* ski)
 {
-  auto* r = reinterpret_cast<Eg1ServiceReader*>(o);
-  ESP_LOGW("eebus_eg1", "Remote SKI connected: %s", ski);
+  auto* r = reinterpret_cast<EgServiceReader*>(o);
+  ESP_LOGW("eebus_eg", "Remote SKI connected: %s", ski);
   r->self->pairing_state_ = "Verbinde: " + std::string(ski);
 }
 
 static void SR_OnRemoteSkiDisconnected(
     ServiceReaderObject* o, EebusServiceObject* /*svc*/, const char* ski)
 {
-  auto* r = reinterpret_cast<Eg1ServiceReader*>(o);
-  ESP_LOGW("eebus_eg1", "Remote SKI disconnected: %s", ski);
+  auto* r = reinterpret_cast<EgServiceReader*>(o);
+  ESP_LOGW("eebus_eg", "Remote SKI disconnected: %s", ski);
   r->self->on_entity_disconnect(nullptr);
 }
 
@@ -236,7 +236,7 @@ static void SR_OnRemoteServicesUpdate(
    * here — the reference openeebus/examples/hems/hems.c does nothing in this
    * callback and triggering an outbound attempt from every mDNS update causes
    * spurious connections in the wrong direction. */
-  auto* r = reinterpret_cast<Eg1ServiceReader*>(o);
+  auto* r = reinterpret_cast<EgServiceReader*>(o);
   size_t n = VectorGetSize(entries);
   ESP_LOGD("eebus", "mDNS EG1 scan: %zu entr%s visible (periodic browser, ~15 s interval)",
            n, n == 1 ? "y" : "ies");
@@ -257,7 +257,7 @@ static void SR_OnRemoteServicesUpdate(
     if (!ski || ski[0] == '\0') continue;
     if (r->self->local_ski_ == ski) continue;
     const char* host = MdnsEntryGetHost(entry) ? MdnsEntryGetHost(entry) : "?";
-    ESP_LOGI("eebus_eg1", "mDNS: EG1 sichtbar ski=%s host=%s — warte auf eingehende Verbindung",
+    ESP_LOGI("eebus_eg", "mDNS: EG1 sichtbar ski=%s host=%s — warte auf eingehende Verbindung",
              ski, host);
     r->self->pairing_state_ = "Gerät sichtbar: " + std::string(ski) + " — warte auf Verbindung";
     break;
@@ -267,31 +267,31 @@ static void SR_OnRemoteServicesUpdate(
 static void SR_OnShipIdUpdate(
     ServiceReaderObject* o, const char* ski, const char* ship_id)
 {
-  auto* r = reinterpret_cast<Eg1ServiceReader*>(o);
-  ESP_LOGD("eebus_eg1", "SHIP ID update ski=%s id=%s", ski, ship_id ? ship_id : "");
+  auto* r = reinterpret_cast<EgServiceReader*>(o);
+  ESP_LOGD("eebus_eg", "SHIP ID update ski=%s id=%s", ski, ship_id ? ship_id : "");
   if (ship_id && ship_id[0] != '\0' && ski && r->self->remote_ski_ == ski) {
     r->self->device_label_ = ship_id;
-    ESP_LOGI("eebus_eg1", "EG1 device name: %s", ship_id);
+    ESP_LOGI("eebus_eg", "EG1 device name: %s", ship_id);
   }
 }
 
 static void SR_OnShipStateUpdate(
     ServiceReaderObject* o, const char* ski, SmeState state)
 {
-  auto* r = reinterpret_cast<Eg1ServiceReader*>(o);
-  ESP_LOGW("eebus_eg1", "SHIP state ski=%s state=%d", ski, (int)state);
+  auto* r = reinterpret_cast<EgServiceReader*>(o);
+  ESP_LOGW("eebus_eg", "SHIP state ski=%s state=%d", ski, (int)state);
   if (state == kDataExchange) {
     /* Reject connections where TLS peer cert extraction failed.
      * Root cause: CONFIG_MBEDTLS_SSL_KEEP_PEER_CERTIFICATE not set in sdkconfig. */
     if (!ski || strcmp(ski, "unknown") == 0 || strlen(ski) < 40) {
-      ESP_LOGE("eebus_eg1", "DataExchange mit ungültiger SKI '%s' — Pairing ignoriert. "
+      ESP_LOGE("eebus_eg", "DataExchange mit ungültiger SKI '%s' — Pairing ignoriert. "
                "Prüfe CONFIG_MBEDTLS_SSL_KEEP_PEER_CERTIFICATE=y in sdkconfig.",
                ski ? ski : "null");
       return;
     }
     r->self->remote_ski_ = ski;
     r->self->pairing_state_ = "Gepairt: " + std::string(ski);
-    ESP_LOGW("eebus_eg1", "EG1 pairing approved, remote SKI=%s", ski);
+    ESP_LOGW("eebus_eg", "EG1 pairing approved, remote SKI=%s", ski);
     r->self->save_remote_ski_nvs_(ski);
     r->self->on_ship_data_exchange_(ski);
   }
@@ -299,7 +299,7 @@ static void SR_OnShipStateUpdate(
 
 static bool SR_IsWaitingForTrustAllowed(const ServiceReaderObject* o, const char* ski) {
   if (!ski || strcmp(ski, "unknown") == 0 || strlen(ski) < 20) return false;
-  const auto* self = reinterpret_cast<const Eg1ServiceReader*>(o)->self;
+  const auto* self = reinterpret_cast<const EgServiceReader*>(o)->self;
   return self->pairing_mode_active_ && millis() < self->pairing_deadline_ms_;
 }
 
@@ -319,7 +319,7 @@ static const ServiceReaderInterface kServiceReaderMethods = {
  * setup()
  * ====================================================================== */
 
-void EebusEg1Component::setup() {
+void EebusEgComponent::setup() {
   ESP_LOGI(TAG, "Setting up EEBus EG1 controller");
 
   /* Derive per-instance NVS namespace from SHIP port (e.g. "eg4713").
@@ -390,7 +390,7 @@ void EebusEg1Component::setup() {
  * loop()
  * ====================================================================== */
 
-void EebusEg1Component::loop() {
+void EebusEgComponent::loop() {
   if (!service_ || !eg_lpc_) return;
 
   /* Check if the remote CS device has sent us a heartbeat within 2× the declared timeout.
@@ -507,7 +507,7 @@ void EebusEg1Component::loop() {
  * dump_config()
  * ====================================================================== */
 
-void EebusEg1Component::dump_config() {
+void EebusEgComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "EEBus %s Component::", instance_name_.c_str());
   ESP_LOGCONFIG(TAG, "  SHIP Port:      %d",   ship_port_);
   ESP_LOGCONFIG(TAG, "  Remote SKI:      %s",   remote_ski_.empty() ? "(auto-discover)" : remote_ski_.c_str());
@@ -524,7 +524,7 @@ void EebusEg1Component::dump_config() {
  * Public API
  * ====================================================================== */
 
-void EebusEg1Component::start_heartbeat_test() {
+void EebusEgComponent::start_heartbeat_test() {
   if (!eg_lpc_) {
     ESP_LOGW(TAG, "Heartbeat test: service not running");
     return;
@@ -541,7 +541,7 @@ void EebusEg1Component::start_heartbeat_test() {
   }
 }
 
-void EebusEg1Component::set_limit(float watts) {
+void EebusEgComponent::set_limit(float watts) {
   if (!connected_ || !have_remote_entity_ || !eg_lpc_) {
     ESP_LOGW(TAG, "set_limit(%.0f W) — %s not connected", watts, instance_name_.c_str());
     return;
@@ -583,7 +583,7 @@ void EebusEg1Component::set_limit(float watts) {
  * EgLpListenerInterface callbacks
  * ====================================================================== */
 
-void EebusEg1Component::on_remote_use_case(int actor, int uc_name_id, const char* /*uc_str*/, const char* /*actor_str*/, bool add) {
+void EebusEgComponent::on_remote_use_case(int actor, int uc_name_id, const char* /*uc_str*/, const char* /*actor_str*/, bool add) {
   /* Official EEBus SPINE abbreviations (EEBus Initiative documentation) */
   const char* a;
   switch (actor) {
@@ -620,7 +620,7 @@ void EebusEg1Component::on_remote_use_case(int actor, int uc_name_id, const char
   }
 }
 
-void EebusEg1Component::subscribe_semp_() {
+void EebusEgComponent::subscribe_semp_() {
   if (!local_semp_feature_ || !service_ || remote_ski_.empty()) return;
 
   DeviceLocalObject* local_dev = EEBUS_SERVICE_GET_LOCAL_DEVICE(service_);
@@ -653,7 +653,7 @@ void EebusEg1Component::subscribe_semp_() {
   ESP_LOGW(TAG, "OSSHPCF: no SEMP server feature found on remote device (%zu entities)", n);
 }
 
-void EebusEg1Component::on_entity_connect(const EntityAddressType* addr) {
+void EebusEgComponent::on_entity_connect(const EntityAddressType* addr) {
   ESP_LOGI(TAG, "%s entity connected", instance_name_.c_str());
   connected_          = true;
   heartbeat_alarm_    = false;
@@ -668,7 +668,7 @@ void EebusEg1Component::on_entity_connect(const EntityAddressType* addr) {
   for (auto* t : connected_triggers_) t->trigger();
 }
 
-void EebusEg1Component::on_entity_disconnect(const EntityAddressType* /*addr*/) {
+void EebusEgComponent::on_entity_disconnect(const EntityAddressType* /*addr*/) {
   if (!connected_ && !have_remote_entity_) return;  /* guard: SPINE and SHIP both fire disconnect */
   ESP_LOGW(TAG, "%s entity disconnected", instance_name_.c_str());
   connected_          = false;
@@ -692,7 +692,7 @@ void EebusEg1Component::on_entity_disconnect(const EntityAddressType* /*addr*/) 
   for (auto* t : disconnected_triggers_) t->trigger();
 }
 
-void EebusEg1Component::on_power_limit_ack(float watts, bool active) {
+void EebusEgComponent::on_power_limit_ack(float watts, bool active) {
   if (active) {
     ESP_LOGD(TAG, "%s ACK limit %.0f W active=yes", instance_name_.c_str(), watts);
     active_limit_w_ = watts;
@@ -703,7 +703,7 @@ void EebusEg1Component::on_power_limit_ack(float watts, bool active) {
   pending_limit_w_ = -1.0f;  /* ACK received — cancel any pending retry */
 }
 
-void EebusEg1Component::on_mpc_measurement(float watts) {
+void EebusEgComponent::on_mpc_measurement(float watts) {
   current_power_w_ = watts;
   for (auto* t : power_triggers_) t->trigger(watts);
 }
@@ -712,7 +712,7 @@ void EebusEg1Component::on_mpc_measurement(float watts) {
  * NVS certificate helpers
  * ====================================================================== */
 
-bool EebusEg1Component::store_cert_nvs_(
+bool EebusEgComponent::store_cert_nvs_(
     const uint8_t* c, size_t cl, const uint8_t* k, size_t kl)
 {
   nvs_handle_t h;
@@ -724,7 +724,7 @@ bool EebusEg1Component::store_cert_nvs_(
   return ok;
 }
 
-bool EebusEg1Component::load_cert_nvs_(
+bool EebusEgComponent::load_cert_nvs_(
     uint8_t** c, size_t* cl, uint8_t** k, size_t* kl)
 {
   nvs_handle_t h;
@@ -745,7 +745,7 @@ bool EebusEg1Component::load_cert_nvs_(
   return ok;
 }
 
-void EebusEg1Component::save_remote_ski_nvs_(const char* ski) {
+void EebusEgComponent::save_remote_ski_nvs_(const char* ski) {
   if (!ski) return;
   /* Allow empty string to clear NVS; reject "unknown" and suspiciously short strings */
   if (strlen(ski) > 0 && (strcmp(ski, "unknown") == 0 || strlen(ski) < 20)) {
@@ -759,7 +759,7 @@ void EebusEg1Component::save_remote_ski_nvs_(const char* ski) {
   nvs_close(h);
 }
 
-std::string EebusEg1Component::load_remote_ski_nvs_() {
+std::string EebusEgComponent::load_remote_ski_nvs_() {
   nvs_handle_t h;
   if (nvs_open(nvs_ns_.c_str(), NVS_READONLY, &h) != ESP_OK) return {};
   size_t len = 0;
@@ -773,7 +773,7 @@ std::string EebusEg1Component::load_remote_ski_nvs_() {
   return result;
 }
 
-bool EebusEg1Component::load_or_generate_cert_() {
+bool EebusEgComponent::load_or_generate_cert_() {
   mbedtls_pk_context       pk;
   mbedtls_x509write_cert   crt;
   mbedtls_entropy_context  entropy;
@@ -831,7 +831,7 @@ bool EebusEg1Component::load_or_generate_cert_() {
  * start_eebus_service_() — correct pattern from openeebus examples/hems
  * ====================================================================== */
 
-bool EebusEg1Component::start_eebus_service_(
+bool EebusEgComponent::start_eebus_service_(
     const uint8_t* cert_der, size_t cert_len,
     const uint8_t* key_der,  size_t key_len)
 {
@@ -939,7 +939,7 @@ bool EebusEg1Component::start_eebus_service_(
  * Pairing management
  * ====================================================================== */
 
-void EebusEg1Component::on_ship_data_exchange_(const char* ski) {
+void EebusEgComponent::on_ship_data_exchange_(const char* ski) {
   ESP_LOGW(TAG, "%s data exchange active — SKI persisted: %s", instance_name_.c_str(), ski);
   if (pairing_mode_active_) {
     pairing_mode_active_ = false;
@@ -951,7 +951,7 @@ void EebusEg1Component::on_ship_data_exchange_(const char* ski) {
   }
 }
 
-void EebusEg1Component::enter_pairing_mode() {
+void EebusEgComponent::enter_pairing_mode() {
   ESP_LOGW(TAG, "Pairing mode activated (window: %u s)", kPairingWindowMs / 1000);
   pairing_mode_active_ = true;
   pairing_deadline_ms_ = millis() + kPairingWindowMs;
@@ -962,12 +962,12 @@ void EebusEg1Component::enter_pairing_mode() {
   pairing_state_ = "Pairing-Modus aktiv — warte auf Verbindung...";
 }
 
-void EebusEg1Component::set_mdns_register(bool val) {
+void EebusEgComponent::set_mdns_register(bool val) {
   mdns_service_txt_item_set("_ship", "_tcp", "register", val ? "true" : "false");
   ESP_LOGW(TAG, "mDNS: register TXT -> %s", val ? "true" : "false");
 }
 
-void EebusEg1Component::forget_pairing() {
+void EebusEgComponent::forget_pairing() {
   ESP_LOGW(TAG, "Pairing forgotten");
   std::string old_ski = remote_ski_;
   save_remote_ski_nvs_("");
@@ -980,7 +980,7 @@ void EebusEg1Component::forget_pairing() {
   enter_pairing_mode();
 }
 
-void EebusEg1Component::refresh_heartbeat() {
+void EebusEgComponent::refresh_heartbeat() {
   if (!eg_lpc_) return;
   if (!time_synced_) {
     time_synced_ = true;
@@ -999,5 +999,5 @@ void EebusEg1Component::refresh_heartbeat() {
   }
 }
 
-}  // namespace eebus_eg1
+}  // namespace eebus_eg
 }  // namespace esphome

@@ -1,14 +1,11 @@
-﻿# Native OpenEEBUS SHIP/SPINE integration.
-# Provides the CLS-Steuerbox LPC receiver and EEBus EG1 (heat pump) control.
+# Native OpenEEBUS SHIP/SPINE integration: CS (receives §14a limits from VNB) + EG (sends limits to StVE).
 
-eebus_lpc:
-  id: hems_lpc
-  ship_port: ${eebus_lpc_ship_port}
+eebus_cs:
+  id: hems_cs
   remote_ski: !secret eebus_cls_remote_ski
   device_brand: "DIY"
   device_type: "HEMS"
   device_model: "esphome-hems"
-  failsafe_limit_w: ${eebus_failsafe_limit_w}
 
   on_limit_active:
     - then:
@@ -62,7 +59,7 @@ eebus_lpc:
             ESP_LOGW("eebus", "Pairing request from SKI: %s", x.c_str());
 
 select:
-  # --- EG1 Gerätetyp (sg_eebus_eg1, weight 0) — persists to NVS across reboots ---
+  # --- EG1 device type (sg_eebus_eg1, weight 0) — persists to NVS across reboots ---
   - platform: template
     name: "${device_name} EG1 Gerätetyp"
     id: eg1_device_type
@@ -78,35 +75,32 @@ select:
     restore_value: true
     optimistic: true
 
-eebus_eg1:
+eebus_eg:
   id: hems_eg1
-  ship_port: ${eebus_eg1_ship_port}
-  remote_ski: !secret eebus_eg1_remote_ski
+  remote_ski: !secret eebus_eg_remote_ski
   instance_name: "EG1"
   device_brand: "DIY"
   device_type: "HEMS"
   device_model: "esphome-hems"
-  failsafe_limit_w: ${eebus_failsafe_limit_w}
-  failsafe_duration_s: ${eebus_failsafe_duration_s}
 
-  on_eg1_connected:
+  on_eg_connected:
     - lambda: |-
-        ESP_LOGI("eebus", "EEBus EG1 (%s) verbunden — native Leistungslimitierung aktiv",
+        ESP_LOGI("eebus", "EEBus EG1 (%s) connected — native power limiting active",
                  id(eg1_device_type).current_option().c_str());
-        if (id(hems_lpc).is_limit_active()) {
-          float lim = id(hems_lpc).current_limit_w();
+        if (id(hems_cs).is_limit_active()) {
+          float lim = id(hems_cs).current_limit_w();
           ESP_LOGW("eebus", "EG1 reconnect: re-applying active LPC limit %.0f W", lim);
           id(hems_eg1).set_limit(lim);
         }
 
-  on_eg1_disconnected:
+  on_eg_disconnected:
     - lambda: |-
-        ESP_LOGI("eebus", "EEBus EG1 (%s) getrennt — Relais-Fallback verfügbar",
+        ESP_LOGI("eebus", "EEBus EG1 (%s) disconnected — relay fallback available",
                  id(eg1_device_type).current_option().c_str());
 
   on_power_reading:
     - lambda: |-
-        ESP_LOGI("eebus", "EG1 (%s) Leistungsmessung: %.0f W",
+        ESP_LOGI("eebus", "EG1 (%s) power reading: %.0f W",
                  id(eg1_device_type).current_option().c_str(), x);
 
 sensor:
@@ -121,7 +115,7 @@ sensor:
     unit_of_measurement: "W"
     accuracy_decimals: 0
     update_interval: 5s
-    lambda: "return id(hems_lpc).current_limit_w();"
+    lambda: "return id(hems_cs).current_limit_w();"
 
   - platform: template
     name: "${device_name} CS Verfuegbare Restleistung"
@@ -134,13 +128,13 @@ sensor:
     accuracy_decimals: 0
     update_interval: 5s
     lambda: |-
-      if (!id(hems_lpc).is_limit_active()) return NAN;
-      return id(hems_lpc).current_limit_w() - id(hems_eg1).current_power_w();
+      if (!id(hems_cs).is_limit_active()) return NAN;
+      return id(hems_cs).current_limit_w() - id(hems_eg1).current_power_w();
 
   # --- EG1 (sg_eebus_eg1, weights 1-2) ---
   - platform: template
     name: "${device_name} EG1 §14a Leistungslimit"
-    id: eebus_eg1_active_limit
+    id: eebus_eg_active_limit
     icon: "mdi:transmission-tower"
     web_server:
       sorting_group_id: sg_eebus_eg1
@@ -152,7 +146,7 @@ sensor:
 
   - platform: template
     name: "${device_name} EG1 MPC Leistung"
-    id: eebus_eg1_power
+    id: eebus_eg_power
     icon: "mdi:gauge"
     web_server:
       sorting_group_id: sg_eebus_eg1
@@ -162,7 +156,7 @@ sensor:
     update_interval: 5s
     lambda: "return id(hems_eg1).current_power_w();"
 
-  # --- §14a aktives Leistungslimit (sg_netz) — EEBus-Wert oder 4200 W bei DI1/Simulation ---
+  # --- §14a active power limit (sg_netz) — EEBus value or 4200 W from DI1/simulation ---
   - platform: template
     name: "${device_name} §14a Leistungslimit"
     icon: "mdi:transmission-tower-export"
@@ -173,7 +167,7 @@ sensor:
     accuracy_decimals: 0
     update_interval: 5s
     lambda: |-
-      if (id(hems_lpc).is_limit_active()) return id(hems_lpc).current_limit_w();
+      if (id(hems_cs).is_limit_active()) return id(hems_cs).current_limit_w();
       if (id(grid_provider_switch).state || id(manual_enwg_test).state) return 4200.0f;
       return NAN;
 
@@ -187,7 +181,7 @@ binary_sensor:
     web_server:
       sorting_group_id: sg_eebus_cs
       sorting_weight: 2.5
-    lambda: "return id(hems_lpc).is_connected() && !id(hems_lpc).is_heartbeat_lost();"
+    lambda: "return id(hems_cs).is_connected() && !id(hems_cs).is_heartbeat_lost();"
 
   # --- EG1 Heartbeat (sg_eebus_eg1, weight 2.5) ---
   - platform: template
@@ -205,7 +199,7 @@ interval:
     then:
       - binary_sensor.template.publish:
           id: cs_heartbeat_ok
-          state: !lambda "return id(hems_lpc).is_connected() && !id(hems_lpc).is_heartbeat_lost();"
+          state: !lambda "return id(hems_cs).is_connected() && !id(hems_cs).is_heartbeat_lost();"
       - binary_sensor.template.publish:
           id: eg1_heartbeat_ok
           state: !lambda "return id(hems_eg1).is_connected() && !id(hems_eg1).is_heartbeat_alarm();"
@@ -220,7 +214,7 @@ text_sensor:
       sorting_weight: 3
     update_interval: 5s
     lambda: |-
-      std::string s = id(hems_lpc).pairing_state();
+      std::string s = id(hems_cs).pairing_state();
       // SKI is already shown in "CS Pairing ausstehend" / "CS Gepaarte SKI" —
       // strip the trailing ": <ski>" (40 hex chars) from Verbindungsstatus
       auto pos = s.rfind(": ");
@@ -237,8 +231,8 @@ text_sensor:
       sorting_weight: 4
     update_interval: 3s
     lambda: |-
-      std::string ski = id(hems_lpc).pending_remote_ski();
-      if (ski.empty() || ski == id(hems_lpc).paired_remote_ski()) return std::string("(keine)");
+      std::string ski = id(hems_cs).pending_remote_ski();
+      if (ski.empty() || ski == id(hems_cs).paired_remote_ski()) return std::string("(keine)");
       return ski;
 
   - platform: template
@@ -250,7 +244,7 @@ text_sensor:
     entity_category: diagnostic
     update_interval: 10s
     lambda: |-
-      std::string ski = id(hems_lpc).paired_remote_ski();
+      std::string ski = id(hems_cs).paired_remote_ski();
       return ski.empty() ? std::string("(keine)") : ski;
 
   - platform: template
@@ -261,7 +255,7 @@ text_sensor:
       sorting_weight: 6
     entity_category: diagnostic
     update_interval: 60s
-    lambda: "return id(hems_lpc).local_ski();"
+    lambda: "return id(hems_cs).local_ski();"
 
   # --- EG1 (sg_eebus_eg1, weights 3-6) ---
   - platform: template
@@ -312,7 +306,7 @@ text_sensor:
     update_interval: 60s
     lambda: "return id(hems_eg1).local_ski();"
 
-  # --- §14a Steuerungskanal (sg_netz) ---
+  # --- §14a control channel (sg_netz) ---
   - platform: template
     name: "${device_name} §14a Steuerungskanal"
     icon: "mdi:transmission-tower"
@@ -321,7 +315,7 @@ text_sensor:
       sorting_weight: 4
     update_interval: 5s
     lambda: |-
-      if (id(hems_lpc).is_limit_active()) return std::string("EEBus digital (CS)");
+      if (id(hems_cs).is_limit_active()) return std::string("EEBus digital (CS)");
       if (id(grid_provider_switch).state) return std::string("Relaiskontakt DI1");
       if (id(manual_enwg_test).state) return std::string("Simulation 4200 W");
       return std::string("Kein Eingriff aktiv");
@@ -335,7 +329,7 @@ text_sensor:
       sorting_weight: 7
     entity_category: diagnostic
     update_interval: 5s
-    lambda: "return id(hems_lpc).active_use_cases();"
+    lambda: "return id(hems_cs).active_use_cases();"
 
   # --- EG1 Use Cases (sg_eebus_eg1) ---
   - platform: template
@@ -359,10 +353,10 @@ text_sensor:
     lambda: "return id(hems_eg1).supported_use_cases();"
 
 number:
-  # --- EG1 Failsafe Konfiguration (sg_eebus_eg1, weights 30-31) ---
+  # --- EG1 failsafe configuration (sg_eebus_eg1, weights 30-31) ---
   - platform: template
     name: "${device_name} EG1 Failsafe Limit"
-    id: eebus_eg1_failsafe_limit
+    id: eebus_eg_failsafe_limit
     icon: "mdi:shield-home"
     web_server:
       sorting_group_id: sg_eebus_eg1
@@ -372,7 +366,7 @@ number:
     min_value: 0
     max_value: 20000
     step: 100
-    initial_value: ${eebus_failsafe_limit_w}
+    initial_value: 4200
     restore_value: true
     optimistic: true
     on_value:
@@ -380,7 +374,7 @@ number:
 
   - platform: template
     name: "${device_name} EG1 Failsafe Dauer"
-    id: eebus_eg1_failsafe_duration
+    id: eebus_eg_failsafe_duration
     icon: "mdi:timer-outline"
     web_server:
       sorting_group_id: sg_eebus_eg1
@@ -390,7 +384,7 @@ number:
     min_value: 7200
     max_value: 86400
     step: 600
-    initial_value: ${eebus_failsafe_duration_s}
+    initial_value: 7200
     restore_value: true
     optimistic: true
     on_value:
@@ -405,7 +399,7 @@ button:
       sorting_group_id: sg_eebus_cs
       sorting_weight: 10
     on_press:
-      - lambda: "id(hems_lpc).enter_pairing_mode();"
+      - lambda: "id(hems_cs).enter_pairing_mode();"
 
   - platform: template
     name: "${device_name} CS Pairing akzeptieren"
@@ -414,7 +408,7 @@ button:
       sorting_group_id: sg_eebus_cs
       sorting_weight: 11
     on_press:
-      - lambda: "id(hems_lpc).accept_pairing();"
+      - lambda: "id(hems_cs).accept_pairing();"
 
   - platform: template
     name: "${device_name} CS Pairing ablehnen"
@@ -423,7 +417,7 @@ button:
       sorting_group_id: sg_eebus_cs
       sorting_weight: 12
     on_press:
-      - lambda: "id(hems_lpc).reject_pairing();"
+      - lambda: "id(hems_cs).reject_pairing();"
 
   - platform: template
     name: "${device_name} CS Pairing zurücksetzen"
@@ -433,7 +427,7 @@ button:
       sorting_group_id: sg_eebus_cs
       sorting_weight: 13
     on_press:
-      - lambda: "id(hems_lpc).forget_pairing(id(hems_lpc).paired_remote_ski());"
+      - lambda: "id(hems_cs).forget_pairing(id(hems_cs).paired_remote_ski());"
 
   # --- EG1 Pairing (sg_eebus_eg1, weights 10-11) ---
   - platform: template
@@ -455,7 +449,7 @@ button:
     on_press:
       - lambda: "id(hems_eg1).forget_pairing();"
 
-  # --- EG1 Diagnose (sg_eebus_eg1, weight 20) ---
+  # --- EG1 diagnostics (sg_eebus_eg1, weight 20) ---
   - platform: template
     name: "${device_name} EG1 Failsafe testen"
     icon: "mdi:shield-check"

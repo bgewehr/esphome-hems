@@ -3,7 +3,7 @@
  * Licensed under the Apache License, Version 2.0
  */
 
-#include "eebus_lpc.h"
+#include "eebus_cs.h"
 
 #include <cmath>
 #include <cstring>
@@ -31,7 +31,7 @@ extern "C" {
 #include "port/esp32/websocket/websocket_server_esp32.h"
 
 static void lpc_spine_event_handler(const EventPayload* payload, void* ctx) {
-  auto* self = static_cast<esphome::eebus_lpc::EebusLpcComponent*>(ctx);
+  auto* self = static_cast<esphome::eebus_cs::EebusCsComponent*>(ctx);
   if (!payload) return;
   const char* ski = payload->ski ? payload->ski : "?";
   if (payload->event_type != kEventTypeUseCaseChange) return;
@@ -46,7 +46,7 @@ static void lpc_spine_event_handler(const EventPayload* payload, void* ctx) {
 }
 
 namespace esphome {
-namespace eebus_lpc {
+namespace eebus_cs {
 
 static const char* NVS_NS       = "eebus";
 static const char* NVS_KEY_CERT = "cert_der";
@@ -72,7 +72,7 @@ static const uint32_t kElectricalConnectionId = 0;
 
 struct LpcServiceReader {
   ServiceReaderObject  obj;    /* must be first */
-  EebusLpcComponent*   self;
+  EebusCsComponent*   self;
 };
 
 extern "C" {
@@ -128,7 +128,7 @@ static const ServiceReaderInterface kServiceReaderMethods = {
  * setup()
  * ====================================================================== */
 
-void EebusLpcComponent::setup() {
+void EebusCsComponent::setup() {
   ESP_LOGI(TAG, "Setting up EEBus LPC (§14a EnWG CS role)");
 
   uint8_t* cert = nullptr; size_t cert_len = 0;
@@ -167,7 +167,7 @@ void EebusLpcComponent::setup() {
  * loop()
  * ====================================================================== */
 
-void EebusLpcComponent::loop() {
+void EebusCsComponent::loop() {
   if (!service_) return;
 
   uint32_t now = millis();
@@ -204,7 +204,7 @@ void EebusLpcComponent::loop() {
  * dump_config()
  * ====================================================================== */
 
-void EebusLpcComponent::dump_config() {
+void EebusCsComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "EEBus LPC Component (CS role, §14a EnWG):");
   ESP_LOGCONFIG(TAG, "  SHIP Port:     %d",   ship_port_);
   ESP_LOGCONFIG(TAG, "  Local SKI:     %s",   local_ski_.c_str());
@@ -219,7 +219,7 @@ void EebusLpcComponent::dump_config() {
  * SHIP ServiceReader callbacks
  * ====================================================================== */
 
-void EebusLpcComponent::on_remote_ski_connected(const char* ski) {
+void EebusCsComponent::on_remote_ski_connected(const char* ski) {
   ESP_LOGI(TAG, "Remote SKI connected: %s", ski);
   pending_remote_ski_ = ski;
 
@@ -252,7 +252,7 @@ void EebusLpcComponent::on_remote_ski_connected(const char* ski) {
   }
 }
 
-void EebusLpcComponent::on_remote_ski_disconnected(const char* ski) {
+void EebusCsComponent::on_remote_ski_disconnected(const char* ski) {
   ESP_LOGI(TAG, "Remote SKI disconnected: %s", ski);
   connected_ = false;
   if (paired_remote_ski_ == ski)  paired_remote_ski_.clear();
@@ -275,7 +275,7 @@ void EebusLpcComponent::on_remote_ski_disconnected(const char* ski) {
   }
 }
 
-void EebusLpcComponent::on_ship_state_update(const char* ski, SmeState state) {
+void EebusCsComponent::on_ship_state_update(const char* ski, SmeState state) {
   ESP_LOGD(TAG, "SHIP state ski=%s state=%d", ski, (int)state);
   if (state == kSmeStateApproved || state == kDataExchange) {
     if (!ski || strcmp(ski, "unknown") == 0 || strlen(ski) < 40) {
@@ -305,11 +305,11 @@ void EebusLpcComponent::on_ship_state_update(const char* ski, SmeState state) {
   }
 }
 
-void EebusLpcComponent::on_ship_id_update(const char* ski, const char* ship_id) {
+void EebusCsComponent::on_ship_id_update(const char* ski, const char* ship_id) {
   ESP_LOGI(TAG, "SHIP ID: ski=%s id=%s", ski, ship_id ? ship_id : "");
 }
 
-bool EebusLpcComponent::is_waiting_for_trust_allowed(const char* /*ski*/) {
+bool EebusCsComponent::is_waiting_for_trust_allowed(const char* /*ski*/) {
   return pairing_mode_active_ && millis() < pairing_deadline_ms_;
 }
 
@@ -317,7 +317,7 @@ bool EebusLpcComponent::is_waiting_for_trust_allowed(const char* /*ski*/) {
  * Pairing control
  * ====================================================================== */
 
-void EebusLpcComponent::enter_pairing_mode() {
+void EebusCsComponent::enter_pairing_mode() {
   ESP_LOGW(TAG, "Pairing mode activated (window: %u s)", kPairingWindowMs / 1000);
   pairing_mode_active_ = true;
   pairing_deadline_ms_ = millis() + kPairingWindowMs;
@@ -325,7 +325,7 @@ void EebusLpcComponent::enter_pairing_mode() {
   update_pairing_state_("Pairing-Modus aktiv — warte auf CS-Verbindung...");
 }
 
-void EebusLpcComponent::accept_pairing() {
+void EebusCsComponent::accept_pairing() {
   if (pending_remote_ski_.empty()) {
     ESP_LOGW(TAG, "accept_pairing() — no pending SKI"); return;
   }
@@ -340,7 +340,7 @@ void EebusLpcComponent::accept_pairing() {
   ESP_LOGI(TAG, "Pairing accepted: %s", ski.c_str());
 }
 
-void EebusLpcComponent::reject_pairing() {
+void EebusCsComponent::reject_pairing() {
   if (!pending_remote_ski_.empty()) {
     EEBUS_SERVICE_CANCEL_PAIRING_WITH_SKI(service_, pending_remote_ski_.c_str());
     pending_remote_ski_.clear();
@@ -351,7 +351,7 @@ void EebusLpcComponent::reject_pairing() {
   update_pairing_state_("Pairing abgelehnt");
 }
 
-void EebusLpcComponent::forget_pairing(const std::string& ski) {
+void EebusCsComponent::forget_pairing(const std::string& ski) {
   if (service_) EEBUS_SERVICE_UNREGISTER_REMOTE_SKI(service_, ski.c_str());
   if (paired_remote_ski_ == ski)  paired_remote_ski_.clear();
   if (pending_remote_ski_ == ski) pending_remote_ski_.clear();
@@ -375,7 +375,7 @@ void EebusLpcComponent::forget_pairing(const std::string& ski) {
  * LPC listener callbacks
  * ====================================================================== */
 
-void EebusLpcComponent::on_power_limit_receive(float limit_w, bool is_active) {
+void EebusCsComponent::on_power_limit_receive(float limit_w, bool is_active) {
   ESP_LOGI(TAG, "LPC: %.0f W active=%s", limit_w, is_active ? "yes" : "no");
   bool was_failsafe  = heartbeat_lost_;
   current_limit_w_   = limit_w;
@@ -394,12 +394,12 @@ void EebusLpcComponent::on_power_limit_receive(float limit_w, bool is_active) {
   }
 }
 
-void EebusLpcComponent::on_failsafe_limit_receive(float limit_w) {
+void EebusCsComponent::on_failsafe_limit_receive(float limit_w) {
   ESP_LOGW(TAG, "Failsafe limit from EG: %.0f W", limit_w);
   failsafe_limit_w_ = limit_w;
 }
 
-void EebusLpcComponent::on_heartbeat_receive(uint64_t counter) {
+void EebusCsComponent::on_heartbeat_receive(uint64_t counter) {
   last_heartbeat_ms_ = millis();
   heartbeat_lost_    = false;
   ESP_LOGV(TAG, "Heartbeat %" PRIu64, counter);
@@ -409,7 +409,7 @@ void EebusLpcComponent::on_heartbeat_receive(uint64_t counter) {
  * NVS helpers
  * ====================================================================== */
 
-void EebusLpcComponent::save_trusted_ski_(const std::string& ski) {
+void EebusCsComponent::save_trusted_ski_(const std::string& ski) {
   nvs_handle_t h;
   if (nvs_open(NVS_NS, NVS_READWRITE, &h) != ESP_OK) return;
   nvs_set_str(h, NVS_KEY_TSKI, ski.c_str());
@@ -417,7 +417,7 @@ void EebusLpcComponent::save_trusted_ski_(const std::string& ski) {
   ESP_LOGI(TAG, "Trusted SKI saved: %s", ski.c_str());
 }
 
-std::string EebusLpcComponent::load_trusted_ski_() {
+std::string EebusCsComponent::load_trusted_ski_() {
   nvs_handle_t h;
   if (nvs_open(NVS_NS, NVS_READONLY, &h) != ESP_OK) return {};
   size_t len = 0;
@@ -431,7 +431,7 @@ std::string EebusLpcComponent::load_trusted_ski_() {
   return ski;
 }
 
-bool EebusLpcComponent::store_cert_nvs_(
+bool EebusCsComponent::store_cert_nvs_(
     const uint8_t* cert, size_t cl, const uint8_t* key, size_t kl)
 {
   nvs_handle_t h;
@@ -442,7 +442,7 @@ bool EebusLpcComponent::store_cert_nvs_(
   nvs_close(h); return ok;
 }
 
-bool EebusLpcComponent::load_cert_nvs_(
+bool EebusCsComponent::load_cert_nvs_(
     uint8_t** cert, size_t* cl, uint8_t** key, size_t* kl)
 {
   nvs_handle_t h;
@@ -466,7 +466,7 @@ bool EebusLpcComponent::load_cert_nvs_(
  * Certificate generation
  * ====================================================================== */
 
-bool EebusLpcComponent::load_or_generate_cert_() {
+bool EebusCsComponent::load_or_generate_cert_() {
   mbedtls_pk_context       pk;
   mbedtls_x509write_cert   crt;
   mbedtls_entropy_context  entropy;
@@ -525,7 +525,7 @@ bool EebusLpcComponent::load_or_generate_cert_() {
  * start_eebus_service_() — correct pattern from openeebus examples/hems
  * ====================================================================== */
 
-bool EebusLpcComponent::start_eebus_service_(
+bool EebusCsComponent::start_eebus_service_(
     const uint8_t* cert_der, size_t cert_len,
     const uint8_t* key_der,  size_t key_len)
 {
@@ -587,13 +587,13 @@ bool EebusLpcComponent::start_eebus_service_(
   if (!local_entity_) { ESP_LOGE(TAG, "EntityLocalCreate failed"); return false; }
 
   /* Create CS LPC use case — needs entity + electrical connection ID */
-  CS_LP_LISTENER_INTERFACE(&lpc_listener_) = &kLpcListenerMethods;
-  lpc_listener_.self = this;
+  CS_LP_LISTENER_INTERFACE(&cs_lp_listener_) = &kLpcListenerMethods;
+  cs_lp_listener_.self = this;
 
   cs_lpc_ = CsLpcUseCaseCreate(
       local_entity_,
       (ElectricalConnectionIdType)kElectricalConnectionId,
-      CS_LP_LISTENER_OBJECT(&lpc_listener_));
+      CS_LP_LISTENER_OBJECT(&cs_lp_listener_));
   if (!cs_lpc_) { ESP_LOGE(TAG, "CsLpcUseCaseCreate failed"); return false; }
 
   DEVICE_LOCAL_ADD_ENTITY(device_local, local_entity_);
@@ -607,7 +607,7 @@ bool EebusLpcComponent::start_eebus_service_(
   return true;
 }
 
-void EebusLpcComponent::on_remote_use_case(int actor, int uc_name_id, const char* /*uc_str*/, const char* /*actor_str*/) {
+void EebusCsComponent::on_remote_use_case(int actor, int uc_name_id, const char* /*uc_str*/, const char* /*actor_str*/) {
   const char* a;
   switch (actor) {
     case  4: a = "Comp"; break;
@@ -630,10 +630,10 @@ void EebusLpcComponent::on_remote_use_case(int actor, int uc_name_id, const char
   remote_uc_seen_ += buf;
 }
 
-void EebusLpcComponent::update_pairing_state_(const std::string& state) {
+void EebusCsComponent::update_pairing_state_(const std::string& state) {
   pairing_state_str_ = state;
   ESP_LOGI(TAG, "Pairing state: %s", state.c_str());
 }
 
-}  // namespace eebus_lpc
+}  // namespace eebus_cs
 }  // namespace esphome

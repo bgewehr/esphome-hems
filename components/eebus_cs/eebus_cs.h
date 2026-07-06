@@ -3,7 +3,7 @@
  * Licensed under the Apache License, Version 2.0
  */
 /**
- * @file eebus_lpc.h
+ * @file eebus_cs.h
  * @brief ESPHome component wrapping the openeebus LPC CS use case.
  *
  * Lifecycle:
@@ -44,11 +44,11 @@ extern "C" {
 }
 
 namespace esphome {
-namespace eebus_lpc {
+namespace eebus_cs {
 
-static const char* const TAG = "eebus_lpc";
+static const char* const TAG = "eebus_cs";
 
-class EebusLpcComponent;
+class EebusCsComponent;
 
 /* -------------------------------------------------------------------------
  * Triggers
@@ -56,24 +56,24 @@ class EebusLpcComponent;
 
 class LimitActiveTrigger : public Trigger<float> {
  public:
-  explicit LimitActiveTrigger(EebusLpcComponent* parent);
+  explicit LimitActiveTrigger(EebusCsComponent* parent);
 };
 
 class LimitClearedTrigger : public Trigger<> {
  public:
-  explicit LimitClearedTrigger(EebusLpcComponent* parent);
+  explicit LimitClearedTrigger(EebusCsComponent* parent);
 };
 
 class PairingRequestTrigger : public Trigger<std::string> {
  public:
-  explicit PairingRequestTrigger(EebusLpcComponent* parent);
+  explicit PairingRequestTrigger(EebusCsComponent* parent);
 };
 
 /* -------------------------------------------------------------------------
  * Main component
  * ---------------------------------------------------------------------- */
 
-class EebusLpcComponent : public Component {
+class EebusCsComponent : public Component {
  public:
   /* ESPHome lifecycle */
   void setup() override;
@@ -195,7 +195,7 @@ class EebusLpcComponent : public Component {
   /* ServiceReader vtable storage (C struct, must outlive the service) */
   struct ServiceReaderWrapper {
     ServiceReaderObject obj;   /* must be first */
-    EebusLpcComponent*  self;
+    EebusCsComponent*  self;
   } service_reader_ {};
 
   /* Trigger lists */
@@ -208,10 +208,10 @@ class EebusLpcComponent : public Component {
    * C-compatible vtable objects — wrap back to this C++ instance.
    * Must be layout-compatible with the C struct (obj is first member).
    * -------------------------------------------------------------------- */
-  struct LpcListener {
+  struct CsLpListener {
     CsLpListenerObject obj;   /* must be first */
-    EebusLpcComponent* self;
-  } lpc_listener_{};
+    EebusCsComponent* self;
+  } cs_lp_listener_{};
 };
 
 /* -------------------------------------------------------------------------
@@ -228,7 +228,7 @@ static void LpcListenerOnPowerLimitReceive(
     const DurationType* /*duration*/,
     bool                is_active)
 {
-  auto* l = reinterpret_cast<EebusLpcComponent::LpcListener*>(self);
+  auto* l = reinterpret_cast<EebusCsComponent::CsLpListener*>(self);
   float w = (float)power_limit->value * powf(10.0f, (float)power_limit->scale);
   l->self->on_power_limit_receive(w, is_active);
 }
@@ -236,7 +236,7 @@ static void LpcListenerOnPowerLimitReceive(
 static void LpcListenerOnFailsafePowerLimitReceive(
     CsLpListenerObject* self, const ScaledValue* power_limit)
 {
-  auto* l = reinterpret_cast<EebusLpcComponent::LpcListener*>(self);
+  auto* l = reinterpret_cast<EebusCsComponent::CsLpListener*>(self);
   float w = (float)power_limit->value * powf(10.0f, (float)power_limit->scale);
   l->self->on_failsafe_limit_receive(w);
 }
@@ -247,7 +247,7 @@ static void LpcListenerOnFailsafeDurationReceive(
 static void LpcListenerOnHeartbeatReceive(
     CsLpListenerObject* self, uint64_t counter)
 {
-  reinterpret_cast<EebusLpcComponent::LpcListener*>(self)->self->on_heartbeat_receive(counter);
+  reinterpret_cast<EebusCsComponent::CsLpListener*>(self)->self->on_heartbeat_receive(counter);
 }
 
 static const CsLpListenerInterface kLpcListenerMethods = {
@@ -264,14 +264,14 @@ static const CsLpListenerInterface kLpcListenerMethods = {
  * Trigger constructors
  * ---------------------------------------------------------------------- */
 
-inline LimitActiveTrigger::LimitActiveTrigger(EebusLpcComponent* p)
+inline LimitActiveTrigger::LimitActiveTrigger(EebusCsComponent* p)
   { p->add_on_limit_active_trigger(this); }
 
-inline LimitClearedTrigger::LimitClearedTrigger(EebusLpcComponent* p)
+inline LimitClearedTrigger::LimitClearedTrigger(EebusCsComponent* p)
   { p->add_on_limit_cleared_trigger(this); }
 
-inline PairingRequestTrigger::PairingRequestTrigger(EebusLpcComponent* p)
+inline PairingRequestTrigger::PairingRequestTrigger(EebusCsComponent* p)
   { p->add_on_pairing_request_trigger(this); }
 
-}  // namespace eebus_lpc
+}  // namespace eebus_cs
 }  // namespace esphome

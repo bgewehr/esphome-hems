@@ -3,7 +3,7 @@
  * Licensed under the Apache License, Version 2.0
  */
 /**
- * @file eebus_eg1.h
+ * @file eebus_eg.h
  * @brief ESPHome component: EEBus EG/LPC sender to heat pump EG gateway.
  *
  * Heartbeat: openeebus drives the heartbeat automatically via its internal
@@ -13,11 +13,11 @@
  * WP raises a fault if no heartbeat is received within 2× the timeout.
  *
  * API for YAML lambdas:
- *   id(hems_eg1).set_limit(watts)     — send LPC limit now (min 4200 W)
- *   id(hems_eg1).clear_limit()        — remove limit (full power)
- *   id(hems_eg1).current_power_w()    — last MPC reading from WP (W)
- *   id(hems_eg1).is_connected()       — WP connection state
- *   id(hems_eg1).remote_ski()         — Remote WP SKI
+ *   id(eg1).set_limit(watts)     — send LPC limit now (min 4200 W)
+ *   id(eg1).clear_limit()        — remove limit (full power)
+ *   id(eg1).current_power_w()    — last MPC reading from WP (W)
+ *   id(eg1).is_connected()       — WP connection state
+ *   id(eg1).remote_ski()         — Remote WP SKI
  */
 
 #pragma once
@@ -45,24 +45,24 @@ extern "C" {
 }
 
 namespace esphome {
-namespace eebus_eg1 {
+namespace eebus_eg {
 
-static const char* const TAG = "eebus_eg1";
+static const char* const TAG = "eebus_eg";
 
-class EebusEg1Component;
+class EebusEgComponent;
 
 /* -------------------------------------------------------------------------
  * Triggers
  * ---------------------------------------------------------------------- */
-class Eg1ConnectedTrigger    : public Trigger<>      { public: explicit Eg1ConnectedTrigger(EebusEg1Component* p); };
-class Eg1DisconnectedTrigger : public Trigger<>      { public: explicit Eg1DisconnectedTrigger(EebusEg1Component* p); };
-class Eg1PowerReadingTrigger : public Trigger<float> { public: explicit Eg1PowerReadingTrigger(EebusEg1Component* p); };
+class EgConnectedTrigger    : public Trigger<>      { public: explicit EgConnectedTrigger(EebusEgComponent* p); };
+class EgDisconnectedTrigger : public Trigger<>      { public: explicit EgDisconnectedTrigger(EebusEgComponent* p); };
+class EgPowerReadingTrigger : public Trigger<float> { public: explicit EgPowerReadingTrigger(EebusEgComponent* p); };
 
 /* -------------------------------------------------------------------------
  * Main component
  * ---------------------------------------------------------------------- */
 
-class EebusEg1Component : public Component {
+class EebusEgComponent : public Component {
  public:
   void setup() override;
   void loop() override;
@@ -92,9 +92,9 @@ class EebusEg1Component : public Component {
   }
 
   /* Trigger registration */
-  void add_on_eg1_connected_trigger(Eg1ConnectedTrigger* t)       { connected_triggers_.push_back(t); }
-  void add_on_eg1_disconnected_trigger(Eg1DisconnectedTrigger* t) { disconnected_triggers_.push_back(t); }
-  void add_on_power_reading_trigger(Eg1PowerReadingTrigger* t)    { power_triggers_.push_back(t); }
+  void add_on_eg_connected_trigger(EgConnectedTrigger* t)       { connected_triggers_.push_back(t); }
+  void add_on_eg_disconnected_trigger(EgDisconnectedTrigger* t) { disconnected_triggers_.push_back(t); }
+  void add_on_power_reading_trigger(EgPowerReadingTrigger* t)    { power_triggers_.push_back(t); }
 
   /* -----------------------------------------------------------------------
    * Public API — callable from YAML lambdas
@@ -142,7 +142,7 @@ class EebusEg1Component : public Component {
   }
   void on_remote_use_case(int actor, int uc_name_id, const char* uc_str, const char* actor_str, bool add);
 
-  /* Called from C vtable (public for Eg1ServiceReader friend access) */
+  /* Called from C vtable (public for EgServiceReader friend access) */
   void on_entity_connect(const EntityAddressType* addr);
   void on_entity_disconnect(const EntityAddressType* addr);
   void on_power_limit_ack(float watts, bool active);
@@ -212,25 +212,25 @@ class EebusEg1Component : public Component {
   FeatureLocalObject*  local_semp_feature_ {nullptr};
 
   /* Trigger lists */
-  std::vector<Eg1ConnectedTrigger*>    connected_triggers_;
-  std::vector<Eg1DisconnectedTrigger*> disconnected_triggers_;
-  std::vector<Eg1PowerReadingTrigger*> power_triggers_;
+  std::vector<EgConnectedTrigger*>    connected_triggers_;
+  std::vector<EgDisconnectedTrigger*> disconnected_triggers_;
+  std::vector<EgPowerReadingTrigger*> power_triggers_;
 
   /* C-vtable wrappers */
-  struct Eg1ServiceReader {
+  struct EgServiceReader {
     ServiceReaderObject obj;   /* must be first */
-    EebusEg1Component*  self;
+    EebusEgComponent*  self;
   } service_reader_{};
 
  public:  /* public so free C-linkage vtable functions can reinterpret_cast */
   struct EgListener {
     EgLpListenerObject obj;   /* must be first */
-    EebusEg1Component* self;
+    EebusEgComponent* self;
   } eg_listener_{};
 
   struct MpcListener {
     MaMpcListenerObject obj;  /* must be first */
-    EebusEg1Component*  self;
+    EebusEgComponent*  self;
   } mpc_listener_{};
 
 };
@@ -246,17 +246,17 @@ extern "C" {
 static void MpcL_Destruct(MaMpcListenerObject*) {}
 
 static void MpcL_OnRemoteEntityConnect(MaMpcListenerObject* o, const EntityAddressType* addr) {
-  auto* self = reinterpret_cast<EebusEg1Component::MpcListener*>(o)->self;
+  auto* self = reinterpret_cast<EebusEgComponent::MpcListener*>(o)->self;
   // Remote CS device may announce MU/MPC on multiple SPINE entities; suppress duplicates.
   if (self->mpc_connected()) return;
-  ESP_LOGW("eebus_eg1", "MPC: remote measurement unit connected");
+  ESP_LOGW("eebus_eg", "MPC: remote measurement unit connected");
   ESP_LOGI("eebus", "SPINE remote MA/MPC entity connected: ski=%s",
            (addr && addr->device) ? addr->device : "?");
   self->on_mpc_state_(true);
 }
 static void MpcL_OnRemoteEntityDisconnect(MaMpcListenerObject* o, const EntityAddressType*) {
-  ESP_LOGW("eebus_eg1", "MPC: remote measurement unit disconnected");
-  reinterpret_cast<EebusEg1Component::MpcListener*>(o)->self->on_mpc_state_(false);
+  ESP_LOGW("eebus_eg", "MPC: remote measurement unit disconnected");
+  reinterpret_cast<EebusEgComponent::MpcListener*>(o)->self->on_mpc_state_(false);
 }
 static void MpcL_OnMeasurementReceive(
     MaMpcListenerObject* o,
@@ -268,14 +268,14 @@ static void MpcL_OnMeasurementReceive(
   float v = (float)val->value * powf(10.0f, (float)val->scale);
   const char* name = MuMpcMeasurementGetName(name_id);
   /* Log raw ScaledValue (value * 10^scale) so diagnostics survive float truncation */
-  ESP_LOGI("eebus_eg1", "MPC measurement [id=%d]: %s = %lld * 10^%d = %.3f W (from: %s)",
+  ESP_LOGI("eebus_eg", "MPC measurement [id=%d]: %s = %lld * 10^%d = %.3f W (from: %s)",
            (int)name_id,
            name ? name : "unknown",
            (long long)val->value, (int)val->scale,
            (double)v,
            (entity_addr && entity_addr->device) ? entity_addr->device : "?");
   if (name_id == kMpcPowerTotal) {
-    reinterpret_cast<EebusEg1Component::MpcListener*>(o)->self->on_mpc_measurement(v);
+    reinterpret_cast<EebusEgComponent::MpcListener*>(o)->self->on_mpc_measurement(v);
   }
 }
 
@@ -293,22 +293,22 @@ static void EgL_Destruct(EgLpListenerObject*) {}
 static void EgL_OnRemoteEntityConnect(EgLpListenerObject* o, const EntityAddressType* addr) {
   ESP_LOGI("eebus", "SPINE remote EG/LPC entity connected: ski=%s",
            (addr && addr->device) ? addr->device : "?");
-  reinterpret_cast<EebusEg1Component::EgListener*>(o)->self->on_entity_connect(addr);
+  reinterpret_cast<EebusEgComponent::EgListener*>(o)->self->on_entity_connect(addr);
 }
 static void EgL_OnRemoteEntityDisconnect(EgLpListenerObject* o, const EntityAddressType* addr) {
-  reinterpret_cast<EebusEg1Component::EgListener*>(o)->self->on_entity_disconnect(addr);
+  reinterpret_cast<EebusEgComponent::EgListener*>(o)->self->on_entity_disconnect(addr);
 }
 static void EgL_OnPowerLimitReceive(
     EgLpListenerObject* o, const EntityAddressType*,
     const ScaledValue* limit, const DurationType*, bool active)
 {
   float w = (float)limit->value * powf(10.0f, (float)limit->scale);
-  reinterpret_cast<EebusEg1Component::EgListener*>(o)->self->on_power_limit_ack(w, active);
+  reinterpret_cast<EebusEgComponent::EgListener*>(o)->self->on_power_limit_ack(w, active);
 }
 static void EgL_OnFailsafePowerLimitReceive(EgLpListenerObject*, const EntityAddressType*, const ScaledValue*) {}
 static void EgL_OnFailsafeDurationReceive(EgLpListenerObject*, const EntityAddressType*, const DurationType*) {}
 static void EgL_OnHeartbeatReceive(EgLpListenerObject* o, const EntityAddressType*, uint64_t /*hb_counter*/) {
-  reinterpret_cast<EebusEg1Component::EgListener*>(o)->self->on_heartbeat_received_();
+  reinterpret_cast<EebusEgComponent::EgListener*>(o)->self->on_heartbeat_received_();
 }
 
 static const EgLpListenerInterface kEgListenerMethods = {
@@ -324,12 +324,12 @@ static const EgLpListenerInterface kEgListenerMethods = {
 }  // extern "C"
 
 /* Trigger constructors */
-inline Eg1ConnectedTrigger::Eg1ConnectedTrigger(EebusEg1Component* p)
-  { p->add_on_eg1_connected_trigger(this); }
-inline Eg1DisconnectedTrigger::Eg1DisconnectedTrigger(EebusEg1Component* p)
-  { p->add_on_eg1_disconnected_trigger(this); }
-inline Eg1PowerReadingTrigger::Eg1PowerReadingTrigger(EebusEg1Component* p)
+inline EgConnectedTrigger::EgConnectedTrigger(EebusEgComponent* p)
+  { p->add_on_eg_connected_trigger(this); }
+inline EgDisconnectedTrigger::EgDisconnectedTrigger(EebusEgComponent* p)
+  { p->add_on_eg_disconnected_trigger(this); }
+inline EgPowerReadingTrigger::EgPowerReadingTrigger(EebusEgComponent* p)
   { p->add_on_power_reading_trigger(this); }
 
-}  // namespace eebus_eg1
+}  // namespace eebus_eg
 }  // namespace esphome

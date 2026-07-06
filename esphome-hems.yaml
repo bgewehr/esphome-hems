@@ -2,19 +2,11 @@ substitutions:
   name: "esphome-hems"
   friendly_name: "ESPHome HEMS"
   device_name: "ESPHome HEMS"
-  # S0-Wasserzähler: Standardwert Liter pro Impuls (wird durch HA-Number überschrieben)
-  water_liters_per_pulse_default: "1.0"
-  # Fronius Gen24 Plus 8.0 – Modbus TCP
   fronius_ip: !secret fronius_ip
   fronius_port: "502"
-  # BYD HVS/HVM max. Entladeleistung (W) – für Prozentberechnung
+  # Battery max discharge power (W) — hardware-specific constant for percentage calculation
   battery_max_discharge_w: "18176"
-  # Native EEBUS SHIP/SPINE ports
-  eebus_lpc_ship_port: "4712"
-  eebus_eg1_ship_port: "4713"
-  eebus_failsafe_limit_w: "4200.0"
-  eebus_failsafe_duration_s: "7200"
-  # EG1: Gerätetyp wird zur Laufzeit per Select (eg1_device_type) in eebus-openeebus.yaml gewählt
+
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
@@ -36,48 +28,30 @@ esp32:
   variant: ESP32S3
   flash_size: 16MB
   framework:
-    type: esp-idf   # Benoetigt fuer native OpenEEBUS SHIP/SPINE-Komponenten
+    type: esp-idf   # Required for native OpenEEBUS SHIP/SPINE components
     sdkconfig_options:
-      # Stack Overflow Fix: loopTask braucht mehr Stack bei vielen Komponenten
-      # (EEBUS TLS/Certificate-Setup allokiert ~10 KB auf dem Stack pro Instanz)
+      # loopTask stack: EEBus TLS setup allocates ~10 KB per instance
       CONFIG_ESP_MAIN_TASK_STACK_SIZE: "65536"
-      # Cache-Crash Fix: Code/Rodata nach PSRAM kopieren, damit NVS-Writes
-      # (restore_value) nicht crashen wenn Flash-Cache deaktiviert wird
+      # Copy code/rodata to PSRAM: prevents cache-disable crash during NVS writes (restore_value)
       CONFIG_SPIRAM_FETCH_INSTRUCTIONS: "y"
       CONFIG_SPIRAM_RODATA: "y"
-      # EEBus SHIP: Client-Zertifikat anfordern aber nicht erzwingen (VERIFY_OPTIONAL)
-      # Notwendig weil EEBus self-signed Zertifikate mit SKI-basiertem Trust verwendet
+      # EEBus uses self-signed certs with SKI-based trust — optional client cert verification
       CONFIG_ESP_TLS_SERVER_MIN_AUTH_MODE_OPTIONAL: "y"
-      # EEBus SHIP: Peer-Zertifikat nach dem TLS-Handshake im RAM behalten.
-      # mbedTLS 3.x (ESP-IDF 5.x) gibt das Peer-Cert nach dem Handshake frei,
-      # sodass mbedtls_ssl_get_peer_cert() NULL zurückgibt — SKI würde 'unknown'.
-      # Mit dieser Option bleibt das Zertifikat bis zum Verbindungsende erhalten.
+      # Retain peer cert after TLS handshake so mbedtls_ssl_get_peer_cert() returns the SKI
       CONFIG_MBEDTLS_SSL_KEEP_PEER_CERTIFICATE: "y"
-      # CONFIG_LWIP_MAX_SOCKETS wird von eebus_lpc (→16) und eebus_eg1 (→21)
-      # automatisch gesetzt — kein manueller Eintrag hier nötig.
-      # PSRAM-Heap-Fix: EEBus-TLS-Sitzungspuffer (je ~16 KB I/O + Handshake-Kontext)
-      # erschöpfen bei längerem Betrieb den internen SRAM, der gleichzeitig vom
-      # W5500-SPI-DMA-Treiber für DMA-Alignment-Kopien (4-8 Byte pro SPI-Register-
-      # Transaktion) benötigt wird. Ohne freien internen SRAM schlägt heap_caps_-
-      # aligned_alloc(MALLOC_CAP_DMA) im ESP-IDF spi_master.c fehl und führt zu
-      # einem Crash in uninstall_priv_desc (NULL-memcpy).
-      # Lösung: Allokationen > 2 KB in den 8-MB-PSRAM auslagern, so dass der
-      # interne SRAM für DMA-kritische Operationen und kleine Puffer reserviert bleibt.
-      # Allokationen <= 2 KB (SPI-DMA-Kopien, Ethernet-Frames bis 1518 B, FreeRTOS-
-      # Strukturen) bleiben im schnellen internen SRAM.
+      # CONFIG_LWIP_MAX_SOCKETS is set automatically by eebus_cs and eebus_eg via consume_sockets()
+      # Keep allocations >2 KB in PSRAM; internal SRAM stays free for DMA (W5500 SPI, FreeRTOS)
       CONFIG_SPIRAM_USE_MALLOC: "y"
       CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL: "2048"
 
-# PSRAM konfigurieren – ESP32-S3-WROOM-1U-N16R8 hat 8 MB Octal PSRAM.
-# Ohne diese Konfiguration können DMA-Puffer für den W5500-SPI-Ethernet-Chip
-# fehlerhaft im PSRAM platziert werden, was den Ethernet-Link verhindert.
+# 8 MB Octal PSRAM (ESP32-S3-WROOM-1U-N16R8); explicit config prevents W5500 DMA buffer misplacement.
 psram:
   mode: octal
   speed: 80MHz
 
 logger:
   id: app_logger
-  level: DEBUG  # Compile-Level muss höchstes sein, Runtime-Filter per Select
+  level: DEBUG  # Must compile at DEBUG; runtime level and tag filters set via Log Level/Log Filter selects
   runtime_tag_levels: true
 
 select:
@@ -126,7 +100,6 @@ select:
     on_value:
       then:
         - lambda: |-
-            // Globales Level ermitteln
             auto current = id(log_level_select).current_option();
             int gl = ESPHOME_LOG_LEVEL_WARN;
             if (current == "ERROR") gl = ESPHOME_LOG_LEVEL_ERROR;
@@ -134,11 +107,9 @@ select:
             else if (current == "INFO") gl = ESPHOME_LOG_LEVEL_INFO;
             else if (current == "DEBUG") gl = ESPHOME_LOG_LEVEL_DEBUG;
 
-            // Alle bekannten Tags zuerst auf ERROR zurücksetzen, damit kein
-            // vorheriger Filter-Zustand durchschlägt (level_for() prüft Tag-Map
-            // vor dem globalen Level — alte Einträge müssen explizit gelöscht werden).
+            // Reset all known tags first so no previous filter state bleeds through.
             auto suppress = [&](const char* tag) { id(app_logger).set_log_level(tag, ESPHOME_LOG_LEVEL_ERROR); };
-            suppress("eebus"); suppress("eebus_lpc"); suppress("eebus_eg1");
+            suppress("eebus"); suppress("eebus_cs"); suppress("eebus_eg");
             suppress("eebus_http_srv"); suppress("eebus_ws_srv"); suppress("eebus_ws_cli");
             suppress("eebus_mdns");
             suppress("ship"); suppress("spine"); suppress("openeebus"); suppress("mdns");
@@ -152,11 +123,9 @@ select:
             suppress("ethernet"); suppress("api"); suppress("api.connection"); suppress("web_server");
 
             if (x == "Alle") {
-              // Globales Level setzen; alle Tags explizit mitsetzen damit die
-              // Map-Einträge nicht ältere Werte behalten.
               id(app_logger).set_log_level(gl);
               auto enable = [&](const char* tag) { id(app_logger).set_log_level(tag, gl); };
-              enable("eebus"); enable("eebus_lpc"); enable("eebus_eg1");
+              enable("eebus"); enable("eebus_cs"); enable("eebus_eg");
               enable("eebus_http_srv"); enable("eebus_ws_srv"); enable("eebus_ws_cli");
               enable("eebus_mdns");
               enable("ship"); enable("spine"); enable("openeebus"); enable("mdns");
@@ -167,14 +136,13 @@ select:
               enable("modbus_server"); enable("modbus-server-xemex"); enable("enwg"); enable("mqtt");
               enable("ethernet"); enable("api"); enable("api.connection"); enable("web_server");
             } else {
-              // Global auf ERROR, nur gewählte Tags auf Wunschlevel setzen.
               id(app_logger).set_log_level(ESPHOME_LOG_LEVEL_ERROR);
-              // EEBus filter always shows INFO minimum so key connection events are visible.
+              // EEBus filter shows INFO minimum so key connection events are always visible.
               int eebus_level = (gl > ESPHOME_LOG_LEVEL_INFO) ? gl : ESPHOME_LOG_LEVEL_INFO;
               auto enable = [&](const char* tag) { id(app_logger).set_log_level(tag, gl); };
               auto enable_eebus = [&](const char* tag) { id(app_logger).set_log_level(tag, eebus_level); };
               if (x == "EEBus") {
-                enable_eebus("eebus"); enable_eebus("eebus_lpc"); enable_eebus("eebus_eg1");
+                enable_eebus("eebus"); enable_eebus("eebus_cs"); enable_eebus("eebus_eg");
                 enable_eebus("eebus_http_srv"); enable_eebus("eebus_ws_srv"); enable_eebus("eebus_ws_cli");
                 enable_eebus("eebus_mdns");
                 enable_eebus("ship"); enable_eebus("spine"); enable_eebus("openeebus"); enable_eebus("mdns");
@@ -192,7 +160,7 @@ select:
                 enable("ethernet"); enable("api"); enable("api.connection"); enable("web_server");
               }
             }
-            // Crash-Backtraces immer sichtbar halten, unabhängig vom gewählten Filter.
+            // Always keep crash backtraces visible regardless of the active filter.
             id(app_logger).set_log_level("esp32.crash", ESPHOME_LOG_LEVEL_ERROR);
 
 api:
@@ -203,7 +171,7 @@ ota:
   - platform: esphome
     password: !secret ota_password
 
-# W5500 SPI Ethernet (PoE) – Waveshare ESP32-S3-POE-ETH-8DI-8RO Pins
+# W5500 SPI Ethernet (PoE) — Waveshare ESP32-S3-POE-ETH-8DI-8RO
 ethernet:
   type: W5500
   clk_pin: GPIO15
@@ -211,7 +179,7 @@ ethernet:
   miso_pin: GPIO14
   cs_pin: GPIO16
   interrupt_pin: GPIO12
-  # Optionale statische IP – auskommentieren für DHCP:
+  # Optional static IP — comment out for DHCP:
   # manual_ip:
   #   static_ip: 192.168.1.100
   #   gateway: 192.168.1.1
@@ -254,15 +222,12 @@ mqtt:
   topic_prefix: esphome/modbus-server-xemex
 
 time:
-  # SNTP syncs within ~1 s of WiFi connect — before K40RF completes its
-  # SHIP handshake (~5–10 s).  This ensures the first heartbeat timestamp
-  # K40RF receives is a valid 2026 date, not the 1970 epoch.
+  # SNTP syncs quickly after network connect, before the first EEBus SHIP handshake completes.
   - platform: sntp
     id: sntp_time
     on_time_sync:
       then:
         - lambda: id(hems_eg1).refresh_heartbeat();
-  # HA time keeps the clock accurate long-term and acts as SNTP fallback.
   - platform: homeassistant
     id: ha_time
     on_time_sync:
@@ -273,12 +238,12 @@ globals:
   - id: water_liter_per_pulse
     type: float
     restore_value: true
-    initial_value: "${water_liters_per_pulse_default}"
+    initial_value: "1.0"
   - id: water_total_m3
     type: float
     restore_value: true
     initial_value: "0.0"
-  # Fronius Batterie-Entladesteuerung
+  # Fronius battery discharge control — booleans select which meters to include in SOC calculation
   - id: include_meter_ev
     type: bool
     restore_value: False
@@ -291,7 +256,7 @@ globals:
     type: bool
     restore_value: true
     initial_value: "true"
-  # Scale Factors (werden alle 5s vom Device gelesen, kein restore nötig)
+  # Scale factors — read from device every 5 s; no NVS restore needed
   - id: sf_ac_power
     type: int
     initial_value: "-1"
@@ -324,23 +289,23 @@ globals:
     initial_value: "-2"
 
 external_components:
-  # Lokale native Implementierungen (ESP-IDF-kompatibel, kein Arduino-Lib):
-  #   modbus_server: ersetzt thomase1234/esphome-fake-xemex-csmb (Arduino-only)
-  #   modbustcp:     lokale Kopie mit Unit-ID-Fix
+  # Local native implementations (ESP-IDF compatible, no Arduino dependency):
+  #   modbus_server: replaces thomase1234/esphome-fake-xemex-csmb (Arduino-only)
+  #   modbustcp:     local fork with unit-ID fix
   - source:
       type: local
       path: components
     components:
       - modbus_server
       - modbustcp
-      - eebus_eg1
-      - eebus_lpc
+      - eebus_eg
+      - eebus_cs
   - source: github://creepystefan/esphome_modbus_tcp
     refresh: 1d
     components:
       - modbustcp_controller
 
-# ── I²C Bus für TCA9554 (Relais-Expander) ───────────────────────────────────
+# I²C bus for TCA9554 relay expander
 i2c:
   id: i2c_bus
   sda: GPIO42
@@ -348,13 +313,13 @@ i2c:
   scan: true
   frequency: 400kHz
 
-# TCA9554 I/O-Expander (Adresse 0x20) – steuert die 8 Relais
+# TCA9554 I/O expander (0x20) — drives 8 relays
 pca9554:
   - id: relay_expander
     address: 0x20
     i2c_id: i2c_bus
 
-# ── 8 Relais-Ausgänge (über TCA9554) ────────────────────────────────────────
+# 8 relay outputs via TCA9554
 switch:
   - platform: gpio
     name: "${device_name} Fronius §14a Leistungslimit"
@@ -520,9 +485,9 @@ switch:
       - lambda: |-
           id(hems_eg1).clear_limit();
 
-# ── Digitale Eingänge (opto-isoliert, active-low) ────────────────────────────
+# Digital inputs (opto-isolated, active-low)
 binary_sensor:
-  # DI1 = §14a Steuereingang des Netzbetreibers (GPIO4)
+  # DI1 = §14a grid-operator control input (GPIO4)
   - platform: gpio
     name: "${device_name} §14a Grid Provider Switch"
     id: grid_provider_switch
@@ -670,9 +635,7 @@ binary_sensor:
         pullup: true
       inverted: true
 
-# ── WS2812 Onboard RGB-LED (GPIO38) – §14a Statusanzeige + Normalbetrieb ────
-# esp32_rmt_led_strip verwendet den neuen RMT-Treiber (driver_ng), kompatibel
-# mit Arduino ESP32 Core 3.x – vermeidet den Legacy-RMT-Konflikt.
+# WS2812 onboard RGB LED (GPIO38) — §14a status indicator
 light:
   - platform: esp32_rmt_led_strip
     rgb_order: GRB
@@ -714,7 +677,7 @@ number:
     step: 0.1
     optimistic: true
     restore_value: true
-    initial_value: "${water_liters_per_pulse_default}"
+    initial_value: "1.0"
     set_action:
       - globals.set:
           id: water_liter_per_pulse
@@ -723,10 +686,8 @@ number:
           format: "Water meter: %.1f L/pulse"
           args: ["x"]
 
-# ── Sensoren ──────────────────────────────────────────────────────────────────
 sensor:
-  # ── S0-Wasserzähler DI2 (GPIO5) ───────────────────────────────────────────
-  # Liter-pro-Impuls über HA-Number konfigurierbar, Wert wird im Flash gespeichert
+  # S0 pulse meter DI2 (GPIO5) — liters per pulse configurable via ESPHome UI number, stored in NVS
   - platform: pulse_meter
     name: "${device_name} Water Flow Rate"
     id: water_flow_rate
@@ -747,7 +708,7 @@ sensor:
         pullup: true
       inverted: true              # S0 active-low
     filters:
-      - lambda: return x * id(water_liter_per_pulse);  # Impulse → L/min
+      - lambda: return x * id(water_liter_per_pulse);  # pulses → L/min
     on_raw_value:
       - globals.set:
           id: water_total_m3
@@ -767,7 +728,6 @@ sensor:
     update_interval: 10s
     lambda: "return id(water_total_m3);"
 
-  # ── CT-Ströme + Power-Events ──────────────────────────────────────────────
   - platform: template
     name: "${device_name} Power Limitation Events"
     id: power_limit_events
@@ -779,10 +739,6 @@ sensor:
     state_class: "total_increasing"
     accuracy_decimals: 0
 
-  # CT-Ströme werden jetzt direkt vom Fronius Grid Meter gelesen (fronius-gen24.yaml)
-  # Die alten MQTT-Sensoren (wallbox/shellrecharge/1/ct*current) wurden entfernt.
-
-# ── Text-Sensoren ─────────────────────────────────────────────────────────────
 text_sensor:
   - platform: version
     name: "${device_name} ESPHome Version"
@@ -793,7 +749,7 @@ text_sensor:
     hide_timestamp: true
 
   - platform: template
-    name: "${device_name} Build-Zeit"
+    name: "${device_name} Build Time"
     id: build_time_sensor
     icon: "mdi:calendar-clock"
     entity_category: diagnostic
@@ -820,22 +776,19 @@ text_sensor:
       sorting_weight: 3
     update_interval: 2s
     lambda: |-
-      if (id(hems_lpc).is_limit_active()) return {"Active - EEBus digital (CS)"};
+      if (id(hems_cs).is_limit_active()) return {"Active - EEBus digital (CS)"};
       if (id(grid_provider_switch).state) return {"Active - Relay DI1"};
       if (id(manual_enwg_test).state)     return {"Active - Simulation 4200 W"};
       return {"Inactive - Normal Operation"};
 
-# ── Buttons ───────────────────────────────────────────────────────────────────
 button:
   - platform: restart
-    name: "${device_name} Neustart"
+    name: "${device_name} Restart"
     icon: "mdi:restart"
     web_server:
       sorting_group_id: sg_system
       sorting_weight: 10
 
-# ── Fronius Gen24 Plus 8.0: Modbus TCP Batterie-Entladesteuerung ──────────────
-# Ausgelagert in separate Datei für saubere Struktur (vermeidet YAML-Key-Duplikate)
 packages:
   xemex_csmb: !include xemex-csmb.yaml
   fronius: !include fronius-gen24.yaml

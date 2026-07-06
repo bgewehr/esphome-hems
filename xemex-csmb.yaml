@@ -150,7 +150,7 @@ select:
               addon = 50.0f - amps - 2.0f;  /* 2.0 A Sicherheitspuffer */
             }
             id(ladebegrenzung_addon) = addon;
-            if (!id(hems_lpc).is_limit_active() &&
+            if (!id(hems_cs).is_limit_active() &&
                 !id(grid_provider_switch).state &&
                 !id(manual_enwg_test).state) {
               id(ct1addon).make_call().set_value(addon).perform();

@@ -1,4 +1,4 @@
-"""ESPHome external component: eebus_eg1
+"""ESPHome external component: eebus_eg
 
 EEBus SHIP/SPINE LPC Energy Guard (EG) actor — sends power limits to the
 connected CS (Controllable System) device, e.g. a heat pump EEBus gateway.
@@ -8,17 +8,17 @@ The HEMS acts as CEM/EG, the remote CS device is discovered automatically via mD
 Typical EEBus use cases announced by CS devices:
   LPC  — Limitation of Power Consumption  (we send limits)
   MPC  — Monitoring of Power Consumption  (we read actual power)
-  OHPCF — PV optimisation (via LPC + limit scheduling)
+  OSSHPCF — PV optimisation (compressor flexibility scheduling)
 
 Example YAML:
-    eebus_eg1:
-      id: hems_eg1
-      instance_name: "EG1"
+    eebus_eg:
+      id: eg1
+      instance_name: "WP"
       remote_ski: "aabbcc..."   # SKI of remote CS device — from web UI after pairing
-      on_eg1_connected:
-        - logger.log: "EG1 device connected"
-      on_eg1_disconnected:
-        - logger.log: "EG1 device disconnected"
+      on_eg_connected:
+        - logger.log: "EG device connected"
+      on_eg_disconnected:
+        - logger.log: "EG device disconnected"
 """
 
 import os
@@ -32,12 +32,12 @@ DEPENDENCIES = ["network", "esp32"]
 CODEOWNERS   = ["@bgewehr"]
 MULTI_CONF   = True
 
-eebus_eg1_ns      = cg.esphome_ns.namespace("eebus_eg1")
-EebusEg1Component = eebus_eg1_ns.class_("EebusEg1Component", cg.Component)
+eebus_eg_ns      = cg.esphome_ns.namespace("eebus_eg")
+EebusEgComponent = eebus_eg_ns.class_("EebusEgComponent", cg.Component)
 
-Eg1ConnectedTrigger    = eebus_eg1_ns.class_("Eg1ConnectedTrigger",    automation.Trigger.template())
-Eg1DisconnectedTrigger = eebus_eg1_ns.class_("Eg1DisconnectedTrigger", automation.Trigger.template())
-Eg1PowerReadingTrigger = eebus_eg1_ns.class_("Eg1PowerReadingTrigger", automation.Trigger.template(cg.float_))
+EgConnectedTrigger    = eebus_eg_ns.class_("EgConnectedTrigger",    automation.Trigger.template())
+EgDisconnectedTrigger = eebus_eg_ns.class_("EgDisconnectedTrigger", automation.Trigger.template())
+EgPowerReadingTrigger = eebus_eg_ns.class_("EgPowerReadingTrigger", automation.Trigger.template(cg.float_))
 
 CONF_REMOTE_SKI          = "remote_ski"
 CONF_SHIP_PORT           = "ship_port"
@@ -47,21 +47,21 @@ CONF_DEVICE_TYPE         = "device_type"
 CONF_DEVICE_MODEL        = "device_model"
 CONF_FAILSAFE_LIMIT_W    = "failsafe_limit_w"
 CONF_FAILSAFE_DURATION_S = "failsafe_duration_s"
-CONF_ON_EG1_CONNECTED    = "on_eg1_connected"
-CONF_ON_EG1_DISCONNECTED = "on_eg1_disconnected"
+CONF_ON_EG_CONNECTED    = "on_eg_connected"
+CONF_ON_EG_DISCONNECTED = "on_eg_disconnected"
 CONF_ON_POWER_READING    = "on_power_reading"
 
-def _consume_eebus_eg1_sockets(config):
+def _consume_eebus_eg_sockets(config):
     # httpd_ssl instance: 1 HTTPS listen + 2 active WS connections + 1 ctrl_port = 4 sockets
-    socket.consume_sockets(1, "eebus_eg1", socket.SocketType.TCP_LISTEN)(config)
-    socket.consume_sockets(3, "eebus_eg1")(config)
+    socket.consume_sockets(1, "eebus_eg", socket.SocketType.TCP_LISTEN)(config)
+    socket.consume_sockets(3, "eebus_eg")(config)
     return config
 
 
 CONFIG_SCHEMA = cv.All(
     cv.Schema({
-        cv.GenerateID(): cv.declare_id(EebusEg1Component),
-        cv.Optional(CONF_SHIP_PORT,           default=4712):    cv.port,
+        cv.GenerateID(): cv.declare_id(EebusEgComponent),
+        cv.Optional(CONF_SHIP_PORT,           default=4713):    cv.port,
         cv.Optional(CONF_REMOTE_SKI,          default=""):      cv.string,
         cv.Optional(CONF_INSTANCE_NAME,       default="EG"):    cv.string_strict,
         cv.Optional(CONF_DEVICE_BRAND,        default="DIY"):   cv.string_strict,
@@ -69,17 +69,17 @@ CONFIG_SCHEMA = cv.All(
         cv.Optional(CONF_DEVICE_MODEL,        default="ESP32-HEMS-14a"): cv.string_strict,
         cv.Optional(CONF_FAILSAFE_LIMIT_W,    default=4200.0):  cv.positive_float,
         cv.Optional(CONF_FAILSAFE_DURATION_S, default=7200):    cv.positive_int,  # 2h default
-        cv.Optional(CONF_ON_EG1_CONNECTED): automation.validate_automation({
-            cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(Eg1ConnectedTrigger),
+        cv.Optional(CONF_ON_EG_CONNECTED): automation.validate_automation({
+            cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(EgConnectedTrigger),
         }),
-        cv.Optional(CONF_ON_EG1_DISCONNECTED): automation.validate_automation({
-            cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(Eg1DisconnectedTrigger),
+        cv.Optional(CONF_ON_EG_DISCONNECTED): automation.validate_automation({
+            cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(EgDisconnectedTrigger),
         }),
         cv.Optional(CONF_ON_POWER_READING): automation.validate_automation({
-            cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(Eg1PowerReadingTrigger),
+            cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(EgPowerReadingTrigger),
         }),
     }).extend(cv.COMPONENT_SCHEMA),
-    _consume_eebus_eg1_sockets,
+    _consume_eebus_eg_sockets,
 )
 
 
@@ -100,11 +100,11 @@ async def to_code(config):
     cg.add(var.set_failsafe_limit_w(config[CONF_FAILSAFE_LIMIT_W]))
     cg.add(var.set_failsafe_duration_s(config[CONF_FAILSAFE_DURATION_S]))
 
-    for conf in config.get(CONF_ON_EG1_CONNECTED, []):
+    for conf in config.get(CONF_ON_EG_CONNECTED, []):
         trigger = cg.new_Pvariable(conf[CONF_TRIGGER_ID], var)
         await automation.build_automation(trigger, [], conf)
 
-    for conf in config.get(CONF_ON_EG1_DISCONNECTED, []):
+    for conf in config.get(CONF_ON_EG_DISCONNECTED, []):
         trigger = cg.new_Pvariable(conf[CONF_TRIGGER_ID], var)
         await automation.build_automation(trigger, [], conf)
 

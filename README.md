@@ -1,216 +1,216 @@
 # esphome-hems
 
-ESPHome-Konfiguration für einen HEMS-Controller auf Basis des **Waveshare ESP32-S3-POE-ETH-8DI-8RO**.
+ESPHome configuration for a HEMS controller based on the **Waveshare ESP32-S3-POE-ETH-8DI-8RO**.
 
-Der Controller empfängt §14a-EnWG-Leistungslimits vom Verteilnetzbetreiber (VNB) über EEBus SHIP/SPINE und verteilt sie intern an steuerbare Verbrauchseinheiten (StVE) wie Wärmepumpen und Wallboxen — ebenfalls über EEBus.
+The controller receives §14a EnWG power limits from the grid operator (VNB) via EEBus SHIP/SPINE and distributes them internally to controllable consumption units (StVE) such as heat pumps and wallboxes — also via EEBus.
 
 ---
 
-## Übersicht
+## Overview
 
 ```
-VNB-Gateway (CLS-Steuerbox)
-        │ EEBus LPC (CS-Rolle, Port 4712)
+VNB gateway (CLS Steuerbox)
+        │ EEBus LPC  (CS role, port 4712)
         ▼
-  ESP32 HEMS  ──── §14a-Limit ────►  Wärmepumpe  (EG-Rolle, Port 4713)
-  (dieser Controller)              (EEBus LPC)
+  ESP32 HEMS  ──── §14a limit ────►  Heat pump  (EG role, port 4713)
+  (this controller)                 (EEBus LPC)
         │
-        └────────────────────────►  Wallbox, weitere StVE ...
+        └────────────────────────►  Wallbox, further StVE ...
 ```
 
-Der Controller kombiniert:
+The controller combines:
 
-- **EEBus CS-Empfänger** (`eebus_lpc`): empfängt §14a-Limits von der CLS-Steuerbox des VNB
-- **EEBus EG-Sender** (`eebus_eg1`): sendet Limits an EEBus-fähige Geräte (Wärmepumpe, Wallbox)
-- **OSSHPCF/SEMP**: passives Monitoring der Kompressor-Flexibilität (PV-Eigenverbrauch)
-- **MPC**: liest die aktuelle Leistungsaufnahme der Geräte via EEBus zurück
-- **Xemex CSMB Modbus RTU** Server-Emulation
-- **Fronius Gen24** Modbus TCP Monitoring und Batterie-Entladebegrenzung
-- **S0-Impulszählung** (Wasserzähler)
-- **8 Relaisausgänge / 8 Digitaleingänge**
+- **EEBus CS receiver** (`eebus_cs`): receives §14a limits from the VNB's CLS Steuerbox
+- **EEBus EG sender** (`eebus_eg`): sends limits to EEBus-capable devices (heat pump, wallbox)
+- **OSSHPCF/SEMP**: passive monitoring of compressor flexibility (PV self-consumption)
+- **MPC**: reads current power consumption of devices via EEBus
+- **Xemex CSMB Modbus RTU** server emulation
+- **Fronius Gen24** Modbus TCP monitoring and battery discharge limiting
+- **S0 pulse counting** (water meter)
+- **8 relay outputs / 8 digital inputs**
 
 ---
 
-## Repository-Struktur
+## Repository structure
 
 ```
 .
-├── esphome-hems.yaml          # Haupt-ESPHome-Konfiguration
-├── eebus-openeebus.yaml       # EEBus-Paket (CS + EG1) — per packages: eingebunden
-├── xemex-csmb.yaml            # Xemex CSMB Modbus RTU Paket
-├── fronius-gen24.yaml         # Fronius Paket
-├── compile.ps1                # Compile/Flash-Skript (Windows PowerShell)
-├── apply_patches.py           # Patching-Skript für openeebus-Anpassungen
-├── requirements-dev.txt       # Python-Abhängigkeiten für Diagnose-Skripte
-├── secrets.example.yaml       # Template für lokale Zugangsdaten
+├── esphome-hems.yaml          # Main ESPHome configuration
+├── eebus-openeebus.yaml       # EEBus package (CS + EG) — included via packages:
+├── xemex-csmb.yaml            # Xemex CSMB Modbus RTU package
+├── fronius-gen24.yaml         # Fronius package
+├── compile.ps1                # Compile/flash script (Windows PowerShell)
+├── requirements-dev.txt       # Python dependencies for diagnostic scripts
+├── secrets.example.yaml       # Template for local credentials
 ├── components/
-│   ├── eebus_lpc/             # EEBus CS-Komponente (LPC-Empfänger vom VNB)
-│   └── eebus_eg1/             # EEBus EG-Komponente (LPC-Sender an StVE)
-├── openeebus/                 # openeebus SHIP/SPINE C-Bibliothek (Submodule)
-├── port/                      # ESP32-Port-Anpassungen für openeebus
+│   ├── eebus_cs/             # EEBus CS component (LPC receiver from VNB)
+│   └── eebus_eg/              # EEBus EG component (LPC sender to StVE)
+├── openeebus/                 # openeebus SHIP/SPINE C library (submodule)
+├── port/                      # ESP32 port adaptations for openeebus
 └── tools/
-    └── diagnostics/           # Fronius-Diagnose-Skripte
+    └── diagnostics/           # EEBus and Fronius diagnostic scripts
 ```
 
 ---
 
-## Einsteiger-Guide: In 3 Schritten zur §14a-Steuerung
+## Beginner guide: §14a control in 3 steps
 
-### Schritt 1 — Zugangsdaten anlegen
+### Step 1 — Create credentials
 
 ```bash
 cp secrets.example.yaml secrets.yaml
 ```
 
-`secrets.yaml` öffnen und ausfüllen:
+Open `secrets.yaml` and fill in your values:
 
 ```yaml
-api_encryption_key: "..."          # ESPHome API-Schlüssel (zufällig generieren)
-ota_password: "..."                # OTA-Passwort
-fronius_ip: "192.168.x.x"         # Fronius-IP (oder leer lassen)
-mqtt_broker: "192.168.x.x"        # MQTT-Broker-IP
+api_encryption_key: "..."          # ESPHome API key (generate randomly)
+ota_password: "..."                # OTA password
+fronius_ip: "192.168.x.x"         # Fronius IP (or leave empty)
+mqtt_broker: "192.168.x.x"        # MQTT broker IP
+hems_ip: "192.168.x.x"            # IP of this HEMS device (for OTA upload)
 
-# EEBus-Pairing: leer lassen → Pairing über Web-UI
-eebus_cls_remote_ski: ""           # CLS-Steuerbox des VNB (wird beim Pairing gesetzt)
-eebus_eg1_remote_ski: ""           # Wärmepumpe / Wallbox (wird beim Pairing gesetzt)
+# EEBus pairing: leave empty to pair via web UI
+eebus_cls_remote_ski: ""           # CLS Steuerbox of VNB (set during pairing)
+eebus_eg_remote_ski: ""            # Heat pump / wallbox (set during pairing)
 ```
 
-> **Hinweis:** `secrets.yaml` wird nie eingecheckt — nur `secrets.example.yaml` liegt im Repository.
+> **Note:** `secrets.yaml` is never committed — only `secrets.example.yaml` is in the repository.
 
 ---
 
-### Schritt 2 — Kompilieren und flashen
+### Step 2 — Compile and flash
 
 ```powershell
-# Nur kompilieren:
+# Compile only:
 .\compile.ps1
 
-# Kompilieren + per OTA auf das Gerät laden:
+# Compile + upload via OTA (reads hems_ip from secrets.yaml):
 .\compile.ps1 --upload
+
+# Explicit target:
+.\compile.ps1 --upload --device 192.168.x.x
 ```
 
-> `esphome run` **nicht** verwenden — das Skript übernimmt die richtige Reihenfolge und das Zielgerät.
+> Do **not** use `esphome run` directly — the script ensures both build cache paths are in sync.
 
 ---
 
-### Schritt 3 — EEBus-Pairing durchführen
+### Step 3 — EEBus pairing
 
-Das Pairing muss **einmalig** für jede Verbindung gemacht werden:
+Pairing must be done **once** for each connection.
 
-#### CLS-Steuerbox (VNB-Gateway → HEMS)
+#### CLS Steuerbox (VNB gateway → HEMS)
 
-1. ESPHome Web-UI öffnen → **„CS Pairing-Modus starten"** drücken (5 Minuten Fenster)
-2. Am VNB-Gateway / CLS-Gerät das Pairing auslösen
-3. Im Web-UI erscheint die SKI des Geräts unter „CS Pairing ausstehend" → **„CS Pairing akzeptieren"** drücken
-4. Status wechselt auf „Verbunden" — SKI wird in NVS gespeichert, Pairing bleibt nach Neustart erhalten
+1. Open ESPHome web UI → press **"CS Pairing-Modus starten"** (5-minute window)
+2. Trigger pairing on the VNB gateway / CLS device
+3. The device SKI appears under "CS Pairing ausstehend" → press **"CS Pairing akzeptieren"**
+4. Status changes to "Verbunden" — SKI is stored in NVS and persists across reboots
 
-#### Wärmepumpe / Wallbox (HEMS → StVE)
+#### Heat pump / wallbox (HEMS → StVE)
 
-1. ESPHome Web-UI → **„EG1 Pairing-Modus starten"** drücken
-2. Am Gerät (z.B. Bosch-App oder WP-Display) das EEBus-Pairing aktivieren
-3. Verbindung wird automatisch hergestellt — Status wechselt auf „Verbunden"
+1. ESPHome web UI → press **"EG1 Pairing-Modus starten"**
+2. Activate EEBus pairing on the device (e.g. Bosch app or heat pump display)
+3. Connection is established automatically — status changes to "Verbunden"
 
-> **Tipp:** Nach erfolgreichem Pairing ist die SKI in NVS gespeichert. Beim nächsten Start verbindet sich der Controller automatisch ohne erneutes Pairing.
+> **Tip:** After successful pairing the SKI is stored in NVS. On the next boot the controller reconnects automatically without re-pairing.
 
 ---
 
-## YAML-Referenz: EEBus-Komponenten
+## YAML reference: EEBus components
 
-### `eebus_lpc` — CS-Empfänger (VNB → HEMS)
+### `eebus_cs` — CS receiver (VNB → HEMS)
 
-Empfängt §14a-Leistungslimits vom VNB-Gateway.
+Receives §14a power limits from the VNB gateway.
 
 ```yaml
-eebus_lpc:
-  id: hems_lpc
-  ship_port: 4712                  # SHIP-Port (fixer Wert, nicht ändern)
+eebus_cs:
+  id: hems_cs
   remote_ski: !secret eebus_cls_remote_ski
   device_brand: "DIY"
   device_type: "HEMS"
   device_model: "esphome-hems"
-  failsafe_limit_w: 4200           # Fallback-Limit wenn Verbindung verloren geht
 
-  on_limit_active:                 # Wird aufgerufen wenn VNB ein Limit sendet
+  on_limit_active:                 # Called when VNB sends a limit
     - lambda: |-
-        float limit = x;           # x = Leistungslimit in Watt
-        id(hems_eg1).set_limit(limit);   # Limit an WP weitergeben
+        float limit = x;           # x = power limit in watts
+        id(eg1).set_limit(limit);  # Forward limit to heat pump
 
-  on_limit_cleared:                # Wird aufgerufen wenn Limit aufgehoben wird
+  on_limit_cleared:                # Called when limit is lifted
     - lambda: |-
-        id(hems_eg1).clear_limit();
+        id(eg1).clear_limit();
 ```
 
-**Verfügbare Methoden im Lambda:**
+**Methods available in lambdas:**
 
-| Methode | Rückgabe | Beschreibung |
-|---------|----------|--------------|
-| `id(hems_lpc).is_limit_active()` | `bool` | Ist gerade ein Limit aktiv? |
-| `id(hems_lpc).current_limit_w()` | `float` | Aktuelles Limit in Watt |
-| `id(hems_lpc).is_connected()` | `bool` | Verbindung zur CLS-Steuerbox aktiv? |
-| `id(hems_lpc).local_ski()` | `std::string` | Eigene SKI (für Pairing-Übergabe an VNB) |
-| `id(hems_lpc).paired_remote_ski()` | `std::string` | SKI der gepaarten CLS-Steuerbox |
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `id(hems_cs).is_limit_active()` | `bool` | Is a limit currently active? |
+| `id(hems_cs).current_limit_w()` | `float` | Current limit in watts |
+| `id(hems_cs).is_connected()` | `bool` | Connection to CLS Steuerbox active? |
+| `id(hems_cs).local_ski()` | `std::string` | Own SKI (for handover to VNB) |
+| `id(hems_cs).paired_remote_ski()` | `std::string` | SKI of paired CLS Steuerbox |
 
 ---
 
-### `eebus_eg1` — EG-Sender (HEMS → StVE)
+### `eebus_eg` — EG sender (HEMS → StVE)
 
-Sendet §14a-Leistungslimits an EEBus-fähige Geräte (Wärmepumpe, Wallbox).
+Sends §14a power limits to EEBus-capable devices (heat pump, wallbox).
 
 ```yaml
-eebus_eg1:
-  id: hems_eg1
-  ship_port: 4713                  # SHIP-Port (pro StVE eindeutig)
-  remote_ski: !secret eebus_eg1_remote_ski
-  instance_name: "EG1"            # Bezeichnung in Logs und Web-UI
+eebus_eg:
+  id: eg1                          # Instance name — choose freely (eg1, eg_wp, eg_wb, ...)
+  ship_port: 4713                  # SHIP port (unique per StVE; default 4713)
+  remote_ski: !secret eebus_eg_remote_ski
+  instance_name: "WP"              # Label shown in logs and web UI
   device_brand: "DIY"
   device_type: "HEMS"
   device_model: "esphome-hems"
-  failsafe_limit_w: 2600           # Limit das das Gerät hält wenn Verbindung abbricht
-  failsafe_duration_s: 7200        # Dauer des Failsafe in Sekunden (2–24 h)
+  failsafe_limit_w: 2600           # Limit the device holds if connection drops (default 4200)
+  failsafe_duration_s: 7200        # Duration of failsafe in seconds (default 7200 = 2 h)
 
-  on_eg1_connected:                # Wird aufgerufen wenn StVE verbunden
+  on_eg_connected:                 # Called when StVE connects
     - lambda: |-
-        # Bei Reconnect: aktives Limit erneut senden
-        if (id(hems_lpc).is_limit_active())
-          id(hems_eg1).set_limit(id(hems_lpc).current_limit_w());
+        if (id(hems_cs).is_limit_active())
+          id(eg1).set_limit(id(hems_cs).current_limit_w());
 
-  on_eg1_disconnected:             # Wird aufgerufen wenn StVE getrennt
+  on_eg_disconnected:              # Called when StVE disconnects
     - lambda: |-
-        ESP_LOGW("eebus", "Wärmepumpe getrennt");
+        ESP_LOGW("eebus", "Heat pump disconnected");
 
-  on_power_reading:                # Wird aufgerufen bei neuer MPC-Leistungsmessung
+  on_power_reading:                # Called on new MPC power measurement
     - lambda: |-
-        float watt = x;            # x = gemessene Leistung in Watt
+        float watt = x;            # x = measured power in watts
 ```
 
-**Verfügbare Methoden im Lambda:**
+**Methods available in lambdas:**
 
-| Methode | Parameter | Beschreibung |
-|---------|-----------|--------------|
-| `id(hems_eg1).set_limit(watts)` | `float` | Leistungslimit setzen (min. 4.200 W) |
-| `id(hems_eg1).clear_limit()` | — | Limit aufheben (volle Leistung) |
-| `id(hems_eg1).current_power_w()` | — | Letzte MPC-Leistungsmessung in Watt |
-| `id(hems_eg1).active_limit_w()` | — | Zuletzt bestätigtes Limit in Watt |
-| `id(hems_eg1).is_connected()` | — | Verbindung zur StVE aktiv? |
-| `id(hems_eg1).update_failsafe_limit_w(w)` | `float` | Failsafe-Limit zur Laufzeit ändern |
-| `id(hems_eg1).update_failsafe_duration_s(s)` | `uint32_t` | Failsafe-Dauer zur Laufzeit ändern |
+| Method | Parameter | Description |
+|--------|-----------|-------------|
+| `id(eg1).set_limit(watts)` | `float` | Set power limit (min. 4,200 W) |
+| `id(eg1).clear_limit()` | — | Remove limit (full power) |
+| `id(eg1).current_power_w()` | — | Last MPC power reading in watts |
+| `id(eg1).active_limit_w()` | — | Last acknowledged limit in watts |
+| `id(eg1).is_connected()` | — | Connection to StVE active? |
+| `id(eg1).update_failsafe_limit_w(w)` | `float` | Change failsafe limit at runtime |
+| `id(eg1).update_failsafe_duration_s(s)` | `uint32_t` | Change failsafe duration at runtime |
 
 ---
 
-### Mehrere StVE einbinden
+### Multiple StVE
 
-Für jede weitere steuerbare Verbrauchseinheit (z.B. zweite Wärmepumpe oder Wallbox) eine zusätzliche `eebus_eg1`-Instanz mit eigenem Port anlegen:
+Add one `eebus_eg` instance per controllable device, each with its own port:
 
 ```yaml
-eebus_eg1:
-  - id: hems_eg1_wp
+eebus_eg:
+  - id: eg_wp
     ship_port: 4713
-    instance_name: "Wärmepumpe"
+    instance_name: "Heat pump"
     remote_ski: !secret eebus_wp_remote_ski
     failsafe_limit_w: 4200
     failsafe_duration_s: 7200
 
-  - id: hems_eg1_wb
+  - id: eg_wb
     ship_port: 4714
     instance_name: "Wallbox"
     remote_ski: !secret eebus_wb_remote_ski
@@ -218,98 +218,100 @@ eebus_eg1:
     failsafe_duration_s: 7200
 ```
 
-**Limit intern verteilen** (im `on_limit_active`-Handler von `eebus_lpc`):
+**Distribute the limit internally** (in the `on_limit_active` handler of `eebus_cs`):
 
 ```yaml
 on_limit_active:
   - lambda: |-
-      float total = x;               // Gesamtlimit vom VNB
-      // Beispiel: Wärmepumpe hat Vorrang, Rest an Wallbox
-      float wp_limit = std::min(total, 7000.0f);   // max 7 kW an WP
-      float wb_limit = total - wp_limit;            // Rest an Wallbox
-      if (wb_limit < 4200.0f) wb_limit = 0.0f;     // unter Minimum → abschalten
-      id(hems_eg1_wp).set_limit(wp_limit);
-      id(hems_eg1_wb).set_limit(wb_limit);
+      float total = x;                     // total limit from VNB
+      float wp = std::min(total, 7000.0f); // up to 7 kW to heat pump
+      float wb = total - wp;               // remainder to wallbox
+      if (wb < 4200.0f) wb = 0.0f;        // below minimum -> skip
+      id(eg_wp).set_limit(wp);
+      id(eg_wb).set_limit(wb);
 ```
 
-> **§14a-Hinweis:** Der VNB sendet mindestens 4.200 W pro angemeldeter StVE. Die interne Verteilung liegt beim HEMS-Betreiber. Limits unter 4.200 W werden von EEBus-Geräten nicht quittiert (die WP ignoriert sie still).
+> **§14a note:** The VNB sends at least 4,200 W per registered StVE. Internal distribution is up to the HEMS operator. Limits below 4,200 W are not acknowledged by EEBus devices.
 
 ---
 
-## EEBus Use Cases
+## EEBus use cases
 
-| Use Case | Kürzel | Richtung | Beschreibung |
-|----------|--------|----------|--------------|
-| LimitationOfPowerConsumption | LPC | VNB→HEMS→StVE | §14a-Leistungslimit |
-| MonitoringOfPowerConsumption | MPC | StVE→HEMS | Leistungsrückmeldung |
-| OptimizationOfSelfConsumptionByHPCF | OSSHPCF | StVE→HEMS | Kompressor-Flexibilität (PV) |
+| Use case | Short | Direction | Description |
+|----------|-------|-----------|-------------|
+| LimitationOfPowerConsumption | LPC | VNB→HEMS→StVE | §14a power limit |
+| MonitoringOfPowerConsumption | MPC | StVE→HEMS | Power feedback |
+| OptimizationOfSelfConsumptionByHPCF | OSSHPCF | StVE→HEMS | Compressor flexibility (PV) |
 
-**OSSHPCF/SEMP** wird automatisch erkannt wenn die Wärmepumpe den Kompressor ankündigt. Der Controller subscribt sich dann auf die SEMP-Datenpunkte (`fn=103`) und loggt eingehende Kompressor-Schedules — Grundlage für spätere PV-Eigenverbrauch-Optimierung.
-
----
-
-## Failsafe-Verhalten
-
-Wenn die Verbindung zwischen HEMS und StVE abbricht, fällt die StVE auf ihr Failsafe-Limit zurück:
-
-- `failsafe_limit_w`: Leistung die das Gerät selbst hält (z.B. 2.600 W)
-- `failsafe_duration_s`: Wie lange der Failsafe gilt (danach: volle Leistung)
-
-Über die Web-UI können beide Werte zur Laufzeit geändert werden ohne Neustart.
-
-Der Failsafe-Test (Web-UI → „EG1 Failsafe testen") stoppt den Heartbeat für 120 s und prüft so, ob das Gerät korrekt auf seinen Failsafe-Wert wechselt.
+**OSSHPCF/SEMP** is detected automatically when the heat pump announces its compressor entity. The controller then subscribes to the SEMP data points (`fn=103`) and logs incoming compressor schedules — the basis for future PV self-consumption optimisation.
 
 ---
 
-## Kompilieren und Flashen
+## Failsafe behaviour
+
+When the connection between HEMS and StVE drops, the StVE falls back to its failsafe limit:
+
+- `failsafe_limit_w`: Power the device holds itself (e.g. 2,600 W)
+- `failsafe_duration_s`: How long the failsafe applies (then: full power)
+
+Both values can be changed at runtime via the web UI without restarting.
+
+The failsafe test (web UI → "EG1 Failsafe testen") stops the heartbeat for 120 s and verifies that the device correctly switches to its failsafe value.
+
+---
+
+## Diagnostic scripts
+
+The `tools/diagnostics/` directory contains scripts for testing and debugging.
+
+### `check_eebus.py` — EEBus port and TLS check
+
+Tests TCP connectivity, TLS handshake, SKI extraction, mDNS, and SHIP CMI handshake against the HEMS ports.
 
 ```powershell
-# Kompilieren (ohne Upload):
-.\compile.ps1
-
-# Kompilieren + per OTA flashen (Standard-Ziel: 192.168.178.24):
-.\compile.ps1 --upload
-
-# Anderes Zielgerät:
-.\compile.ps1 --upload --device 192.168.x.x
+python tools/diagnostics/check_eebus.py
 ```
 
-> `esphome run` **nicht** direkt verwenden — `compile.ps1` stellt sicher dass beide Build-Cache-Pfade synchron sind.
+### `fake_steuerbox.py` — Simulated CLS Steuerbox
 
----
+Simulates a CLS Steuerbox (VNB gateway) connecting to the HEMS via EEBus SHIP/SPINE. Useful for testing LPC limit reception without a real VNB device.
 
-## Diagnose-Skripte (Fronius)
+The script uses `.fake_steuerbox_cert.pem` / `.fake_steuerbox_key.pem` (self-signed, generated on first run) to perform the TLS handshake. The resulting SKI must be paired in the HEMS web UI once (CS pairing flow).
+
+```powershell
+# Install dependencies first:
+python -m pip install -r requirements-dev.txt
+
+# Run:
+python tools/diagnostics/fake_steuerbox.py --host 192.168.x.x
+```
+
+### `read_fronius.py` — Fronius Modbus TCP diagnostics
 
 ```powershell
 $env:FRONIUS_HOST = "192.168.x.x"
 python tools/diagnostics/read_fronius.py
 ```
 
-Abhängigkeiten installieren:
-
-```powershell
-python -m pip install -r requirements-dev.txt
-```
-
 ---
 
-## Sicherheit
+## Security
 
-`secrets.yaml`, ESPHome Build-Ausgabe, virtuelle Umgebungen und private Dokumentation werden nicht eingecheckt. Das Repository enthält nur `secrets.example.yaml` mit leeren Werten.
+`secrets.yaml`, ESPHome build output, virtual environments, and private documentation are not committed. The repository contains only `secrets.example.yaml` with empty values.
 
 ---
 
 ## Credits
 
-| Komponente | Autor / Projekt | Lizenz |
-|------------|----------------|--------|
-| **openeebus** — SHIP/SPINE C-Bibliothek | [NIBE AB](https://github.com/nibe-stefan/openeebus) | Apache 2.0 |
-| **esphome_modbus_tcp** — Modbus TCP Server | [creepystefan](https://github.com/creepystefan/esphome_modbus_tcp) | siehe Repo |
-| **xemex-csmb** — Modbus RTU Server-Emulation | [thomase1234](https://github.com/thomase1234/esphome-fake-xemex-csmb) | siehe Repo |
-| **eebus_lpc / eebus_eg1** — EEBus ESPHome-Komponenten | bgewehr (Eigenentwicklung) | MIT |
+| Component | Author / Project | License |
+|-----------|-----------------|---------|
+| **openeebus** — SHIP/SPINE C library | [NIBE AB](https://github.com/nibe-stefan/openeebus) | Apache 2.0 |
+| **esphome_modbus_tcp** — Modbus TCP server | [creepystefan](https://github.com/creepystefan/esphome_modbus_tcp) | see repo |
+| **xemex-csmb** — Modbus RTU server emulation | [thomase1234](https://github.com/thomase1234/esphome-fake-xemex-csmb) | see repo |
+| **eebus_cs / eebus_eg** — EEBus ESPHome components | bgewehr (own development) | MIT |
 
 ---
 
-## Lizenz
+## License
 
-MIT License. Siehe `LICENSE`.
+MIT License. See `LICENSE`.

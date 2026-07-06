@@ -2,7 +2,7 @@
 """
 fake_steuerbox.py — EEBus §14a Steuerbox pairing/LPC test.
 
-Connects to esphome-hems eebus_lpc port (4712) as a fake EG (EnergyGuard /
+Connects to esphome-hems eebus_cs port (4712) as a fake EG (EnergyGuard /
 Netz-Steuerbox), completes the full SHIP handshake, then sends properly
 addressed SPINE messages to activate a §14a LPC power limit.
 
@@ -349,7 +349,7 @@ def spine_send(
           write:  [{"function": "..."}, {"filter": ...}, {"data": [...]}]
 
     SPINE device addresses ("d:_n:{vendor}_{serial}") are completely separate
-    from TLS cert SKIs. HEMS address: "d:_n:DIY_HEMS-CS-01" (eebus_lpc.cpp:493-497).
+    from TLS cert SKIs. HEMS address: "d:_n:DIY_HEMS-CS-01" (eebus_cs.cpp:493-497).
     """
     header = [
         {"specificationVersion": "1.3.0"},
@@ -907,7 +907,7 @@ def main():
         description="EEBus fake Steuerbox (§14a EG) — pairing, use-case announce, LPC test"
     )
     ap.add_argument("host", help="HEMS IP address, e.g. 192.168.178.24")
-    ap.add_argument("--port", type=int, default=4712, help="eebus_lpc SHIP port (default 4712)")
+    ap.add_argument("--port", type=int, default=4712, help="eebus_cs SHIP port (default 4712)")
     ap.add_argument(
         "--limit", type=float, default=4200.0,
         help="LPC power limit in W (default 4200)",
@@ -1004,7 +1004,7 @@ Prerequisites (first-time pairing):
 
         # SPINE device addresses — completely independent of TLS cert SKI.
         # HEMS address is "d:_n:{vendor}_{serial}" (eebus_device_info.c:86).
-        # vendor="DIY", serial="HEMS-CS-01" come from eebus_lpc.cpp:493-497.
+        # vendor="DIY", serial="HEMS-CS-01" come from eebus_cs.cpp:493-497.
         # GetFeatureWithAddress() drops any message where dst.device != device->address.
         our_addr  = f"d:_n:FakeSteuerbox_{our_ski[:8]}"
         hems_addr = "d:_n:DIY_HEMS-CS-01"
@@ -1096,7 +1096,7 @@ Prerequisites (first-time pairing):
             # After kHeartbeatTimeoutSeconds (60 s) the HEMS watchdog fires and
             # applies failsafe_limit_w_ (default 4200 W). Use --limit >4200 to
             # make the transition from active limit → failsafe visible in the HEMS UI.
-            HEMS_HB_TIMEOUT = 60  # must match kHeartbeatTimeoutSeconds in eebus_lpc.cpp
+            HEMS_HB_TIMEOUT = 60  # must match kHeartbeatTimeoutSeconds in eebus_cs.cpp
 
             send_subscription_request(
                 sock, our_addr, hems_addr,

@@ -1,6 +1,6 @@
-"""ESPHome external component: eebus_lpc
+"""ESPHome external component: eebus_cs
 
-EEBus SHIP/SPINE LPC CS actor for §14a EnWG.
+EEBus SHIP/SPINE LPC CS (Controllable System) actor for §14a EnWG.
 
 Pairing flow:
   1. First boot: certificate generated, local SKI shown in web UI.
@@ -21,15 +21,15 @@ DEPENDENCIES = ["network", "esp32"]
 CODEOWNERS   = ["@bgewehr"]
 MULTI_CONF   = False
 
-eebus_lpc_ns       = cg.esphome_ns.namespace("eebus_lpc")
-EebusLpcComponent  = eebus_lpc_ns.class_("EebusLpcComponent", cg.Component)
+eebus_cs_ns        = cg.esphome_ns.namespace("eebus_cs")
+EebusCsComponent   = eebus_cs_ns.class_("EebusCsComponent", cg.Component)
 
-LimitActiveTrigger   = eebus_lpc_ns.class_("LimitActiveTrigger",   automation.Trigger.template(cg.float_))
-LimitClearedTrigger  = eebus_lpc_ns.class_("LimitClearedTrigger",  automation.Trigger.template())
-PairingRequestTrigger= eebus_lpc_ns.class_("PairingRequestTrigger", automation.Trigger.template(cg.std_string))
+LimitActiveTrigger   = eebus_cs_ns.class_("LimitActiveTrigger",   automation.Trigger.template(cg.float_))
+LimitClearedTrigger  = eebus_cs_ns.class_("LimitClearedTrigger",  automation.Trigger.template())
+PairingRequestTrigger= eebus_cs_ns.class_("PairingRequestTrigger", automation.Trigger.template(cg.std_string))
 
-AcceptPairingAction = eebus_lpc_ns.class_("AcceptPairingAction", automation.Action)
-RejectPairingAction = eebus_lpc_ns.class_("RejectPairingAction", automation.Action)
+AcceptPairingAction = eebus_cs_ns.class_("AcceptPairingAction", automation.Action)
+RejectPairingAction = eebus_cs_ns.class_("RejectPairingAction", automation.Action)
 
 CONF_REMOTE_SKI         = "remote_ski"
 CONF_SHIP_PORT          = "ship_port"
@@ -41,16 +41,16 @@ CONF_ON_LIMIT_ACTIVE    = "on_limit_active"
 CONF_ON_LIMIT_CLEARED   = "on_limit_cleared"
 CONF_ON_PAIRING_REQUEST = "on_pairing_request"
 
-def _consume_eebus_lpc_sockets(config):
+def _consume_eebus_cs_sockets(config):
     # httpd_ssl instance: 1 HTTPS listen + 2 active WS connections + 1 ctrl_port = 4 sockets
-    socket.consume_sockets(1, "eebus_lpc", socket.SocketType.TCP_LISTEN)(config)
-    socket.consume_sockets(3, "eebus_lpc")(config)
+    socket.consume_sockets(1, "eebus_cs", socket.SocketType.TCP_LISTEN)(config)
+    socket.consume_sockets(3, "eebus_cs")(config)
     return config
 
 
 CONFIG_SCHEMA = cv.All(
     cv.Schema({
-        cv.GenerateID(): cv.declare_id(EebusLpcComponent),
+        cv.GenerateID(): cv.declare_id(EebusCsComponent),
         cv.Optional(CONF_SHIP_PORT,      default=4712):          cv.port,
         cv.Optional(CONF_REMOTE_SKI,     default=""):            cv.string,
         cv.Optional(CONF_DEVICE_BRAND,   default="DIY"):         cv.string_strict,
@@ -67,7 +67,7 @@ CONFIG_SCHEMA = cv.All(
             cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(PairingRequestTrigger),
         }),
     }).extend(cv.COMPONENT_SCHEMA),
-    _consume_eebus_lpc_sockets,
+    _consume_eebus_cs_sockets,
 )
 
 
@@ -82,7 +82,7 @@ def _generate_unity_build(component_dir, repo_root):
 
     All wrappers are placed in component_dir alongside this __init__.py.
     ESPHome's ComponentManifest scans that directory for .c files and
-    copies them to build/src/esphome/components/eebus_lpc/.
+    copies them to build/src/esphome/components/eebus_cs/.
     The generated src/CMakeLists.txt uses GLOB_RECURSE, so they are
     compiled automatically.
 
@@ -208,7 +208,7 @@ async def to_code(config):
         cg.add_build_flag("-I" + os.path.dirname(idf_cjson[0]).replace("\\", "/"))
 
     # esp_websocket_client is required by the port/esp32 WebSocket client layer
-    # (used by eebus_eg1 for outbound SHIP connections to remote CS devices).
+    # (used by eebus_eg for outbound SHIP connections to remote CS devices).
     # In ESP-IDF 5.x it is a managed component — declare it so the IDF
     # Component Manager downloads and includes it in the build.
     from esphome.components.esp32 import (
