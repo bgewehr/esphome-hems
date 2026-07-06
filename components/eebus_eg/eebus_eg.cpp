@@ -1109,7 +1109,25 @@ void EebusEgComponent::forget_pairing() {
   save_remote_ski_nvs_("");
   remote_ski_.clear();
   device_label_.clear();
-  pairing_state_ = "Inaktiv";
+
+  /* Reset all connection-derived display state so the UI returns to a clean
+   * initial appearance regardless of whether a live session existed.
+   * on_entity_disconnect() has a guard that skips the reset when already
+   * disconnected, so we replicate the relevant resets here explicitly. */
+  connected_           = false;
+  mpc_connected_       = false;
+  last_heartbeat_ms_   = 0;
+  have_remote_entity_  = false;
+  active_limit_w_      = 0.0f;
+  current_power_w_     = 0.0f;
+  pending_limit_w_     = -1.0f;
+  uc_dump_at_ms_       = 0;
+  remote_uc_seen_      = {};
+  semp_subscribe_pending_ = false;
+  failsafe_set_        = false;
+  heartbeat_alarm_     = false;
+  pairing_state_       = "Inaktiv";
+
   if (service_ && !old_ski.empty()) {
     /* UNREGISTER removes the SKI from the outbound-connect whitelist.
      * CANCEL_PAIRING tears down the active SHIP session and closes the connection. */
