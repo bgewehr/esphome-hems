@@ -4,8 +4,6 @@ substitutions:
   device_name: "ESPHome HEMS"
   fronius_ip: !secret fronius_ip
   fronius_port: "502"
-  # Battery max discharge power (W) — hardware-specific constant for percentage calculation
-  battery_max_discharge_w: "18176"
 
 esphome:
   name: ${name}
@@ -793,5 +791,46 @@ packages:
   xemex_csmb: !include xemex-csmb.yaml
   fronius: !include fronius-gen24.yaml
   eebus: !include eebus-openeebus.yaml
+
+# §14a application glue — relay, LED, CT add-on, and event counter wired into EEBus CS triggers.
+# ESPHome merges these on_limit_active / on_limit_cleared lists with the ones in eebus-openeebus.yaml.
+eebus_cs:
+  id: hems_cs
+  on_limit_active:
+    - lambda: |-
+        float _ev = id(power_limit_events).state;
+        id(power_limit_events).publish_state(std::isnan(_ev) ? 1.0f : _ev + 1.0f);
+    - text_sensor.template.publish:
+        id: last_enwg_event
+        state: !lambda 'return std::string("Aktiviert (EEBus): ") + id(ha_time).now().strftime("%d.%m.%Y %H:%M:%S");'
+    - number.set:
+        id: ct1addon
+        value: 45.0
+    - number.set:
+        id: ct2addon
+        value: 45.0
+    - number.set:
+        id: ct3addon
+        value: 45.0
+    - light.turn_on:
+        id: status_led
+        effect: "Paragraph14a Warning Flash"
+    - switch.turn_on: relay_1
+  on_limit_cleared:
+    - text_sensor.template.publish:
+        id: last_enwg_event
+        state: !lambda 'return std::string("Beendet (EEBus): ") + id(ha_time).now().strftime("%d.%m.%Y %H:%M:%S");'
+    - number.set:
+        id: ct1addon
+        value: !lambda "return id(ladebegrenzung_addon);"
+    - number.set:
+        id: ct2addon
+        value: !lambda "return id(ladebegrenzung_addon);"
+    - number.set:
+        id: ct3addon
+        value: !lambda "return id(ladebegrenzung_addon);"
+    - light.turn_off:
+        id: status_led
+    - switch.turn_off: relay_1
 
 # ══════════════════════════════════════════════════════════════════════════════

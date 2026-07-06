@@ -2,13 +2,17 @@
 # Compiles and optionally uploads to the device.
 # The target IP is read from secrets.yaml (hems_ip key) unless --device is given.
 
-param(
-    [switch]$Upload,
-    [string]$Device = ""
-)
-
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
+
+$Upload = $false
+$Device = ""
+for ($i = 0; $i -lt $args.Count; $i++) {
+    switch ($args[$i]) {
+        { $_ -in '-upload', '--upload' } { $Upload = $true }
+        { $_ -in '-device', '--device' } { $i++; $Device = $args[$i] }
+    }
+}
 
 if ($Upload -and $Device -eq "") {
     $secrets = Get-Content "secrets.yaml" -ErrorAction Stop | Where-Object { $_ -match "^hems_ip:" }

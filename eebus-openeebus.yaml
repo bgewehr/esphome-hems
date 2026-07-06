@@ -1,4 +1,6 @@
 # Native OpenEEBUS SHIP/SPINE integration: CS (receives §14a limits from VNB) + EG (sends limits to StVE).
+# Requires: grid_provider_switch, manual_enwg_test (defined in including file)
+# Exports:  hems_cs, hems_eg1
 
 eebus_cs:
   id: hems_cs
@@ -8,50 +10,14 @@ eebus_cs:
   device_model: "esphome-hems"
 
   on_limit_active:
-    - then:
-        - lambda: |-
-            float _ev = id(power_limit_events).state;
-            id(power_limit_events).publish_state(std::isnan(_ev) ? 1.0f : _ev + 1.0f);
-            ESP_LOGW("eebus", "EEBUS LPC limit active: %.0f W", x);
-        - text_sensor.template.publish:
-            id: last_enwg_event
-            state: !lambda 'return std::string("Aktiviert (EEBus): ") + id(ha_time).now().strftime("%d.%m.%Y %H:%M:%S");'
-        - number.set:
-            id: ct1addon
-            value: 45.0
-        - number.set:
-            id: ct2addon
-            value: 45.0
-        - number.set:
-            id: ct3addon
-            value: 45.0
-        - light.turn_on:
-            id: status_led
-            effect: "Paragraph14a Warning Flash"
-        - switch.turn_on: relay_1
-        - lambda: |-
-            id(hems_eg1).set_limit(x);
+    - lambda: |-
+        ESP_LOGW("eebus", "EEBUS LPC limit active: %.0f W", x);
+        id(hems_eg1).set_limit(x);
 
   on_limit_cleared:
-    - then:
-        - logger.log: "EEBUS LPC limit cleared"
-        - text_sensor.template.publish:
-            id: last_enwg_event
-            state: !lambda 'return std::string("Beendet (EEBus): ") + id(ha_time).now().strftime("%d.%m.%Y %H:%M:%S");'
-        - number.set:
-            id: ct1addon
-            value: !lambda "return id(ladebegrenzung_addon);"
-        - number.set:
-            id: ct2addon
-            value: !lambda "return id(ladebegrenzung_addon);"
-        - number.set:
-            id: ct3addon
-            value: !lambda "return id(ladebegrenzung_addon);"
-        - lambda: |-
-            id(hems_eg1).clear_limit();
-        - light.turn_off:
-            id: status_led
-        - switch.turn_off: relay_1
+    - lambda: |-
+        ESP_LOGW("eebus", "EEBUS LPC limit cleared");
+        id(hems_eg1).clear_limit();
 
   on_pairing_request:
     - then:

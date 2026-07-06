@@ -11,7 +11,7 @@
 # Prüfe im Fronius Web-UI unter: Kommunikation → Modbus → Register-Map
 # SunSpec-Registerbasis kann bei unterschiedlicher FW abweichen.
 #
-# Batterie: BYD HVS/HVM, max. Entladeleistung: ${battery_max_discharge_w} W
+# Battery: BYD HVS/HVM — max discharge power configurable via ESPHome UI (id: battery_max_discharge_w, default 18176 W)
 # ══════════════════════════════════════════════════════════════════════════════
 
 http_request:
@@ -521,11 +521,9 @@ sensor:
     accuracy_decimals: 1
     update_interval: never
 
-  # ── Template: Batterie-Entladebegrenzung (%) ────────────────────────────────
-  # Neue Logik: deficit = Summe(aktivierte Verbraucher) - solar
-  # Wenn deficit > 0 → Batterie muss liefern → OutWRte = deficit / max * 100
-  # Wenn deficit <= 0 → Solar reicht → OutWRte = 0 (keine Entladung nötig)
-  # Nicht aktiv wenn keine Verbraucher eingeschaltet oder Batterie lädt
+  # ── Battery discharge limit (%) ─────────────────────────────────────────────
+  # deficit = sum(active consumers) - solar; if > 0 → battery must supply
+  # OutWRte = deficit / battery_max_discharge_w * 100, capped at 100%
   - platform: template
     name: "${device_name} Fronius Discharge Limit"
     id: fronius_discharge_limit
@@ -546,31 +544,30 @@ sensor:
       float hp = id(fronius_hp_power).state;
       if (std::isnan(hp)) hp = 0;
 
-      // Prüfe ob ein AUS-geschalteter Verbraucher >30W zieht
+      // Check if a disabled consumer is drawing >30 W (discharge limiting needed)
       bool limit_needed = false;
       if (!id(include_meter_house) && house > 30) limit_needed = true;
       if (!id(include_meter_ev) && ev > 30) limit_needed = true;
       if (!id(include_meter_hp) && hp > 30) limit_needed = true;
 
-      // Keine Begrenzung nötig oder Batterie lädt
+      // No limiting needed or battery is charging
       if (!limit_needed || id(fronius_battery_power).state < 0) {
         return 100.0f;
       }
 
-      // Summe der aktivierten Verbraucher
+      // Sum of active consumers
       float consumers = 0;
       if (id(include_meter_house)) consumers += house;
       if (id(include_meter_ev)) consumers += ev;
       if (id(include_meter_hp)) consumers += hp;
 
-      // deficit = Verbrauch(aktive) - Solar
       float deficit = consumers - solar;
 
       if (deficit <= 0) {
-        return 0.0f;  // Solar deckt alles → keine Entladung nötig
+        return 0.0f;  // solar covers all — no battery discharge needed
       }
 
-      float percentage = deficit / ${battery_max_discharge_w} * 100.0f;
+      float percentage = deficit / id(battery_max_discharge_w).state * 100.0f;
       return std::min(100.0f, percentage);
   # ── Wechselrichter: Batterie DC-Leistung ────────────────────────────────────
   # Register 40314 = DC Power Charge (U_WORD), SF at 40257
@@ -731,7 +728,24 @@ interval:
                     });
                   }
 
-# ── Schalter für Fronius Steuerung ────────────────────────────────────────────
+number:
+  - platform: template
+    name: "${device_name} Battery Max Discharge Power"
+    id: battery_max_discharge_w
+    icon: "mdi:battery-arrow-down"
+    web_server:
+      sorting_group_id: sg_fronius
+      sorting_weight: 20
+    entity_category: config
+    unit_of_measurement: "W"
+    min_value: 1000
+    max_value: 50000
+    step: 100
+    initial_value: 18176
+    restore_value: true
+    optimistic: true
+
+# ── Battery discharge control switches ────────────────────────────────────────
 switch:
   - platform: template
     name: "${device_name} Charge EV from Battery"
