@@ -806,46 +806,60 @@ bool EebusEgComponent::load_or_generate_cert_(
     uint8_t** cert_out, size_t* cl_out,
     uint8_t** key_out,  size_t* kl_out)
 {
-  mbedtls_pk_context       pk;
-  mbedtls_x509write_cert   crt;
-  mbedtls_entropy_context  entropy;
-  mbedtls_ctr_drbg_context drbg;
+  /* All large buffers and mbedtls contexts are heap-allocated to avoid overflowing
+   * the 8 KB task stack when this function is called from setup(). */
+  static const size_t KEY_BUF_SZ  = 2048;
+  static const size_t CERT_BUF_SZ = 4096;
 
-  mbedtls_pk_init(&pk);
-  mbedtls_x509write_crt_init(&crt);
-  mbedtls_entropy_init(&entropy);
-  mbedtls_ctr_drbg_init(&drbg);
+  auto* pk      = (mbedtls_pk_context*)      malloc(sizeof(mbedtls_pk_context));
+  auto* crt     = (mbedtls_x509write_cert*)  malloc(sizeof(mbedtls_x509write_cert));
+  auto* entropy = (mbedtls_entropy_context*) malloc(sizeof(mbedtls_entropy_context));
+  auto* drbg    = (mbedtls_ctr_drbg_context*)malloc(sizeof(mbedtls_ctr_drbg_context));
+  auto* key_buf = (uint8_t*)malloc(KEY_BUF_SZ);
+  auto* cert_buf= (uint8_t*)malloc(CERT_BUF_SZ);
+
+  if (!pk || !crt || !entropy || !drbg || !key_buf || !cert_buf) {
+    ESP_LOGE(TAG, "%s: OOM in cert generation", instance_name_.c_str());
+    free(pk); free(crt); free(entropy); free(drbg); free(key_buf); free(cert_buf);
+    return false;
+  }
+  memset(key_buf,  0, KEY_BUF_SZ);
+  memset(cert_buf, 0, CERT_BUF_SZ);
+
+  mbedtls_pk_init(pk);
+  mbedtls_x509write_crt_init(crt);
+  mbedtls_entropy_init(entropy);
+  mbedtls_ctr_drbg_init(drbg);
 
   bool ok = false;
   do {
     const char* pers = "eebus_wp_eg";
-    if (mbedtls_ctr_drbg_seed(&drbg, mbedtls_entropy_func, &entropy,
+    if (mbedtls_ctr_drbg_seed(drbg, mbedtls_entropy_func, entropy,
                                (const unsigned char*)pers, strlen(pers)) != 0) break;
-    if (mbedtls_pk_setup(&pk, mbedtls_pk_info_from_type(MBEDTLS_PK_ECKEY)) != 0) break;
+    if (mbedtls_pk_setup(pk, mbedtls_pk_info_from_type(MBEDTLS_PK_ECKEY)) != 0) break;
     /* ECC key generation takes 2-4 s on ESP32 — reset WDT before and after */
     esp_task_wdt_reset();
-    int keygen_ret = mbedtls_ecp_gen_key(MBEDTLS_ECP_DP_SECP256R1, mbedtls_pk_ec(pk),
-                                          mbedtls_ctr_drbg_random, &drbg);
+    int keygen_ret = mbedtls_ecp_gen_key(MBEDTLS_ECP_DP_SECP256R1, mbedtls_pk_ec(*pk),
+                                          mbedtls_ctr_drbg_random, drbg);
     esp_task_wdt_reset();
     if (keygen_ret != 0) break;
 
-    uint8_t key_buf[2048]; memset(key_buf, 0, sizeof(key_buf));
-    int key_len = mbedtls_pk_write_key_der(&pk, key_buf, sizeof(key_buf));
+    int key_len = mbedtls_pk_write_key_der(pk, key_buf, KEY_BUF_SZ);
     if (key_len <= 0) break;
-    uint8_t* key_p = key_buf + sizeof(key_buf) - key_len;
+    uint8_t* key_p = key_buf + KEY_BUF_SZ - key_len;
 
     char cn_buf[64];
     snprintf(cn_buf, sizeof(cn_buf), "CN=%s-%s,O=%s,C=DE",
              device_model_.c_str(), instance_name_.c_str(), device_brand_.c_str());
-    mbedtls_x509write_crt_set_subject_key(&crt, &pk);
-    mbedtls_x509write_crt_set_issuer_key(&crt, &pk);
-    if (mbedtls_x509write_crt_set_subject_name(&crt, cn_buf) != 0) break;
-    if (mbedtls_x509write_crt_set_issuer_name(&crt, cn_buf) != 0) break;
-    mbedtls_x509write_crt_set_version(&crt, MBEDTLS_X509_CRT_VERSION_3);
-    mbedtls_x509write_crt_set_md_alg(&crt, MBEDTLS_MD_SHA256);
+    mbedtls_x509write_crt_set_subject_key(crt, pk);
+    mbedtls_x509write_crt_set_issuer_key(crt, pk);
+    if (mbedtls_x509write_crt_set_subject_name(crt, cn_buf) != 0) break;
+    if (mbedtls_x509write_crt_set_issuer_name(crt, cn_buf) != 0) break;
+    mbedtls_x509write_crt_set_version(crt, MBEDTLS_X509_CRT_VERSION_3);
+    mbedtls_x509write_crt_set_md_alg(crt, MBEDTLS_MD_SHA256);
     uint8_t serial_bytes[] = {0x01};
-    mbedtls_x509write_crt_set_serial_raw(&crt, serial_bytes, sizeof(serial_bytes));
-    mbedtls_x509write_crt_set_validity(&crt, "20250101000000", "20350101000000");
+    mbedtls_x509write_crt_set_serial_raw(crt, serial_bytes, sizeof(serial_bytes));
+    mbedtls_x509write_crt_set_validity(crt, "20250101000000", "20350101000000");
 
     /* Compute SHA-1 of raw EC public key point for SubjectKeyIdentifier.
      * Use mbedtls_sha1_context directly — avoids the PSA/mbedtls_md path used by
@@ -853,7 +867,7 @@ bool EebusEgComponent::load_or_generate_cert_(
      * generate a cert without an SKI extension, causing TlsCertificateParseX509KeyPair
      * to reject it (openeebus CheckSki() requires the extension to be present). */
     uint8_t pk_pt[100]; uint8_t* pk_pt_p = pk_pt + sizeof(pk_pt);
-    int pk_pt_len = mbedtls_pk_write_pubkey(&pk_pt_p, pk_pt, &pk);
+    int pk_pt_len = mbedtls_pk_write_pubkey(&pk_pt_p, pk_pt, pk);
     if (pk_pt_len <= 0) break;
     uint8_t ski_hash[20];
     {
@@ -867,23 +881,22 @@ bool EebusEgComponent::load_or_generate_cert_(
     /* SubjectKeyIdentifier value: OCTET STRING (04 14) wrapping the 20-byte SHA-1 */
     uint8_t ski_ext[22] = {0x04, 0x14};
     memcpy(ski_ext + 2, ski_hash, 20);
-    if (mbedtls_x509write_crt_set_extension(&crt,
+    if (mbedtls_x509write_crt_set_extension(crt,
             MBEDTLS_OID_SUBJECT_KEY_IDENTIFIER,
             MBEDTLS_OID_SIZE(MBEDTLS_OID_SUBJECT_KEY_IDENTIFIER),
             0, ski_ext, sizeof(ski_ext)) != 0) break;
     /* AuthorityKeyIdentifier for self-signed cert: SEQUENCE { [0] IMPLICIT keyIdentifier } */
     uint8_t aki_ext[24] = {0x30, 0x16, 0x80, 0x14};
     memcpy(aki_ext + 4, ski_hash, 20);
-    if (mbedtls_x509write_crt_set_extension(&crt,
+    if (mbedtls_x509write_crt_set_extension(crt,
             MBEDTLS_OID_AUTHORITY_KEY_IDENTIFIER,
             MBEDTLS_OID_SIZE(MBEDTLS_OID_AUTHORITY_KEY_IDENTIFIER),
             0, aki_ext, sizeof(aki_ext)) != 0) break;
 
-    uint8_t cert_buf[4096];
-    int cert_len = mbedtls_x509write_crt_der(&crt, cert_buf, sizeof(cert_buf),
-                                              mbedtls_ctr_drbg_random, &drbg);
+    int cert_len = mbedtls_x509write_crt_der(crt, cert_buf, CERT_BUF_SZ,
+                                              mbedtls_ctr_drbg_random, drbg);
     if (cert_len <= 0) break;
-    uint8_t* cert_p = cert_buf + sizeof(cert_buf) - cert_len;
+    uint8_t* cert_p = cert_buf + CERT_BUF_SZ - cert_len;
 
     *cert_out = (uint8_t*)malloc((size_t)cert_len);
     *key_out  = (uint8_t*)malloc((size_t)key_len);
@@ -897,10 +910,11 @@ bool EebusEgComponent::load_or_generate_cert_(
     ok = true;
   } while (false);
 
-  mbedtls_pk_free(&pk);
-  mbedtls_x509write_crt_free(&crt);
-  mbedtls_entropy_free(&entropy);
-  mbedtls_ctr_drbg_free(&drbg);
+  mbedtls_pk_free(pk);
+  mbedtls_x509write_crt_free(crt);
+  mbedtls_entropy_free(entropy);
+  mbedtls_ctr_drbg_free(drbg);
+  free(pk); free(crt); free(entropy); free(drbg); free(key_buf); free(cert_buf);
   return ok;
 }
 
