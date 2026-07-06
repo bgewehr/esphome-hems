@@ -14,6 +14,7 @@
 
 #include <mbedtls/sha1.h>
 #include <mbedtls/oid.h>
+#include <esp_task_wdt.h>
 
 #include "esphome/core/log.h"
 
@@ -835,9 +836,13 @@ bool EebusEgComponent::load_or_generate_cert_(
     const char* pers = "eebus_wp_eg";
     if (mbedtls_ctr_drbg_seed(&drbg, mbedtls_entropy_func, &entropy,
                                (const unsigned char*)pers, strlen(pers)) != 0) break;
-    if (mbedtls_pk_setup(&pk, mbedtls_pk_info_from_type(MBEDTLS_PK_ECKEY)) != 0 ||
-        mbedtls_ecp_gen_key(MBEDTLS_ECP_DP_SECP256R1, mbedtls_pk_ec(pk),
-                            mbedtls_ctr_drbg_random, &drbg) != 0) break;
+    if (mbedtls_pk_setup(&pk, mbedtls_pk_info_from_type(MBEDTLS_PK_ECKEY)) != 0) break;
+    /* ECC key generation takes 2-4 s on ESP32 — reset WDT before and after */
+    esp_task_wdt_reset();
+    int keygen_ret = mbedtls_ecp_gen_key(MBEDTLS_ECP_DP_SECP256R1, mbedtls_pk_ec(pk),
+                                          mbedtls_ctr_drbg_random, &drbg);
+    esp_task_wdt_reset();
+    if (keygen_ret != 0) break;
 
     uint8_t key_buf[2048]; memset(key_buf, 0, sizeof(key_buf));
     int key_len = mbedtls_pk_write_key_der(&pk, key_buf, sizeof(key_buf));
