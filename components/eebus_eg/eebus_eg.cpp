@@ -9,10 +9,10 @@
 #include <cstdarg>
 #include <cstring>
 #include <ctime>
-#include <set>
 #include <vector>
 
 #include <mbedtls/sha1.h>
+#include <mbedtls/oid.h>
 
 #include "esphome/core/log.h"
 
@@ -185,9 +185,6 @@ namespace eebus_eg {
 static const char* NVS_KEY_CERT  = "cert_der";
 static const char* NVS_KEY_KEY   = "key_der";
 static const char* NVS_KEY_SKI   = "remote_ski";
-/* Legacy NVS namespace used before multi-instance support — kept for migration only */
-static const char* NVS_NS_LEGACY = "eebus_wp";
-
 /* Outbound heartbeat timeout declared to the remote CS device in the DeviceDiagnosis heartbeat
  * data (SPINE spec standard for HEMS). heartbeat_manager sends every
  * timeout*3/4 = 45 s, well within the 60 s window. */
@@ -196,10 +193,6 @@ static const uint32_t kHeartbeatTimeoutSeconds = 60;
 /* Inbound alarm: how long without a heartbeat from the remote CS device before we warn.
  * EEBus heartbeats are sent every ~40 s; 3× that gives a safe margin. */
 static const uint32_t kInboundHeartbeatAlarmMs = 120000u;
-
-/* Per-boot SKI registry — populated by start_eebus_service_() (TLS) and read by Check 1 in
- * setup() (mbedtls). Detects duplicate SKIs regardless of whether DER cert bytes differ. */
-static std::set<std::string> s_claimed_eg_skis;
 
 /* Pairing window: how long the explicit pairing mode stays open */
 static const uint32_t kPairingWindowMs = 300000;  /* 5 minutes */
@@ -330,44 +323,11 @@ static const ServiceReaderInterface kServiceReaderMethods = {
 void EebusEgComponent::setup() {
   ESP_LOGI(TAG, "Setting up EEBus %s", instance_name_.c_str());
 
-  /* Derive per-instance NVS namespace from SHIP port (e.g. "eg4713").
-   * Keeps instances isolated when MULTI_CONF is used.
-   * Auto-migrates cert+SKI from the legacy "eebus_wp" namespace on first boot. */
+  /* Per-instance NVS namespace derived from SHIP port (e.g. "eg4713"). */
   {
     char ns_buf[16];
     snprintf(ns_buf, sizeof(ns_buf), "eg%u", (unsigned)ship_port_);
     nvs_ns_ = ns_buf;
-
-    uint8_t* mc = nullptr; size_t mcl = 0;
-    uint8_t* mk = nullptr; size_t mkl = 0;
-    if (!load_cert_nvs_(&mc, &mcl, &mk, &mkl)) {
-      /* No cert in port-based namespace — try legacy "eebus_wp" */
-      std::string new_ns = nvs_ns_;
-      nvs_ns_ = NVS_NS_LEGACY;
-      if (load_cert_nvs_(&mc, &mcl, &mk, &mkl)) {
-        std::string old_ski = load_remote_ski_nvs_();
-        nvs_ns_ = new_ns;
-        store_cert_nvs_(mc, mcl, mk, mkl);
-        if (!old_ski.empty()) save_remote_ski_nvs_(old_ski.c_str());
-        ESP_LOGI(TAG, "Migrated NVS cert+SKI from '%s' to '%s'", NVS_NS_LEGACY, nvs_ns_.c_str());
-        free(mc); free(mk); mc = nullptr; mk = nullptr; mcl = mkl = 0;
-        /* Erase legacy cert so no subsequent instance inherits the same certificate and SKI. */
-        {
-          nvs_handle_t h_leg;
-          if (nvs_open(NVS_NS_LEGACY, NVS_READWRITE, &h_leg) == ESP_OK) {
-            nvs_erase_key(h_leg, NVS_KEY_CERT);
-            nvs_erase_key(h_leg, NVS_KEY_KEY);
-            nvs_erase_key(h_leg, NVS_KEY_SKI);
-            nvs_commit(h_leg);
-            nvs_close(h_leg);
-            ESP_LOGI(TAG, "Erased legacy cert from '%s' after migration", NVS_NS_LEGACY);
-          }
-        }
-      } else {
-        nvs_ns_ = new_ns;
-      }
-    }
-    if (mc) { free(mc); free(mk); }
   }
 
   /* Load paired remote CS device SKI from NVS if not set in YAML secrets */
@@ -379,7 +339,7 @@ void EebusEgComponent::setup() {
         save_remote_ski_nvs_("");
         remote_ski_.clear();
       } else {
-        ESP_LOGW(TAG, "Loaded paired remote SKI from NVS: %s", remote_ski_.c_str());
+        ESP_LOGW(TAG, "%s: loaded paired remote SKI from NVS: %s", instance_name_.c_str(), remote_ski_.c_str());
       }
     }
   }
@@ -388,113 +348,34 @@ void EebusEgComponent::setup() {
   uint8_t* key  = nullptr; size_t kl = 0;
 
   if (!load_cert_nvs_(&cert, &cl, &key, &kl)) {
-    ESP_LOGI(TAG, "%s: generating certificate...", instance_name_.c_str());
+    ESP_LOGI(TAG, "%s: no cert in NVS — generating...", instance_name_.c_str());
     if (!load_or_generate_cert_() || !load_cert_nvs_(&cert, &cl, &key, &kl)) {
       ESP_LOGE(TAG, "%s: certificate setup failed", instance_name_.c_str());
       mark_failed(); return;
     }
   }
 
-  /* Detect shared cert from a bad legacy migration — two complementary checks:
-   *
-   * Check 1 (per-boot SKI set): if another EG instance already registered this SKI in the
-   * current boot via start_eebus_service_(), the cert is shared.
-   *
-   * Check 2 (NVS byte comparison + claimed_by marker): if the cert bytes match the legacy
-   * 'eebus_wp' cert AND a different port has already stamped itself as the primary migrator,
-   * this instance is a secondary that copied the cert by mistake.
-   *
-   * Both checks clear NVS and regenerate a unique cert. */
-  bool is_secondary_migrator = false;
-
-  /* Check 1: compute own SKI via mbedtls (no TLS service needed) and compare against
-   * s_claimed_eg_skis populated by start_eebus_service_() of already-started EG instances.
-   * Catches duplicate SKIs regardless of whether the DER cert bytes are identical. */
-  {
-    mbedtls_x509_crt crt_tmp;
-    mbedtls_x509_crt_init(&crt_tmp);
-    bool ski_ok = false;
-    if (mbedtls_x509_crt_parse_der(&crt_tmp, cert, cl) == 0) {
-      uint8_t pk_buf[100]; uint8_t* pk_p = pk_buf + sizeof(pk_buf);
-      int pk_len = mbedtls_pk_write_pubkey(&pk_p, pk_buf, &crt_tmp.pk);
-      if (pk_len > 0) {
-        uint8_t sha[20];
-        mbedtls_sha1_context sha1;
-        mbedtls_sha1_init(&sha1);
-        mbedtls_sha1_starts(&sha1);
-        mbedtls_sha1_update(&sha1, pk_p, (size_t)pk_len);
-        mbedtls_sha1_finish(&sha1, sha);
-        mbedtls_sha1_free(&sha1);
-        char ski_hex[41];
-        for (int i = 0; i < 20; i++) snprintf(ski_hex + 2 * i, 3, "%02x", sha[i]);
-        ski_hex[40] = '\0';
-        ski_ok = true;
-        if (s_claimed_eg_skis.count(ski_hex)) {
-          is_secondary_migrator = true;
-          ESP_LOGW(TAG, "%s: SKI %s already claimed by another EG — regenerating cert",
-                   instance_name_.c_str(), ski_hex);
-        } else {
-          s_claimed_eg_skis.insert(ski_hex);
-          ESP_LOGD(TAG, "%s: SKI %s claimed (boot set)", instance_name_.c_str(), ski_hex);
-        }
-      }
-    }
-    mbedtls_x509_crt_free(&crt_tmp);
-    if (!ski_ok)
-      ESP_LOGE(TAG, "%s: mbedtls cert parse for SKI check failed", instance_name_.c_str());
-  }
-
-  /* Check 2: NVS byte comparison against 'eebus_wp' cert + claimed_by port marker.
-   * Handles the case where Check 1 couldn't parse the SKI or was not yet populated. */
-  if (!is_secondary_migrator) {
-    std::string save_ns = nvs_ns_;
-    nvs_ns_ = NVS_NS_LEGACY;
-    uint8_t* leg_c = nullptr; size_t leg_cl = 0;
-    uint8_t* leg_k = nullptr; size_t leg_kl = 0;
-    bool has_legacy = load_cert_nvs_(&leg_c, &leg_cl, &leg_k, &leg_kl);
-    nvs_ns_ = save_ns;
-    if (has_legacy && leg_cl == cl && memcmp(leg_c, cert, cl) == 0) {
-      nvs_handle_t h_cbp;
-      if (nvs_open(NVS_NS_LEGACY, NVS_READWRITE, &h_cbp) == ESP_OK) {
-        uint32_t claimed_by = 0;
-        esp_err_t ce = nvs_get_u32(h_cbp, "claimed_by", &claimed_by);
-        if (ce == ESP_ERR_NVS_NOT_FOUND || claimed_by == 0) {
-          nvs_set_u32(h_cbp, "claimed_by", (uint32_t)ship_port_);
-          nvs_commit(h_cbp);
-          ESP_LOGI(TAG, "%s: stamped legacy cert as owned by port %u",
-                   instance_name_.c_str(), (unsigned)ship_port_);
-        } else if (claimed_by != (uint32_t)ship_port_) {
-          is_secondary_migrator = true;
-          ESP_LOGW(TAG, "%s: legacy cert owned by port %u (NVS marker) — regenerating",
-                   instance_name_.c_str(), (unsigned)claimed_by);
-        }
-        nvs_close(h_cbp);
-      }
-    }
-    if (leg_c) { free(leg_c); free(leg_k); }
-  }
-
-  if (is_secondary_migrator) {
+  if (!start_eebus_service_(cert, cl, key, kl)) {
+    /* Cert may be invalid (e.g. generated by older firmware without proper SKI extension).
+     * Erase it and regenerate once using the corrected cert generation. */
+    ESP_LOGW(TAG, "%s: cert invalid — erasing and regenerating", instance_name_.c_str());
     free(cert); free(key); cert = nullptr; key = nullptr; cl = kl = 0;
-    nvs_handle_t h_dup;
-    if (nvs_open(nvs_ns_.c_str(), NVS_READWRITE, &h_dup) == ESP_OK) {
-      nvs_erase_key(h_dup, NVS_KEY_CERT);
-      nvs_erase_key(h_dup, NVS_KEY_KEY);
-      nvs_erase_key(h_dup, NVS_KEY_SKI);
-      nvs_commit(h_dup);
-      nvs_close(h_dup);
+    nvs_handle_t h_erase;
+    if (nvs_open(nvs_ns_.c_str(), NVS_READWRITE, &h_erase) == ESP_OK) {
+      nvs_erase_key(h_erase, NVS_KEY_CERT);
+      nvs_erase_key(h_erase, NVS_KEY_KEY);
+      nvs_commit(h_erase);
+      nvs_close(h_erase);
     }
-    remote_ski_.clear();
     if (!load_or_generate_cert_() || !load_cert_nvs_(&cert, &cl, &key, &kl)) {
-      ESP_LOGE(TAG, "%s: certificate regeneration failed", instance_name_.c_str());
+      ESP_LOGE(TAG, "%s: cert regeneration failed", instance_name_.c_str());
       mark_failed(); return;
     }
-  }
-
-  if (!start_eebus_service_(cert, cl, key, kl)) {
-    ESP_LOGE(TAG, "%s: failed to start EEBus service", instance_name_.c_str());
-    free(cert); free(key);
-    mark_failed(); return;
+    if (!start_eebus_service_(cert, cl, key, kl)) {
+      ESP_LOGE(TAG, "%s: service start failed after cert regeneration", instance_name_.c_str());
+      free(cert); free(key);
+      mark_failed(); return;
+    }
   }
 
   free(cert); free(key);
@@ -914,19 +795,50 @@ bool EebusEgComponent::load_or_generate_cert_() {
     if (key_len <= 0) break;
     uint8_t* key_p = key_buf + sizeof(key_buf) - key_len;
 
-    std::string subj = "CN=" + device_model_ + "-EG1,O=" + device_brand_ + ",C=DE";
+    char cn_buf[64];
+    snprintf(cn_buf, sizeof(cn_buf), "CN=%s-%s,O=%s,C=DE",
+             device_model_.c_str(), instance_name_.c_str(), device_brand_.c_str());
     mbedtls_x509write_crt_set_subject_key(&crt, &pk);
     mbedtls_x509write_crt_set_issuer_key(&crt, &pk);
-    mbedtls_x509write_crt_set_subject_name(&crt, subj.c_str());
-    mbedtls_x509write_crt_set_issuer_name(&crt, subj.c_str());
+    if (mbedtls_x509write_crt_set_subject_name(&crt, cn_buf) != 0) break;
+    if (mbedtls_x509write_crt_set_issuer_name(&crt, cn_buf) != 0) break;
     mbedtls_x509write_crt_set_version(&crt, MBEDTLS_X509_CRT_VERSION_3);
     mbedtls_x509write_crt_set_md_alg(&crt, MBEDTLS_MD_SHA256);
-    // Use non-deprecated serial API (mbedTLS 3.x / ESP-IDF 5.x)
     uint8_t serial_bytes[] = {0x01};
     mbedtls_x509write_crt_set_serial_raw(&crt, serial_bytes, sizeof(serial_bytes));
     mbedtls_x509write_crt_set_validity(&crt, "20250101000000", "20350101000000");
-    mbedtls_x509write_crt_set_subject_key_identifier(&crt);
-    mbedtls_x509write_crt_set_authority_key_identifier(&crt);
+
+    /* Compute SHA-1 of raw EC public key point for SubjectKeyIdentifier.
+     * Use mbedtls_sha1_context directly — avoids the PSA/mbedtls_md path used by
+     * mbedtls_x509write_crt_set_subject_key_identifier which can silently fail and
+     * generate a cert without an SKI extension, causing TlsCertificateParseX509KeyPair
+     * to reject it (openeebus CheckSki() requires the extension to be present). */
+    uint8_t pk_pt[100]; uint8_t* pk_pt_p = pk_pt + sizeof(pk_pt);
+    int pk_pt_len = mbedtls_pk_write_pubkey(&pk_pt_p, pk_pt, &pk);
+    if (pk_pt_len <= 0) break;
+    uint8_t ski_hash[20];
+    {
+      mbedtls_sha1_context sha1;
+      mbedtls_sha1_init(&sha1);
+      mbedtls_sha1_starts(&sha1);
+      mbedtls_sha1_update(&sha1, pk_pt_p, (size_t)pk_pt_len);
+      mbedtls_sha1_finish(&sha1, ski_hash);
+      mbedtls_sha1_free(&sha1);
+    }
+    /* SubjectKeyIdentifier value: OCTET STRING (04 14) wrapping the 20-byte SHA-1 */
+    uint8_t ski_ext[22] = {0x04, 0x14};
+    memcpy(ski_ext + 2, ski_hash, 20);
+    if (mbedtls_x509write_crt_set_extension(&crt,
+            MBEDTLS_OID_SUBJECT_KEY_IDENTIFIER,
+            MBEDTLS_OID_SIZE(MBEDTLS_OID_SUBJECT_KEY_IDENTIFIER),
+            0, ski_ext, sizeof(ski_ext)) != 0) break;
+    /* AuthorityKeyIdentifier for self-signed cert: SEQUENCE { [0] IMPLICIT keyIdentifier } */
+    uint8_t aki_ext[24] = {0x30, 0x16, 0x80, 0x14};
+    memcpy(aki_ext + 4, ski_hash, 20);
+    if (mbedtls_x509write_crt_set_extension(&crt,
+            MBEDTLS_OID_AUTHORITY_KEY_IDENTIFIER,
+            MBEDTLS_OID_SIZE(MBEDTLS_OID_AUTHORITY_KEY_IDENTIFIER),
+            0, aki_ext, sizeof(aki_ext)) != 0) break;
 
     uint8_t cert_buf[4096];
     int cert_len = mbedtls_x509write_crt_der(&crt, cert_buf, sizeof(cert_buf),
@@ -959,9 +871,9 @@ bool EebusEgComponent::start_eebus_service_(
   const char* local_ski = TLS_CERTIFICATE_GET_SKI(tls_cert);
   if (local_ski) {
     local_ski_ = local_ski;
-    s_claimed_eg_skis.insert(std::string(local_ski));  /* authoritative TLS-based registration */
   } else {
-    /* Fallback: compute SKI from cert bytes via mbedtls when TLS macro returns null. */
+    /* Fallback: TLS_CERTIFICATE_GET_SKI returned null (unusual for correctly generated certs).
+     * Compute SKI directly from the cert's public key via mbedtls. */
     mbedtls_x509_crt crt_fb;
     mbedtls_x509_crt_init(&crt_fb);
     if (mbedtls_x509_crt_parse_der(&crt_fb, cert_der, cert_len) == 0) {
@@ -979,8 +891,7 @@ bool EebusEgComponent::start_eebus_service_(
         for (int i = 0; i < 20; i++) snprintf(ski_hex + 2 * i, 3, "%02x", sha[i]);
         ski_hex[40] = '\0';
         local_ski_ = ski_hex;
-        s_claimed_eg_skis.insert(local_ski_);
-        ESP_LOGW(TAG, "%s: TLS_CERTIFICATE_GET_SKI null — mbedtls SKI: %s",
+        ESP_LOGW(TAG, "%s: TLS_CERTIFICATE_GET_SKI null — mbedtls fallback SKI: %s",
                  instance_name_.c_str(), ski_hex);
       }
     }
