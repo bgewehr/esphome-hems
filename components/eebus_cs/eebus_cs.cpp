@@ -157,9 +157,11 @@ void EebusCsComponent::setup() {
   }
 
   free(cert); free(key);
-  update_pairing_state_(remote_ski_.empty()
-      ? "Kein Pairing — Pairing-Modus manuell aktivieren"
-      : "Inaktiv");
+  if (!remote_ski_.empty()) {
+    EEBUS_SERVICE_START(service_);
+    service_started_ = true;
+  }
+  update_pairing_state_("Inaktiv");
   ESP_LOGI(TAG, "EEBus LPC CS ready — local SKI: %s", local_ski_.c_str());
 }
 
@@ -208,7 +210,7 @@ void EebusCsComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "EEBus LPC Component (CS role, §14a EnWG):");
   ESP_LOGCONFIG(TAG, "  SHIP Port:     %d",   ship_port_);
   ESP_LOGCONFIG(TAG, "  Local SKI:     %s",   local_ski_.c_str());
-  ESP_LOGCONFIG(TAG, "  Remote SKI:    %s",   remote_ski_.empty() ? "(pairing mode)" : remote_ski_.c_str());
+  ESP_LOGCONFIG(TAG, "  Remote SKI:    %s",   remote_ski_.empty() ? "(keine)" : remote_ski_.c_str());
   ESP_LOGCONFIG(TAG, "  Paired:        %s",   is_paired() ? "yes" : "no");
   ESP_LOGCONFIG(TAG, "  Failsafe:      %.0f W", failsafe_limit_w_);
   ESP_LOGCONFIG(TAG, "  Device:        %s / %s / %s",
@@ -321,6 +323,11 @@ void EebusCsComponent::enter_pairing_mode() {
   ESP_LOGW(TAG, "Pairing mode activated (window: %u s)", kPairingWindowMs / 1000);
   pairing_mode_active_ = true;
   pairing_deadline_ms_ = millis() + kPairingWindowMs;
+  if (!service_started_ && service_) {
+    service_started_ = true;
+    EEBUS_SERVICE_START(service_);
+    ESP_LOGI(TAG, "CS service started on pairing mode activation");
+  }
   if (service_) EEBUS_SERVICE_SET_PAIRING_POSSIBLE(service_, true);
   update_pairing_state_("Pairing-Modus aktiv — warte auf CS-Verbindung...");
 }
@@ -368,7 +375,7 @@ void EebusCsComponent::forget_pairing(const std::string& ski) {
     current_limit_w_ = 0.0f;
     for (auto* t : limit_cleared_triggers_) t->trigger();
   }
-  enter_pairing_mode();
+  update_pairing_state_("Inaktiv");
 }
 
 /* =========================================================================
@@ -599,9 +606,6 @@ bool EebusCsComponent::start_eebus_service_(
   DEVICE_LOCAL_ADD_ENTITY(device_local, local_entity_);
 
   EventSubscribe(kEventHandlerLevelApplication, lpc_spine_event_handler, this);
-
-  EEBUS_SERVICE_START(service_);
-  // EEBUS_SERVICE_START returns void in this version of openeebus
 
   last_heartbeat_ms_ = millis();
   return true;

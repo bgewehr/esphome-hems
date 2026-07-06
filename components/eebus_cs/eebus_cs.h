@@ -186,6 +186,7 @@ class EebusCsComponent : public Component {
   uint32_t    last_heartbeat_ms_   {0};
   bool        pairing_mode_active_ {false}; /* true only while explicit pairing window is open */
   uint32_t    pairing_deadline_ms_ {0};     /* absolute millis() deadline for pairing window */
+  bool        service_started_     {false}; /* EEBUS_SERVICE_START has been called */
 
   /* openeebus handles */
   EebusServiceObject*  service_       {nullptr};
