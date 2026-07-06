@@ -37,12 +37,15 @@ static void lpc_spine_event_handler(const EventPayload* payload, void* ctx) {
   if (payload->event_type != kEventTypeUseCaseChange) return;
   const UseCaseFilterType* f = payload->use_case_filter;
   if (!f) return;
+  // Copy to locals immediately — same stack-reuse hazard as in EG spine handler.
+  const int actor      = (int)f->actor;
+  const int uc_name_id = (int)f->use_case_name_id;
   if (payload->change_type != kElementChangeAdd) return;
   /* Only track use cases from the paired remote EG — reject when no EG is
    * paired yet (empty) or when the event comes from a different device */
   const std::string& paired = self->paired_remote_ski();
   if (paired.empty() || paired != ski) return;
-  self->on_remote_use_case(f->actor, f->use_case_name_id, nullptr, nullptr);
+  self->on_remote_use_case(actor, uc_name_id, nullptr, nullptr);
 }
 
 namespace esphome {
@@ -192,7 +195,7 @@ void EebusCsComponent::loop() {
   }
 
   /* Pairing window timeout */
-  if (pairing_mode_active_ && now >= pairing_deadline_ms_) {
+  if (pairing_mode_active_ && (int32_t)(now - pairing_deadline_ms_) >= 0) {
     ESP_LOGW(TAG, "CS pairing window expired");
     pairing_mode_active_ = false;
     pairing_deadline_ms_ = 0;
@@ -229,6 +232,7 @@ void EebusCsComponent::on_remote_ski_connected(const char* ski) {
     /* Known stored SKI — register for persistent auto-connect */
     ESP_LOGI(TAG, "CS known SKI — auto-trusting");
     EEBUS_SERVICE_REGISTER_REMOTE_SKI(service_, ski, true);
+    pending_remote_ski_.clear();
     update_pairing_state_((heartbeat_lost_ ? "Verbunden (Failsafe): " : "Verbunden: ") + std::string(ski));
   } else if (paired_remote_ski_ == ski) {
     /* SHIP DataExchange already completed via is_waiting_for_trust_allowed.
@@ -240,8 +244,9 @@ void EebusCsComponent::on_remote_ski_connected(const char* ski) {
     remote_ski_ = ski;
     save_trusted_ski_(remote_ski_);
     EEBUS_SERVICE_REGISTER_REMOTE_SKI(service_, ski, true);
+    pending_remote_ski_.clear();
     update_pairing_state_((heartbeat_lost_ ? "Verbunden (Failsafe): " : "Verbunden: ") + std::string(ski));
-  } else if (pairing_mode_active_ && millis() < pairing_deadline_ms_) {
+  } else if (pairing_mode_active_ && (int32_t)(millis() - pairing_deadline_ms_) < 0) {
     /* Unknown SKI, explicit pairing window still open — let the user approve */
     ESP_LOGW(TAG, "CS unknown SKI wants to pair: %s", ski);
     update_pairing_state_("Pairing-Anfrage: " + std::string(ski));
@@ -288,12 +293,12 @@ void EebusCsComponent::on_ship_state_update(const char* ski, SmeState state) {
     }
     if (paired_remote_ski_ != ski) {
       paired_remote_ski_ = ski;
-      pending_remote_ski_.clear();
       pairing_mode_active_ = false;
       pairing_deadline_ms_ = 0;
       if (service_) EEBUS_SERVICE_SET_PAIRING_POSSIBLE(service_, false);
       update_pairing_state_("Gepairt & verbunden: " + std::string(ski));
     }
+    pending_remote_ski_.clear();  // always clear on DataExchange, even on reconnect
     connected_ = true;
     /* Reset heartbeat timer on every DataExchange — gives the EG a fresh 60 s
      * window before the watchdog fires, even if the device ran for a long time
@@ -312,7 +317,7 @@ void EebusCsComponent::on_ship_id_update(const char* ski, const char* ship_id) {
 }
 
 bool EebusCsComponent::is_waiting_for_trust_allowed(const char* /*ski*/) {
-  return pairing_mode_active_ && millis() < pairing_deadline_ms_;
+  return pairing_mode_active_ && (int32_t)(millis() - pairing_deadline_ms_) < 0;
 }
 
 /* =========================================================================
@@ -359,10 +364,14 @@ void EebusCsComponent::reject_pairing() {
 }
 
 void EebusCsComponent::forget_pairing(const std::string& ski) {
-  if (service_) EEBUS_SERVICE_UNREGISTER_REMOTE_SKI(service_, ski.c_str());
+  if (service_) {
+    EEBUS_SERVICE_UNREGISTER_REMOTE_SKI(service_, ski.c_str());
+    EEBUS_SERVICE_CANCEL_PAIRING_WITH_SKI(service_, ski.c_str());
+  }
   if (paired_remote_ski_ == ski)  paired_remote_ski_.clear();
   if (pending_remote_ski_ == ski) pending_remote_ski_.clear();
   if (remote_ski_ == ski)         remote_ski_.clear();
+  connected_ = false;
   nvs_handle_t h;
   if (nvs_open(NVS_NS, NVS_READWRITE, &h) == ESP_OK) {
     nvs_erase_key(h, NVS_KEY_TSKI); nvs_commit(h); nvs_close(h);
@@ -631,7 +640,10 @@ void EebusCsComponent::on_remote_use_case(int actor, int uc_name_id, const char*
   }
   char buf[24];
   snprintf(buf, sizeof(buf), " | %s/%s", a, uc);
-  remote_uc_seen_ += buf;
+  if (remote_uc_seen_.find(buf) == std::string::npos) {
+    remote_uc_seen_ += buf;
+    ESP_LOGI(TAG, "CS use case announced by remote EG: %s", buf + 3);  // skip " | "
+  }
 }
 
 void EebusCsComponent::update_pairing_state_(const std::string& state) {

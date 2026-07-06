@@ -137,13 +137,13 @@ static void spine_event_handler(const EventPayload* payload, void* ctx) {
       const char* uc_str    = spine_uc_name(uc_id);
       const char* actor_str = spine_actor_name(actor_id);
       ESP_LOGW("eebus", "%s SPINE use-case %s from %s: actor=%d(%s) useCase=%d(%s)",
-               self ? self->instance_name() : "?", change, ski, actor_id, actor_str, uc_id, uc_str);
-      if (self) {
+               self->instance_name(), change, ski, actor_id, actor_str, uc_id, uc_str);
+      {
         const std::string& eg_ski = self->remote_ski();
         if (!eg_ski.empty() && eg_ski == ski) {
           bool rem = (payload->change_type == kElementChangeRemove);
-          /* Treat ADD and UPDATE both as "use case present" — WP may re-announce
-           * via UPDATE rather than ADD after a reconnect. */
+          // Treat ADD and UPDATE both as "use case present" — WP may re-announce
+          // via UPDATE rather than ADD after a reconnect.
           bool add = !rem;
           self->on_remote_use_case(actor_id, uc_id, uc_str, actor_str, add);
         }
@@ -152,11 +152,11 @@ static void spine_event_handler(const EventPayload* payload, void* ctx) {
     }
     case kEventTypeEntityChange:
       if (payload->change_type == kElementChangeAdd)
-        ESP_LOGI("eebus", "%s SPINE entity added from %s", self ? self->instance_name() : "?", ski);
+        ESP_LOGI("eebus", "%s SPINE entity added from %s", self->instance_name(), ski);
       break;
     case kEventTypeDeviceChange:
       if (payload->change_type == kElementChangeAdd)
-        ESP_LOGI("eebus", "%s SPINE device discovered: ski=%s", self ? self->instance_name() : "?", ski);
+        ESP_LOGI("eebus", "%s SPINE device discovered: ski=%s", self->instance_name(), ski);
       break;
     case kEventTypeDataChange: {
       /* Passive observer — log SmartEnergyManagementPs (OSSHPCF) data at WARN
@@ -171,13 +171,13 @@ static void spine_event_handler(const EventPayload* payload, void* ctx) {
       for (const auto& e : kSemp) {
         if (payload->function_type == e.fn) {
           ESP_LOGW("eebus_eg", "%s OSSHPCF msg from %s: %s (fn=%d) — data=%s",
-                   self ? self->instance_name() : "?", ski, e.name, (int)payload->function_type,
+                   self->instance_name(), ski, e.name, (int)payload->function_type,
                    payload->function_data ? "present" : "null");
           break;
         }
       }
       ESP_LOGD("eebus_eg", "%s SPINE data change from %s: fn=%d",
-               self ? self->instance_name() : "?", ski, (int)payload->function_type);
+               self->instance_name(), ski, (int)payload->function_type);
       break;
     }
     default: break;
@@ -313,7 +313,8 @@ static void SR_OnShipStateUpdate(
      * going through IsWaitingForTrustAllowed.  Only accept if this instance already
      * has this device paired, OR if pairing mode is currently active. */
     bool known   = !r->self->remote_ski_.empty() && r->self->remote_ski_ == ski;
-    bool pairing = r->self->pairing_mode_active_ && millis() < r->self->pairing_deadline_ms_;
+    bool pairing = r->self->pairing_mode_active_ &&
+                   (int32_t)(millis() - r->self->pairing_deadline_ms_) < 0;
     if (!known && !pairing) {
       r->self->reject_reconnect(ski);
       return;
@@ -328,7 +329,7 @@ static void SR_OnShipStateUpdate(
 static bool SR_IsWaitingForTrustAllowed(const ServiceReaderObject* o, const char* ski) {
   if (!ski || strcmp(ski, "unknown") == 0 || strlen(ski) < 20) return false;
   const auto* self = reinterpret_cast<const EgServiceReader*>(o)->self;
-  return self->pairing_mode_active_ && millis() < self->pairing_deadline_ms_;
+  return self->pairing_mode_active_ && (int32_t)(millis() - self->pairing_deadline_ms_) < 0;
 }
 
 static const ServiceReaderInterface kServiceReaderMethods = {
@@ -471,8 +472,10 @@ void EebusEgComponent::loop() {
     heartbeat_alarm_ = false;
   }
 
+  uint32_t now = millis();
+
   /* Heartbeat test: resume heartbeat and re-enable reconnect after test period */
-  if (heartbeat_test_until_ms_ != 0 && millis() >= heartbeat_test_until_ms_) {
+  if (heartbeat_test_until_ms_ != 0 && (int32_t)(now - heartbeat_test_until_ms_) >= 0) {
     heartbeat_test_until_ms_ = 0;
     EgLpcStartHeartbeat(eg_lpc_);
     if (service_ && !remote_ski_.empty()) {
@@ -484,8 +487,7 @@ void EebusEgComponent::loop() {
   }
 
   /* Pairing window timeout */
-  uint32_t now = millis();
-  if (pairing_mode_active_ && now >= pairing_deadline_ms_) {
+  if (pairing_mode_active_ && (int32_t)(now - pairing_deadline_ms_) >= 0) {
     ESP_LOGW(TAG, "%s: pairing window expired", instance_name_.c_str());
     pairing_mode_active_ = false;
     pairing_deadline_ms_ = 0;
@@ -495,21 +497,22 @@ void EebusEgComponent::loop() {
     pairing_state_ = "Pairing-Fenster abgelaufen";
   }
 
-  /* Boot: one-shot mDNS announce 15 s after boot (eebus-go pattern: checkAutoReannounce on start) */
-  if (!startup_mdns_done_ && now >= startup_mdns_at_ms_) {
+  /* Boot: one-shot mDNS de-announce 15 s after boot (avoid stale register=true from prior run) */
+  if (!startup_mdns_done_ && (int32_t)(now - startup_mdns_at_ms_) >= 0) {
     startup_mdns_done_ = true;
     if (!connected_) set_mdns_register(false);
   }
 
   /* Pairing: register=true every 5 s while pairing window is open */
-  if (pairing_mode_active_ && pairing_advert_at_ms_ != 0 && now >= pairing_advert_at_ms_) {
+  if (pairing_mode_active_ && pairing_advert_at_ms_ != 0 && (int32_t)(now - pairing_advert_at_ms_) >= 0) {
     set_mdns_register(true);
     pairing_advert_at_ms_ = now + 5000;
   }
 
   /* Failsafe setup retry: DeviceConfiguration key descriptions arrive after on_entity_connect,
    * so the first attempt in on_entity_connect fails. Retry every 5 s until it succeeds. */
-  if (connected_ && have_remote_entity_ && !remote_ski_.empty() && !failsafe_set_ && now >= failsafe_retry_ms_) {
+  if (connected_ && have_remote_entity_ && !remote_ski_.empty() && !failsafe_set_ &&
+      (int32_t)(now - failsafe_retry_ms_) >= 0) {
     ScaledValue fs_limit;
     fs_limit.value = (int64_t)failsafe_limit_w_;
     fs_limit.scale = 0;
@@ -537,7 +540,7 @@ void EebusEgComponent::loop() {
 
   /* 5 s after entity connect: log a consolidated use-case summary so it is
    * visible in the log even if the individual ADD messages scrolled past. */
-  if (uc_dump_at_ms_ != 0 && now >= uc_dump_at_ms_) {
+  if (uc_dump_at_ms_ != 0 && (int32_t)(now - uc_dump_at_ms_) >= 0) {
     uc_dump_at_ms_ = 0;
     ESP_LOGW(TAG, "%s supported UCs: %s", instance_name_.c_str(),
              remote_uc_seen_.empty() ? "(none)" : remote_uc_seen_.c_str() + 3);
@@ -626,6 +629,7 @@ void EebusEgComponent::set_limit(float watts) {
   EebusError err = EgLpcSetActiveConsumptionPowerLimit(eg_lpc_, &remote_entity_addr_, &limit);
   if (err != kEebusErrorOk) {
     ESP_LOGE(TAG, "SetActiveConsumptionPowerLimit failed: %d", (int)err);
+    pending_limit_ms_ = millis();  // push back retry so error path doesn't flood
     return;
   }
 
@@ -743,7 +747,7 @@ void EebusEgComponent::on_entity_disconnect(const EntityAddressType* /*addr*/) {
   uc_dump_at_ms_           = 0;
   remote_uc_seen_          = {};
   semp_subscribe_pending_  = false;
-  pairing_state_      = "Getrennt — suche Gerät...";
+  pairing_state_      = remote_ski_.empty() ? "Inaktiv" : "Getrennt — suche Gerät...";
   /* Re-announce mDNS so the remote device reconnects immediately (eebus-go: checkAutoReannounce on disconnect) */
   set_mdns_register(false);
 
@@ -816,7 +820,11 @@ void EebusEgComponent::save_remote_ski_nvs_(const char* ski) {
   }
   nvs_handle_t h;
   if (nvs_open(nvs_ns_.c_str(), NVS_READWRITE, &h) != ESP_OK) return;
-  nvs_set_str(h, NVS_KEY_SKI, ski);
+  if (ski[0] == '\0') {
+    nvs_erase_key(h, NVS_KEY_SKI);
+  } else {
+    nvs_set_str(h, NVS_KEY_SKI, ski);
+  }
   nvs_commit(h);
   nvs_close(h);
 }
@@ -1148,10 +1156,19 @@ void EebusEgComponent::forget_pairing() {
   remote_ski_.clear();
   device_label_.clear();
 
-  /* Reset all connection-derived display state so the UI returns to a clean
-   * initial appearance regardless of whether a live session existed.
-   * on_entity_disconnect() has a guard that skips the reset when already
-   * disconnected, so we replicate the relevant resets here explicitly. */
+  // Tear down the SHIP session before clearing connected_ so the SPINE
+  // disconnect callback (on_entity_disconnect) can still fire and run triggers.
+  if (service_ && !old_ski.empty()) {
+    EEBUS_SERVICE_UNREGISTER_REMOTE_SKI(service_, old_ski.c_str());
+    EEBUS_SERVICE_CANCEL_PAIRING_WITH_SKI(service_, old_ski.c_str());
+  }
+
+  // Fire disconnect triggers if there was a live connection; on_entity_disconnect()
+  // guards on connected_==true so we must fire before clearing it.
+  if (connected_) {
+    for (auto* t : disconnected_triggers_) t->trigger();
+  }
+
   connected_           = false;
   mpc_connected_       = false;
   last_heartbeat_ms_   = 0;
@@ -1165,20 +1182,17 @@ void EebusEgComponent::forget_pairing() {
   failsafe_set_        = false;
   heartbeat_alarm_     = false;
   pairing_state_       = "Inaktiv";
-
-  if (service_ && !old_ski.empty()) {
-    /* UNREGISTER removes the SKI from the outbound-connect whitelist.
-     * CANCEL_PAIRING tears down the active SHIP session and closes the connection. */
-    EEBUS_SERVICE_UNREGISTER_REMOTE_SKI(service_, old_ski.c_str());
-    EEBUS_SERVICE_CANCEL_PAIRING_WITH_SKI(service_, old_ski.c_str());
-  }
 }
 
 void EebusEgComponent::refresh_heartbeat() {
   if (!eg_lpc_) return;
   if (!time_synced_) {
     time_synced_ = true;
-    EgLpcStartHeartbeat(eg_lpc_);  /* store valid timestamp before any subscriber arrives */
+    // Prime the heartbeat timestamp so data is ready when the service starts and a
+    // subscriber connects. Only needed when there is a reason to start the service.
+    if (!remote_ski_.empty() || pairing_mode_active_) {
+      EgLpcStartHeartbeat(eg_lpc_);
+    }
   }
   if (!service_started_ && service_ && (!remote_ski_.empty() || pairing_mode_active_)) {
     service_started_ = true;

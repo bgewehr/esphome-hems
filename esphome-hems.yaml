@@ -6,7 +6,7 @@ substitutions:
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
-  comment: "ESPHome-HEMS – Xemex CSMB Modbus Server + §14a EnWG"
+  comment: "EnWG §14a HEMS with EEBus, Modbus TCP/RTU, MQTT, and S0 meter support"
   name_add_mac_suffix: false
   build_path: "c:/temp/esphome-hems"
   project:

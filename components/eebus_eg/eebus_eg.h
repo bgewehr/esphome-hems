@@ -250,17 +250,17 @@ static void MpcL_Destruct(MaMpcListenerObject*) {}
 static void MpcL_OnRemoteEntityConnect(MaMpcListenerObject* o, const EntityAddressType* addr) {
   auto* self = reinterpret_cast<EebusEgComponent::MpcListener*>(o)->self;
   if (self->mpc_connected()) return;
-  /* Guard: only accept MPC from a device whose entity connect was accepted (connected_==true).
-   * Without this, the SPINE/use-case layer fires independently of the SHIP-level rejection in
-   * SR_OnShipStateUpdate/on_entity_connect, leaking mpc_connected_=true for unpaired devices. */
-  if (!self->is_connected()) {
-    ESP_LOGD("eebus_eg", "%s: MPC entity connect ignored — SHIP entity not accepted",
-             self->instance_name());
+  // Guard against unpaired devices: the MU (MonitoredUnit) SPINE entity may connect
+  // independently of the LPC entity — don't assume LPC fired first (is_connected()).
+  // Use the addr SKI directly to decide: accept only if it matches our paired device.
+  const char* ski = (addr && addr->device) ? addr->device : "";
+  if (self->remote_ski().empty() || self->remote_ski() != ski) {
+    ESP_LOGD("eebus_eg", "%s: MPC entity connect from %s ignored — not paired device",
+             self->instance_name(), ski[0] ? ski : "?");
     return;
   }
-  ESP_LOGW("eebus_eg", "MPC: remote measurement unit connected");
-  ESP_LOGI("eebus", "SPINE remote MA/MPC entity connected: ski=%s",
-           (addr && addr->device) ? addr->device : "?");
+  ESP_LOGW("eebus_eg", "%s MPC: remote measurement unit connected (ski=%s)",
+           self->instance_name(), ski);
   self->on_mpc_state_(true);
 }
 static void MpcL_OnRemoteEntityDisconnect(MaMpcListenerObject* o, const EntityAddressType*) {
@@ -314,6 +314,7 @@ static void EgL_OnPowerLimitReceive(
     EgLpListenerObject* o, const EntityAddressType*,
     const ScaledValue* limit, const DurationType*, bool active)
 {
+  if (!limit) return;
   float w = (float)limit->value * powf(10.0f, (float)limit->scale);
   reinterpret_cast<EebusEgComponent::EgListener*>(o)->self->on_power_limit_ack(w, active);
 }

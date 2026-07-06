@@ -111,7 +111,7 @@ class EebusCsComponent : public Component {
   /** Reject / cancel pairing with the currently pending SKI */
   void reject_pairing();
 
-  /** Remove a previously trusted SKI and re-open pairing window */
+  /** Remove a previously trusted SKI and reset to Inaktiv (pairing must be re-activated explicitly) */
   void forget_pairing(const std::string& ski);
 
   /* -----------------------------------------------------------------------
@@ -229,6 +229,7 @@ static void LpcListenerOnPowerLimitReceive(
     const DurationType* /*duration*/,
     bool                is_active)
 {
+  if (!power_limit) return;
   auto* l = reinterpret_cast<EebusCsComponent::CsLpListener*>(self);
   float w = (float)power_limit->value * powf(10.0f, (float)power_limit->scale);
   l->self->on_power_limit_receive(w, is_active);
@@ -237,6 +238,7 @@ static void LpcListenerOnPowerLimitReceive(
 static void LpcListenerOnFailsafePowerLimitReceive(
     CsLpListenerObject* self, const ScaledValue* power_limit)
 {
+  if (!power_limit) return;
   auto* l = reinterpret_cast<EebusCsComponent::CsLpListener*>(self);
   float w = (float)power_limit->value * powf(10.0f, (float)power_limit->scale);
   l->self->on_failsafe_limit_receive(w);
