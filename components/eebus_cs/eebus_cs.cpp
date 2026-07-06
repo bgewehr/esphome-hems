@@ -193,7 +193,7 @@ void EebusCsComponent::loop() {
 
   /* Pairing window timeout */
   if (pairing_mode_active_ && now >= pairing_deadline_ms_) {
-    ESP_LOGW(TAG, "Pairing window expired");
+    ESP_LOGW(TAG, "CS pairing window expired");
     pairing_mode_active_ = false;
     pairing_deadline_ms_ = 0;
     if (service_) EEBUS_SERVICE_SET_PAIRING_POSSIBLE(service_, false);
@@ -222,12 +222,12 @@ void EebusCsComponent::dump_config() {
  * ====================================================================== */
 
 void EebusCsComponent::on_remote_ski_connected(const char* ski) {
-  ESP_LOGI(TAG, "Remote SKI connected: %s", ski);
+  ESP_LOGI(TAG, "CS remote SKI connected: %s", ski);
   pending_remote_ski_ = ski;
 
   if (!remote_ski_.empty() && remote_ski_ == ski) {
     /* Known stored SKI — register for persistent auto-connect */
-    ESP_LOGI(TAG, "Known SKI — auto-trusting");
+    ESP_LOGI(TAG, "CS known SKI — auto-trusting");
     EEBUS_SERVICE_REGISTER_REMOTE_SKI(service_, ski, true);
     update_pairing_state_((heartbeat_lost_ ? "Verbunden (Failsafe): " : "Verbunden: ") + std::string(ski));
   } else if (paired_remote_ski_ == ski) {
@@ -236,18 +236,18 @@ void EebusCsComponent::on_remote_ski_connected(const char* ski) {
      * cleared pairing_mode_active_ before this callback fires — so we can no
      * longer rely on pairing_mode_active_ to detect a just-paired session.
      * Persist the SKI and register it for future auto-connect. */
-    ESP_LOGI(TAG, "SHIP-approved SKI — persisting: %s", ski);
+    ESP_LOGI(TAG, "CS SHIP-approved SKI — persisting: %s", ski);
     remote_ski_ = ski;
     save_trusted_ski_(remote_ski_);
     EEBUS_SERVICE_REGISTER_REMOTE_SKI(service_, ski, true);
     update_pairing_state_((heartbeat_lost_ ? "Verbunden (Failsafe): " : "Verbunden: ") + std::string(ski));
   } else if (pairing_mode_active_ && millis() < pairing_deadline_ms_) {
     /* Unknown SKI, explicit pairing window still open — let the user approve */
-    ESP_LOGW(TAG, "Unknown SKI wants to pair: %s", ski);
+    ESP_LOGW(TAG, "CS unknown SKI wants to pair: %s", ski);
     update_pairing_state_("Pairing-Anfrage: " + std::string(ski));
     for (auto* t : pairing_request_triggers_) t->trigger(std::string(ski));
   } else {
-    ESP_LOGW(TAG, "Untrusted SKI %s — pairing not active, rejecting", ski);
+    ESP_LOGW(TAG, "CS untrusted SKI %s — pairing not active, rejecting", ski);
     EEBUS_SERVICE_CANCEL_PAIRING_WITH_SKI(service_, ski);
     pending_remote_ski_.clear();
     update_pairing_state_("Abgelehnt: " + std::string(ski));
@@ -255,7 +255,7 @@ void EebusCsComponent::on_remote_ski_connected(const char* ski) {
 }
 
 void EebusCsComponent::on_remote_ski_disconnected(const char* ski) {
-  ESP_LOGI(TAG, "Remote SKI disconnected: %s", ski);
+  ESP_LOGI(TAG, "CS remote SKI disconnected: %s", ski);
   connected_ = false;
   if (paired_remote_ski_ == ski)  paired_remote_ski_.clear();
   if (pending_remote_ski_ == ski) pending_remote_ski_.clear();
@@ -278,7 +278,7 @@ void EebusCsComponent::on_remote_ski_disconnected(const char* ski) {
 }
 
 void EebusCsComponent::on_ship_state_update(const char* ski, SmeState state) {
-  ESP_LOGD(TAG, "SHIP state ski=%s state=%d", ski, (int)state);
+  ESP_LOGD(TAG, "CS SHIP state ski=%s state=%d", ski, (int)state);
   if (state == kSmeStateApproved || state == kDataExchange) {
     if (!ski || strcmp(ski, "unknown") == 0 || strlen(ski) < 40) {
       ESP_LOGE(TAG, "DataExchange mit ungültiger SKI '%s' — Pairing ignoriert. "
@@ -308,7 +308,7 @@ void EebusCsComponent::on_ship_state_update(const char* ski, SmeState state) {
 }
 
 void EebusCsComponent::on_ship_id_update(const char* ski, const char* ship_id) {
-  ESP_LOGI(TAG, "SHIP ID: ski=%s id=%s", ski, ship_id ? ship_id : "");
+  ESP_LOGI(TAG, "CS SHIP ID: ski=%s id=%s", ski, ship_id ? ship_id : "");
 }
 
 bool EebusCsComponent::is_waiting_for_trust_allowed(const char* /*ski*/) {
@@ -320,7 +320,7 @@ bool EebusCsComponent::is_waiting_for_trust_allowed(const char* /*ski*/) {
  * ====================================================================== */
 
 void EebusCsComponent::enter_pairing_mode() {
-  ESP_LOGW(TAG, "Pairing mode activated (window: %u s)", kPairingWindowMs / 1000);
+  ESP_LOGW(TAG, "CS pairing mode activated (window: %u s)", kPairingWindowMs / 1000);
   pairing_mode_active_ = true;
   pairing_deadline_ms_ = millis() + kPairingWindowMs;
   if (!service_started_ && service_) {
@@ -344,7 +344,7 @@ void EebusCsComponent::accept_pairing() {
   save_trusted_ski_(ski);
   remote_ski_ = ski;
   update_pairing_state_("Pairing akzeptiert: " + ski);
-  ESP_LOGI(TAG, "Pairing accepted: %s", ski.c_str());
+  ESP_LOGI(TAG, "CS pairing accepted: %s", ski.c_str());
 }
 
 void EebusCsComponent::reject_pairing() {
@@ -383,7 +383,7 @@ void EebusCsComponent::forget_pairing(const std::string& ski) {
  * ====================================================================== */
 
 void EebusCsComponent::on_power_limit_receive(float limit_w, bool is_active) {
-  ESP_LOGI(TAG, "LPC: %.0f W active=%s", limit_w, is_active ? "yes" : "no");
+  ESP_LOGI(TAG, "CS LPC: %.0f W active=%s", limit_w, is_active ? "yes" : "no");
   bool was_failsafe  = heartbeat_lost_;
   current_limit_w_   = limit_w;
   heartbeat_lost_    = false;
@@ -394,7 +394,7 @@ void EebusCsComponent::on_power_limit_receive(float limit_w, bool is_active) {
     for (auto* t : limit_active_triggers_) t->trigger(limit_w);
   } else if (!is_active && limit_active_) {
     limit_active_ = false; current_limit_w_ = 0.0f;
-    if (was_failsafe) ESP_LOGW(TAG, "Failsafe ended — EG reconnected and released limit");
+    if (was_failsafe) ESP_LOGW(TAG, "CS failsafe ended — EG reconnected and released limit");
     for (auto* t : limit_cleared_triggers_) t->trigger();
   } else if (is_active) {
     for (auto* t : limit_active_triggers_) t->trigger(limit_w);
@@ -402,7 +402,7 @@ void EebusCsComponent::on_power_limit_receive(float limit_w, bool is_active) {
 }
 
 void EebusCsComponent::on_failsafe_limit_receive(float limit_w) {
-  ESP_LOGW(TAG, "Failsafe limit from EG: %.0f W", limit_w);
+  ESP_LOGW(TAG, "CS failsafe limit from EG: %.0f W", limit_w);
   failsafe_limit_w_ = limit_w;
 }
 
@@ -636,7 +636,7 @@ void EebusCsComponent::on_remote_use_case(int actor, int uc_name_id, const char*
 
 void EebusCsComponent::update_pairing_state_(const std::string& state) {
   pairing_state_str_ = state;
-  ESP_LOGI(TAG, "Pairing state: %s", state.c_str());
+  ESP_LOGI(TAG, "CS pairing state: %s", state.c_str());
 }
 
 }  // namespace eebus_cs

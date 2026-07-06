@@ -157,13 +157,14 @@ static void spine_event_handler(const EventPayload* payload, void* ctx) {
       };
       for (const auto& e : kSemp) {
         if (payload->function_type == e.fn) {
-          ESP_LOGW("eebus_eg", "OSSHPCF msg from %s: %s (fn=%d) — data=%s",
-                   ski, e.name, (int)payload->function_type,
+          ESP_LOGW("eebus_eg", "%s OSSHPCF msg from %s: %s (fn=%d) — data=%s",
+                   self ? self->instance_name() : "?", ski, e.name, (int)payload->function_type,
                    payload->function_data ? "present" : "null");
           break;
         }
       }
-      ESP_LOGD("eebus_eg", "SPINE data change from %s: fn=%d", ski, (int)payload->function_type);
+      ESP_LOGD("eebus_eg", "%s SPINE data change from %s: fn=%d",
+               self ? self->instance_name() : "?", ski, (int)payload->function_type);
       break;
     }
     default: break;
@@ -219,7 +220,7 @@ static void SR_OnRemoteSkiConnected(
     ServiceReaderObject* o, EebusServiceObject* /*svc*/, const char* ski)
 {
   auto* r = reinterpret_cast<EgServiceReader*>(o);
-  ESP_LOGW("eebus_eg", "Remote SKI connected: %s", ski);
+  ESP_LOGW("eebus_eg", "%s remote SKI connected: %s", r->self->instance_name(), ski);
   r->self->pairing_state_ = "Verbinde: " + std::string(ski);
 }
 
@@ -227,7 +228,7 @@ static void SR_OnRemoteSkiDisconnected(
     ServiceReaderObject* o, EebusServiceObject* /*svc*/, const char* ski)
 {
   auto* r = reinterpret_cast<EgServiceReader*>(o);
-  ESP_LOGW("eebus_eg", "Remote SKI disconnected: %s", ski);
+  ESP_LOGW("eebus_eg", "%s remote SKI disconnected: %s", r->self->instance_name(), ski);
   r->self->on_entity_disconnect(nullptr);
 }
 
@@ -251,7 +252,7 @@ static void SR_OnRemoteServicesUpdate(
     const char* ski  = MdnsEntryGetSki(entry);
     const char* host = MdnsEntryGetHost(entry) ? MdnsEntryGetHost(entry) : "?";
     if (ski && ski[0] != '\0') {
-      ESP_LOGD("eebus", "  mDNS[%zu]: ski=%s host=%s", i, ski, host);
+      ESP_LOGD("eebus", "%s   mDNS[%zu]: ski=%s host=%s", r->self->instance_name(), i, ski, host);
     }
   }
   if (!r->self->pairing_mode_active_) return;
@@ -263,8 +264,8 @@ static void SR_OnRemoteServicesUpdate(
     if (!ski || ski[0] == '\0') continue;
     if (r->self->local_ski_ == ski) continue;
     const char* host = MdnsEntryGetHost(entry) ? MdnsEntryGetHost(entry) : "?";
-    ESP_LOGI("eebus_eg", "mDNS: EG1 sichtbar ski=%s host=%s — warte auf eingehende Verbindung",
-             ski, host);
+    ESP_LOGI("eebus_eg", "%s mDNS: Gerät sichtbar ski=%s host=%s — warte auf eingehende Verbindung",
+             r->self->instance_name(), ski, host);
     r->self->pairing_state_ = "Gerät sichtbar: " + std::string(ski) + " — warte auf Verbindung";
     break;
   }
@@ -274,7 +275,7 @@ static void SR_OnShipIdUpdate(
     ServiceReaderObject* o, const char* ski, const char* ship_id)
 {
   auto* r = reinterpret_cast<EgServiceReader*>(o);
-  ESP_LOGD("eebus_eg", "SHIP ID update ski=%s id=%s", ski, ship_id ? ship_id : "");
+  ESP_LOGD("eebus_eg", "%s SHIP ID update ski=%s id=%s", r->self->instance_name(), ski, ship_id ? ship_id : "");
   if (ship_id && ship_id[0] != '\0' && ski && r->self->remote_ski_ == ski) {
     r->self->device_label_ = ship_id;
     ESP_LOGI("eebus_eg", "%s device name: %s", r->self->instance_name(), ship_id);
@@ -285,14 +286,14 @@ static void SR_OnShipStateUpdate(
     ServiceReaderObject* o, const char* ski, SmeState state)
 {
   auto* r = reinterpret_cast<EgServiceReader*>(o);
-  ESP_LOGW("eebus_eg", "SHIP state ski=%s state=%d", ski, (int)state);
+  ESP_LOGW("eebus_eg", "%s SHIP state ski=%s state=%d", r->self->instance_name(), ski, (int)state);
   if (state == kDataExchange) {
     /* Reject connections where TLS peer cert extraction failed.
      * Root cause: CONFIG_MBEDTLS_SSL_KEEP_PEER_CERTIFICATE not set in sdkconfig. */
     if (!ski || strcmp(ski, "unknown") == 0 || strlen(ski) < 40) {
-      ESP_LOGE("eebus_eg", "DataExchange mit ungültiger SKI '%s' — Pairing ignoriert. "
+      ESP_LOGE("eebus_eg", "%s DataExchange mit ungültiger SKI '%s' — Pairing ignoriert. "
                "Prüfe CONFIG_MBEDTLS_SSL_KEEP_PEER_CERTIFICATE=y in sdkconfig.",
-               ski ? ski : "null");
+               r->self->instance_name(), ski ? ski : "null");
       return;
     }
     /* Reconnect from a previously trusted remote can reach kDataExchange without
@@ -463,9 +464,9 @@ void EebusEgComponent::loop() {
     EgLpcStartHeartbeat(eg_lpc_);
     if (service_ && !remote_ski_.empty()) {
       EEBUS_SERVICE_REGISTER_REMOTE_SKI(service_, remote_ski_.c_str(), true);
-      ESP_LOGI(TAG, "Heartbeat test complete — reconnect re-enabled for %s", remote_ski_.c_str());
+      ESP_LOGI(TAG, "%s heartbeat test complete — reconnect re-enabled for %s", instance_name_.c_str(), remote_ski_.c_str());
     } else {
-      ESP_LOGI(TAG, "Heartbeat test complete — outbound heartbeat resumed");
+      ESP_LOGI(TAG, "%s heartbeat test complete — outbound heartbeat resumed", instance_name_.c_str());
     }
   }
 
@@ -669,7 +670,7 @@ void EebusEgComponent::subscribe_semp_() {
 
   DeviceRemoteObject* remote_dev = DEVICE_LOCAL_GET_REMOTE_DEVICE_WITH_SKI(local_dev, remote_ski_.c_str());
   if (!remote_dev) {
-    ESP_LOGW(TAG, "OSSHPCF subscribe: remote device not found (SKI=%s)", remote_ski_.c_str());
+    ESP_LOGW(TAG, "%s OSSHPCF subscribe: remote device not found (SKI=%s)", instance_name_.c_str(), remote_ski_.c_str());
     return;
   }
 
@@ -1025,7 +1026,7 @@ bool EebusEgComponent::start_eebus_service_(
       ESP_LOGW(TAG, "Ignoring invalid remote SKI from config: '%s'", remote_ski_.c_str());
       remote_ski_.clear();
     }
-    ESP_LOGI(TAG, "No remote SKI — pairing mode must be activated explicitly");
+    ESP_LOGI(TAG, "%s no remote SKI — pairing mode must be activated explicitly", instance_name_.c_str());
   }
   pairing_mode_active_ = false;
   pairing_deadline_ms_ = 0;
@@ -1096,12 +1097,12 @@ void EebusEgComponent::on_ship_data_exchange_(const char* ski) {
     if (service_) EEBUS_SERVICE_SET_PAIRING_POSSIBLE(service_, false);
     mdns_service_txt_item_set("_ship", "_tcp", "register", "false");
     ESP_LOGW(TAG, "%s: mDNS: register TXT -> false (data exchange active)", instance_name_.c_str());
-    ESP_LOGW(TAG, "Pairing mode exited after successful connection");
+    ESP_LOGW(TAG, "%s pairing mode exited after successful connection", instance_name_.c_str());
   }
 }
 
 void EebusEgComponent::enter_pairing_mode() {
-  ESP_LOGW(TAG, "Pairing mode activated (window: %u s)", kPairingWindowMs / 1000);
+  ESP_LOGW(TAG, "%s pairing mode activated (window: %u s)", instance_name_.c_str(), kPairingWindowMs / 1000);
   pairing_mode_active_ = true;
   pairing_deadline_ms_ = millis() + kPairingWindowMs;
   if (!service_started_ && service_ && time_synced_) {
