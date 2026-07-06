@@ -209,9 +209,12 @@ web_server:
     - id: sg_eebus_eg1
       name: "EEBus Energy Guard 1 (EG1)"
       sorting_weight: 7
+    - id: sg_eebus_eg2
+      name: "EEBus Energy Guard 2 (EG2)"
+      sorting_weight: 8
     - id: sg_system
       name: "System"
-      sorting_weight: 8
+      sorting_weight: 9
 
 mqtt:
   broker: !secret mqtt_broker
@@ -791,6 +794,7 @@ packages:
   xemex_csmb: !include xemex-csmb.yaml
   fronius: !include fronius-gen24.yaml
   eebus: !include eebus-openeebus.yaml
+  eebus_eg2: !include eebus-eg2.yaml
 
 # §14a application glue — relay, LED, CT add-on, and event counter wired into EEBus CS triggers.
 # ESPHome merges these on_limit_active / on_limit_cleared lists with the ones in eebus-openeebus.yaml.

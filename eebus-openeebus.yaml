@@ -1,6 +1,6 @@
 # Native OpenEEBUS SHIP/SPINE integration: CS (receives §14a limits from VNB) + EG (sends limits to StVE).
 # Requires: grid_provider_switch, manual_enwg_test (defined in including file)
-# Exports:  hems_cs, hems_eg1
+# Exports:  hems_cs, hems_eg1, hems_eg2
 
 eebus_cs:
   id: hems_cs
@@ -13,11 +13,13 @@ eebus_cs:
     - lambda: |-
         ESP_LOGW("eebus", "EEBUS LPC limit active: %.0f W", x);
         id(hems_eg1).set_limit(x);
+        id(hems_eg2).set_limit(x);
 
   on_limit_cleared:
     - lambda: |-
         ESP_LOGW("eebus", "EEBUS LPC limit cleared");
         id(hems_eg1).clear_limit();
+        id(hems_eg2).clear_limit();
 
   on_pairing_request:
     - then:
@@ -42,32 +44,32 @@ select:
     optimistic: true
 
 eebus_eg:
-  id: hems_eg1
-  remote_ski: !secret eebus_eg_remote_ski
-  instance_name: "EG1"
-  device_brand: "DIY"
-  device_type: "HEMS"
-  device_model: "esphome-hems"
+  - id: hems_eg1
+    remote_ski: !secret eebus_eg_remote_ski
+    instance_name: "EG1"
+    device_brand: "DIY"
+    device_type: "HEMS"
+    device_model: "esphome-hems"
 
-  on_eg_connected:
-    - lambda: |-
-        ESP_LOGI("eebus", "EEBus EG1 (%s) connected — native power limiting active",
-                 id(eg1_device_type).current_option().c_str());
-        if (id(hems_cs).is_limit_active()) {
-          float lim = id(hems_cs).current_limit_w();
-          ESP_LOGW("eebus", "EG1 reconnect: re-applying active LPC limit %.0f W", lim);
-          id(hems_eg1).set_limit(lim);
-        }
+    on_eg_connected:
+      - lambda: |-
+          ESP_LOGI("eebus", "EEBus EG1 (%s) connected — native power limiting active",
+                   id(eg1_device_type).current_option().c_str());
+          if (id(hems_cs).is_limit_active()) {
+            float lim = id(hems_cs).current_limit_w();
+            ESP_LOGW("eebus", "EG1 reconnect: re-applying active LPC limit %.0f W", lim);
+            id(hems_eg1).set_limit(lim);
+          }
 
-  on_eg_disconnected:
-    - lambda: |-
-        ESP_LOGI("eebus", "EEBus EG1 (%s) disconnected — relay fallback available",
-                 id(eg1_device_type).current_option().c_str());
+    on_eg_disconnected:
+      - lambda: |-
+          ESP_LOGI("eebus", "EEBus EG1 (%s) disconnected — relay fallback available",
+                   id(eg1_device_type).current_option().c_str());
 
-  on_power_reading:
-    - lambda: |-
-        ESP_LOGI("eebus", "EG1 (%s) power reading: %.0f W",
-                 id(eg1_device_type).current_option().c_str(), x);
+    on_power_reading:
+      - lambda: |-
+          ESP_LOGI("eebus", "EG1 (%s) power reading: %.0f W",
+                   id(eg1_device_type).current_option().c_str(), x);
 
 sensor:
   # --- CS (sg_eebus_cs, weights 1-2) ---
@@ -425,3 +427,4 @@ button:
       sorting_weight: 20
     on_press:
       - lambda: "id(hems_eg1).start_heartbeat_test();"
+
