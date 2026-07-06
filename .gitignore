@@ -10,8 +10,9 @@ __pycache__/
 # Local/private project material that is not part of the OSS release
 /private/
 
-# Generated openeebus wrapper files (auto-created by eebus_lpc/__init__.py on each compile)
-/components/eebus_lpc/oe__*.c
+# Generated openeebus wrapper files (auto-created by __init__.py on each compile)
+/components/eebus_cs/oe__*.c
+/components/eebus_eg/oe__*.c
 
 # Editor/workspace files
 *.code-workspace
