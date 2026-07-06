@@ -305,7 +305,7 @@ python -m pip install -r requirements-dev.txt
 |------------|----------------|--------|
 | **openeebus** — SHIP/SPINE C-Bibliothek | [NIBE AB](https://github.com/nibe-stefan/openeebus) | Apache 2.0 |
 | **esphome_modbus_tcp** — Modbus TCP Server | [creepystefan](https://github.com/creepystefan/esphome_modbus_tcp) | siehe Repo |
-| **xemex-csmb** — Modbus RTU Server-Emulation | bgewehr (Eigenentwicklung) | MIT |
+| **xemex-csmb** — Modbus RTU Server-Emulation | [thomase1234](https://github.com/thomase1234/esphome-fake-xemex-csmb) | siehe Repo |
 | **eebus_lpc / eebus_eg1** — EEBus ESPHome-Komponenten | bgewehr (Eigenentwicklung) | MIT |
 
 ---
