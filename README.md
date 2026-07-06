@@ -35,21 +35,28 @@ The controller combines:
 
 ```
 .
-├── esphome-hems.yaml          # Main ESPHome configuration
-├── eebus-openeebus.yaml       # EEBus package (CS + EG) — included via packages:
-├── xemex-csmb.yaml            # Xemex CSMB Modbus RTU package
-├── fronius-gen24.yaml         # Fronius package
+├── esphome-hems.yaml          # Core config: hw, api/ota/logger, time, eebus_cs glue
+├── dido.yaml                  # DI/DO hardware: i2c, pca9554, relay_2-8, DI3-8
+├── eebus-cs.yaml              # EEBus CS + §14a hardware (relay_1, DI1, LED, switches)
+├── eebus-eg-1.yaml            # EEBus EG1 instance (e.g. heat pump, port 4713)
+├── eebus-eg-2.yaml            # EEBus EG2 instance (e.g. wallbox, port 4714)
+├── fronius-gen24.yaml         # Fronius Gen24 Modbus TCP + battery control
+├── xemex-csmb.yaml            # Xemex CSMB Modbus RTU server emulation
+├── s0-meter-1.yaml            # S0 pulse counter (water meter, DI2)
 ├── compile.ps1                # Compile/flash script (Windows PowerShell)
 ├── requirements-dev.txt       # Python dependencies for diagnostic scripts
 ├── secrets.example.yaml       # Template for local credentials
 ├── components/
-│   ├── eebus_cs/             # EEBus CS component (LPC receiver from VNB)
+│   ├── eebus_cs/              # EEBus CS component (LPC receiver from VNB)
 │   └── eebus_eg/              # EEBus EG component (LPC sender to StVE)
 ├── openeebus/                 # openeebus SHIP/SPINE C library (submodule)
 ├── port/                      # ESP32 port adaptations for openeebus
 └── tools/
     └── diagnostics/           # EEBus and Fronius diagnostic scripts
 ```
+
+The package files are self-contained: each owns its entities, sorting groups, and globals.
+`esphome-hems.yaml` only holds the hardware platform config and cross-cutting application glue.
 
 ---
 
@@ -71,8 +78,9 @@ mqtt_broker: "192.168.x.x"        # MQTT broker IP
 hems_ip: "192.168.x.x"            # IP of this HEMS device (for OTA upload)
 
 # EEBus pairing: leave empty to pair via web UI
-eebus_cls_remote_ski: ""           # CLS Steuerbox of VNB (set during pairing)
-eebus_eg_remote_ski: ""            # Heat pump / wallbox (set during pairing)
+eebus_cs_remote_ski: ""            # CLS Steuerbox of VNB (set during pairing)
+eebus_eg1_remote_ski: ""           # EG1 device — heat pump (set during pairing)
+eebus_eg2_remote_ski: ""           # EG2 device — wallbox (set during pairing)
 ```
 
 > **Note:** `secrets.yaml` is never committed — only `secrets.example.yaml` is in the repository.
@@ -126,7 +134,7 @@ Receives §14a power limits from the VNB gateway.
 ```yaml
 eebus_cs:
   id: hems_cs
-  remote_ski: !secret eebus_cls_remote_ski
+  remote_ski: !secret eebus_cs_remote_ski
   device_brand: "DIY"
   device_type: "HEMS"
   device_model: "esphome-hems"
@@ -161,7 +169,7 @@ Sends §14a power limits to EEBus-capable devices (heat pump, wallbox).
 eebus_eg:
   id: eg1                          # Instance name — choose freely (eg1, eg_wp, eg_wb, ...)
   ship_port: 4713                  # SHIP port (unique per StVE; default 4713)
-  remote_ski: !secret eebus_eg_remote_ski
+  remote_ski: !secret eebus_eg1_remote_ski
   instance_name: "WP"              # Label shown in logs and web UI
   device_brand: "DIY"
   device_type: "HEMS"
@@ -203,33 +211,35 @@ Add one `eebus_eg` instance per controllable device, each with its own port:
 
 ```yaml
 eebus_eg:
-  - id: eg_wp
+  - id: hems_eg1
     ship_port: 4713
-    instance_name: "Heat pump"
-    remote_ski: !secret eebus_wp_remote_ski
+    instance_name: "EG1"
+    remote_ski: !secret eebus_eg1_remote_ski
     failsafe_limit_w: 4200
     failsafe_duration_s: 7200
 
-  - id: eg_wb
+  - id: hems_eg2
     ship_port: 4714
-    instance_name: "Wallbox"
-    remote_ski: !secret eebus_wb_remote_ski
+    instance_name: "EG2"
+    remote_ski: !secret eebus_eg2_remote_ski
     failsafe_limit_w: 4200
     failsafe_duration_s: 7200
 ```
 
-**Distribute the limit internally** (in the `on_limit_active` handler of `eebus_cs`):
+**Plugin pattern**: each EG package file adds its own `eebus_cs: on_limit_active:` block.
+ESPHome concatenates trigger lists across packages — the CS does not need to enumerate EGs.
 
 ```yaml
-on_limit_active:
-  - lambda: |-
-      float total = x;                     // total limit from VNB
-      float wp = std::min(total, 7000.0f); // up to 7 kW to heat pump
-      float wb = total - wp;               // remainder to wallbox
-      if (wb < 4200.0f) wb = 0.0f;        // below minimum -> skip
-      id(eg_wp).set_limit(wp);
-      id(eg_wb).set_limit(wb);
+# In eebus-eg-1.yaml — forward CS limit to EG1
+eebus_cs:
+  on_limit_active:
+    - lambda: "id(hems_eg1).set_limit(x);"
+  on_limit_cleared:
+    - lambda: "id(hems_eg1).clear_limit();"
 ```
+
+Adding EG3 means creating a new `eebus-eg-3.yaml` and adding `id: hems_eg3` —
+no changes to existing files.
 
 > **§14a note:** The VNB sends at least 4,200 W per registered StVE. Internal distribution is up to the HEMS operator. Limits below 4,200 W are not acknowledged by EEBus devices.
 
