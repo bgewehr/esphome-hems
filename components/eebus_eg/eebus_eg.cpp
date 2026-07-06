@@ -726,7 +726,10 @@ void EebusEgComponent::on_entity_connect(const EntityAddressType* addr) {
   heartbeat_alarm_    = false;
   connected_since_ms_ = millis();
   have_remote_entity_ = true;
-  if (addr) remote_entity_addr_ = *addr;
+  if (addr) {
+    remote_entity_addr_ = *addr;
+    remote_spine_addr_  = addr->device ? addr->device : "";
+  }
   pairing_state_      = "Verbunden";
   failsafe_set_       = false;   /* loop() will retry until DeviceConfiguration data is available */
   failsafe_retry_ms_  = 0;
@@ -747,6 +750,7 @@ void EebusEgComponent::on_entity_disconnect(const EntityAddressType* /*addr*/) {
   pending_limit_w_         = -1.0f;
   uc_dump_at_ms_           = 0;
   remote_uc_seen_          = {};
+  remote_spine_addr_       = {};
   semp_subscribe_pending_  = false;
   pairing_state_      = remote_ski_.empty() ? "Inaktiv" : "Getrennt — suche Gerät...";
   /* Re-announce mDNS so the remote device reconnects immediately (eebus-go: checkAutoReannounce on disconnect) */
@@ -1179,6 +1183,7 @@ void EebusEgComponent::forget_pairing() {
   pending_limit_w_     = -1.0f;
   uc_dump_at_ms_       = 0;
   remote_uc_seen_      = {};
+  remote_spine_addr_   = {};
   semp_subscribe_pending_ = false;
   failsafe_set_        = false;
   heartbeat_alarm_     = false;

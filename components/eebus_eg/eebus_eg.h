@@ -127,6 +127,7 @@ class EebusEgComponent : public Component {
   float       current_power_w()    const { return current_power_w_; }
   float       active_limit_w()     const { return active_limit_w_; }
   std::string remote_ski()         const { return remote_ski_; }
+  std::string remote_spine_addr()  const { return remote_spine_addr_; }
   std::string local_ski()          const { return local_ski_; }
   std::string pairing_state()      const { return pairing_state_; }
   std::string device_label()       const { return device_label_; }
@@ -155,6 +156,7 @@ class EebusEgComponent : public Component {
   /* Public for ServiceReader vtable access */
   std::string pairing_state_       {"Inaktiv"};
   std::string remote_ski_          {};
+  std::string remote_spine_addr_   {};
   std::string local_ski_           {};
   std::string device_label_        {};
   bool        pairing_mode_active_ {false};
@@ -250,17 +252,19 @@ static void MpcL_Destruct(MaMpcListenerObject*) {}
 static void MpcL_OnRemoteEntityConnect(MaMpcListenerObject* o, const EntityAddressType* addr) {
   auto* self = reinterpret_cast<EebusEgComponent::MpcListener*>(o)->self;
   if (self->mpc_connected()) return;
-  // Guard against unpaired devices: the MU (MonitoredUnit) SPINE entity may connect
-  // independently of the LPC entity — don't assume LPC fired first (is_connected()).
-  // Use the addr SKI directly to decide: accept only if it matches our paired device.
-  const char* ski = (addr && addr->device) ? addr->device : "";
-  if (self->remote_ski().empty() || self->remote_ski() != ski) {
+  // Guard: reject MU entity connects from devices other than our paired LPC device.
+  // addr->device is the SPINE device address (e.g. d:_i:46863_K40RF-…), not the TLS SKI.
+  // remote_spine_addr_ is populated when our paired device's LPC entity connects.
+  if (!self->is_connected()) return;
+  const char* dev = (addr && addr->device) ? addr->device : "";
+  const std::string& expected = self->remote_spine_addr();
+  if (expected.empty() || expected != dev) {
     ESP_LOGD("eebus_eg", "%s: MPC entity connect from %s ignored — not paired device",
-             self->instance_name(), ski[0] ? ski : "?");
+             self->instance_name(), dev[0] ? dev : "?");
     return;
   }
-  ESP_LOGW("eebus_eg", "%s MPC: remote measurement unit connected (ski=%s)",
-           self->instance_name(), ski);
+  ESP_LOGW("eebus_eg", "%s MPC: remote measurement unit connected (device=%s)",
+           self->instance_name(), dev);
   self->on_mpc_state_(true);
 }
 static void MpcL_OnRemoteEntityDisconnect(MaMpcListenerObject* o, const EntityAddressType*) {
