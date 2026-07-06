@@ -14,6 +14,58 @@
 # Battery: BYD HVS/HVM — max discharge power configurable via ESPHome UI (id: battery_max_discharge_w, default 18176 W)
 # ══════════════════════════════════════════════════════════════════════════════
 
+web_server:
+  sorting_groups:
+    - id: sg_fronius
+      name: "Fronius"
+      sorting_weight: 1
+
+globals:
+  # Fronius battery discharge control — booleans select which meters to include in SOC calculation
+  - id: include_meter_ev
+    type: bool
+    restore_value: False
+    initial_value: "false"
+  - id: include_meter_hp
+    type: bool
+    restore_value: true
+    initial_value: "true"
+  - id: include_meter_house
+    type: bool
+    restore_value: true
+    initial_value: "true"
+  # Scale factors — read from device every 5 s; no NVS restore needed
+  - id: sf_ac_power
+    type: int
+    initial_value: "-1"
+  - id: sf_solar_power
+    type: int
+    initial_value: "-1"
+  - id: sf_grid_power
+    type: int
+    initial_value: "-1"
+  - id: sf_ev_power
+    type: int
+    initial_value: "-1"
+  - id: sf_hp_power
+    type: int
+    initial_value: "-1"
+  - id: sf_grid_current
+    type: int
+    initial_value: "-1"
+  - id: sf_ev_current
+    type: int
+    initial_value: "100"
+  - id: sf_battery_power
+    type: int
+    initial_value: "-1"
+  - id: sf_battery_soc
+    type: int
+    initial_value: "-1"
+  - id: sf_outwrte
+    type: int
+    initial_value: "-2"
+
 http_request:
   useragent: "ESPHome"
   timeout: 10s

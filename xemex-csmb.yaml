@@ -1,6 +1,12 @@
 # Xemex CSMB Modbus RTU server emulation.
 # RS485 UART, Modbus holding-register map, CT current controls and EV charging limit.
 
+web_server:
+  sorting_groups:
+    - id: sg_wallbox
+      name: "Xemex CSMB"
+      sorting_weight: 2
+
 globals:
   - id: ladebegrenzung_addon
     type: float

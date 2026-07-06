@@ -9,7 +9,7 @@
 #include <cstdarg>
 #include <cstring>
 #include <ctime>
-#include <set>
+#include <vector>
 
 #include "esphome/core/log.h"
 
@@ -194,10 +194,10 @@ static const uint32_t kHeartbeatTimeoutSeconds = 60;
  * EEBus heartbeats are sent every ~40 s; 3× that gives a safe margin. */
 static const uint32_t kInboundHeartbeatAlarmMs = 120000u;
 
-/* Tracks local SKIs already claimed by started EG instances in this boot.
- * Used to detect bad cert migrations where multiple instances inherited the same cert
- * from the legacy 'eebus_wp' NVS namespace. */
-static std::set<std::string> s_claimed_eg_skis;
+/* Tracks raw cert DER bytes already claimed by EG instances in this boot.
+ * Pure byte comparison — no TLS library needed in setup() context. Detects shared certs
+ * that arose from multiple instances inheriting the same legacy cert on migration. */
+static std::vector<std::vector<uint8_t>> s_claimed_cert_bytes;
 
 /* Pairing window: how long the explicit pairing mode stays open */
 static const uint32_t kPairingWindowMs = 300000;  /* 5 minutes */
@@ -373,7 +373,7 @@ void EebusEgComponent::setup() {
     remote_ski_ = load_remote_ski_nvs_();
     if (!remote_ski_.empty()) {
       if (remote_ski_ == "unknown" || remote_ski_.length() < 20) {
-        ESP_LOGW(TAG, "Clearing invalid SKI from NVS: '%s'", remote_ski_.c_str());
+        ESP_LOGW(TAG, "%s: clearing invalid SKI from NVS: '%s'", instance_name_.c_str(), remote_ski_.c_str());
         save_remote_ski_nvs_("");
         remote_ski_.clear();
       } else {
@@ -386,42 +386,91 @@ void EebusEgComponent::setup() {
   uint8_t* key  = nullptr; size_t kl = 0;
 
   if (!load_cert_nvs_(&cert, &cl, &key, &kl)) {
-    ESP_LOGI(TAG, "Generating certificate...");
+    ESP_LOGI(TAG, "%s: generating certificate...", instance_name_.c_str());
     if (!load_or_generate_cert_() || !load_cert_nvs_(&cert, &cl, &key, &kl)) {
-      ESP_LOGE(TAG, "Certificate setup failed");
+      ESP_LOGE(TAG, "%s: certificate setup failed", instance_name_.c_str());
       mark_failed(); return;
     }
   }
 
-  /* Detect shared cert from a bad legacy migration: if another EG instance already claimed
-   * this local SKI, the cert was copied from 'eebus_wp' without being erased first.
-   * Erase from NVS and generate a unique cert so each instance has its own EEBus identity. */
+  /* Detect shared cert from a bad legacy migration — two complementary checks:
+   *
+   * Check 1 (per-boot SKI set): if another EG instance already registered this SKI in the
+   * current boot via start_eebus_service_(), the cert is shared.
+   *
+   * Check 2 (NVS byte comparison + claimed_by marker): if the cert bytes match the legacy
+   * 'eebus_wp' cert AND a different port has already stamped itself as the primary migrator,
+   * this instance is a secondary that copied the cert by mistake.
+   *
+   * Both checks clear NVS and regenerate a unique cert. */
+  bool is_secondary_migrator = false;
+
+  /* Check 1: compare raw cert DER bytes against all certs already registered in this boot.
+   * Does not require TLS library initialization — pure byte comparison. */
   {
-    TlsCertificateObject* tls_tmp = TlsCertificateParseX509KeyPair(
-        (const char*)cert, (size_t)cl, (const char*)key, (size_t)kl);
-    const char* ski_tmp = tls_tmp ? TLS_CERTIFICATE_GET_SKI(tls_tmp) : nullptr;
-    if (ski_tmp && s_claimed_eg_skis.count(std::string(ski_tmp))) {
-      ESP_LOGW(TAG, "%s: local SKI %s already owned by another instance — regenerating unique cert",
-               instance_name_.c_str(), ski_tmp);
-      free(cert); free(key); cert = nullptr; key = nullptr; cl = kl = 0;
-      nvs_handle_t h_dup;
-      if (nvs_open(nvs_ns_.c_str(), NVS_READWRITE, &h_dup) == ESP_OK) {
-        nvs_erase_key(h_dup, NVS_KEY_CERT);
-        nvs_erase_key(h_dup, NVS_KEY_KEY);
-        nvs_erase_key(h_dup, NVS_KEY_SKI);
-        nvs_commit(h_dup);
-        nvs_close(h_dup);
+    std::vector<uint8_t> cert_vec(cert, cert + cl);
+    bool already_claimed = false;
+    for (const auto& claimed : s_claimed_cert_bytes) {
+      if (claimed == cert_vec) { already_claimed = true; break; }
+    }
+    if (already_claimed) {
+      is_secondary_migrator = true;
+      ESP_LOGW(TAG, "%s: cert bytes identical to another EG instance — regenerating unique cert",
+               instance_name_.c_str());
+    } else {
+      s_claimed_cert_bytes.push_back(cert_vec);
+    }
+  }
+
+  /* Check 2: NVS byte comparison against 'eebus_wp' cert + claimed_by port marker.
+   * Handles the case where Check 1 couldn't parse the SKI or was not yet populated. */
+  if (!is_secondary_migrator) {
+    std::string save_ns = nvs_ns_;
+    nvs_ns_ = NVS_NS_LEGACY;
+    uint8_t* leg_c = nullptr; size_t leg_cl = 0;
+    uint8_t* leg_k = nullptr; size_t leg_kl = 0;
+    bool has_legacy = load_cert_nvs_(&leg_c, &leg_cl, &leg_k, &leg_kl);
+    nvs_ns_ = save_ns;
+    if (has_legacy && leg_cl == cl && memcmp(leg_c, cert, cl) == 0) {
+      nvs_handle_t h_cbp;
+      if (nvs_open(NVS_NS_LEGACY, NVS_READWRITE, &h_cbp) == ESP_OK) {
+        uint32_t claimed_by = 0;
+        esp_err_t ce = nvs_get_u32(h_cbp, "claimed_by", &claimed_by);
+        if (ce == ESP_ERR_NVS_NOT_FOUND || claimed_by == 0) {
+          nvs_set_u32(h_cbp, "claimed_by", (uint32_t)ship_port_);
+          nvs_commit(h_cbp);
+          ESP_LOGI(TAG, "%s: stamped legacy cert as owned by port %u",
+                   instance_name_.c_str(), (unsigned)ship_port_);
+        } else if (claimed_by != (uint32_t)ship_port_) {
+          is_secondary_migrator = true;
+          ESP_LOGW(TAG, "%s: legacy cert owned by port %u (NVS marker) — regenerating",
+                   instance_name_.c_str(), (unsigned)claimed_by);
+        }
+        nvs_close(h_cbp);
       }
-      remote_ski_.clear();
-      if (!load_or_generate_cert_() || !load_cert_nvs_(&cert, &cl, &key, &kl)) {
-        ESP_LOGE(TAG, "Certificate regeneration failed");
-        mark_failed(); return;
-      }
+    }
+    if (leg_c) { free(leg_c); free(leg_k); }
+  }
+
+  if (is_secondary_migrator) {
+    free(cert); free(key); cert = nullptr; key = nullptr; cl = kl = 0;
+    nvs_handle_t h_dup;
+    if (nvs_open(nvs_ns_.c_str(), NVS_READWRITE, &h_dup) == ESP_OK) {
+      nvs_erase_key(h_dup, NVS_KEY_CERT);
+      nvs_erase_key(h_dup, NVS_KEY_KEY);
+      nvs_erase_key(h_dup, NVS_KEY_SKI);
+      nvs_commit(h_dup);
+      nvs_close(h_dup);
+    }
+    remote_ski_.clear();
+    if (!load_or_generate_cert_() || !load_cert_nvs_(&cert, &cl, &key, &kl)) {
+      ESP_LOGE(TAG, "%s: certificate regeneration failed", instance_name_.c_str());
+      mark_failed(); return;
     }
   }
 
   if (!start_eebus_service_(cert, cl, key, kl)) {
-    ESP_LOGE(TAG, "Failed to start openeebus service");
+    ESP_LOGE(TAG, "%s: failed to start EEBus service", instance_name_.c_str());
     free(cert); free(key);
     mark_failed(); return;
   }
@@ -476,7 +525,7 @@ void EebusEgComponent::loop() {
   /* Pairing window timeout */
   uint32_t now = millis();
   if (pairing_mode_active_ && now >= pairing_deadline_ms_) {
-    ESP_LOGW(TAG, "Pairing window expired");
+    ESP_LOGW(TAG, "%s: pairing window expired", instance_name_.c_str());
     pairing_mode_active_ = false;
     pairing_deadline_ms_ = 0;
     if (service_) EEBUS_SERVICE_SET_PAIRING_POSSIBLE(service_, false);
@@ -887,7 +936,6 @@ bool EebusEgComponent::start_eebus_service_(
 
   const char* local_ski = TLS_CERTIFICATE_GET_SKI(tls_cert);
   if (local_ski) local_ski_ = local_ski;
-  if (!local_ski_.empty()) s_claimed_eg_skis.insert(local_ski_);
   ESP_LOGI(TAG, "%s local SKI: %s", instance_name_.c_str(), local_ski ? local_ski : "(null)");
 
   /* Build service config */
@@ -992,7 +1040,7 @@ void EebusEgComponent::on_ship_data_exchange_(const char* ski) {
     pairing_deadline_ms_ = 0;
     if (service_) EEBUS_SERVICE_SET_PAIRING_POSSIBLE(service_, false);
     mdns_service_txt_item_set("_ship", "_tcp", "register", "false");
-    ESP_LOGW(TAG, "mDNS: register TXT -> false (data exchange active)");
+    ESP_LOGW(TAG, "%s: mDNS: register TXT -> false (data exchange active)", instance_name_.c_str());
     ESP_LOGW(TAG, "Pairing mode exited after successful connection");
   }
 }
@@ -1010,7 +1058,7 @@ void EebusEgComponent::enter_pairing_mode() {
 
 void EebusEgComponent::set_mdns_register(bool val) {
   mdns_service_txt_item_set("_ship", "_tcp", "register", val ? "true" : "false");
-  ESP_LOGW(TAG, "mDNS: register TXT -> %s", val ? "true" : "false");
+  ESP_LOGW(TAG, "%s: mDNS: register TXT -> %s", instance_name_.c_str(), val ? "true" : "false");
 }
 
 void EebusEgComponent::forget_pairing() {

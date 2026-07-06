@@ -1,6 +1,12 @@
 # EEBus Energy Guard 2 — second EG instance (port 4714, id: hems_eg2).
-# Requires: hems_cs (from eebus-openeebus.yaml)
-# Exports:  hems_eg2, eg2_device_type
+# Requires: hems_cs (from eebus-cs.yaml)
+# Exports:  hems_eg2, eg2_device_type, sg_eebus_eg2
+
+web_server:
+  sorting_groups:
+    - id: sg_eebus_eg2
+      name: "EEBus Energy Guard 2 (EG2)"
+      sorting_weight: 8
 
 select:
   # --- EG2 device type (sg_eebus_eg2, weight 0) — persists to NVS across reboots ---
@@ -18,6 +24,13 @@ select:
     initial_option: "Wärmepumpe"
     restore_value: true
     optimistic: true
+
+# Plugin: forward CS limits to EG2 (trigger lists merge across packages)
+eebus_cs:
+  on_limit_active:
+    - lambda: "id(hems_eg2).set_limit(x);"
+  on_limit_cleared:
+    - lambda: "id(hems_eg2).clear_limit();"
 
 eebus_eg:
   - id: hems_eg2

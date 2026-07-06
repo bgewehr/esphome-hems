@@ -1,0 +1,406 @@
+# EEBus Customer Station (CS) — receives §14a limits from VNB (Netzbetreiber).
+# Exports: hems_cs, relay_1, manual_enwg_test, grid_provider_switch, status_led,
+#          power_limit_events, last_enwg_event, enwg_status, sg_netz, sg_eebus_cs
+# Requires: relay_expander (dido.yaml), ct1addon/ct2addon/ct3addon (xemex-csmb.yaml),
+#           ha_time (esphome-hems.yaml), hems_eg1 (eebus-eg-1.yaml)
+
+web_server:
+  sorting_groups:
+    - id: sg_netz
+      name: "Netzdienliche Steuerung"
+      sorting_weight: 3
+    - id: sg_eebus_cs
+      name: "EEBus CS (Steuerbox)"
+      sorting_weight: 6
+
+eebus_cs:
+  id: hems_cs
+  remote_ski: !secret eebus_cs_remote_ski
+  device_brand: "DIY"
+  device_type: "HEMS"
+  device_model: "esphome-hems"
+
+  on_limit_active:
+    - lambda: |-
+        ESP_LOGW("eebus", "CS: §14a LPC limit active: %.0f W", x);
+
+  on_limit_cleared:
+    - lambda: |-
+        ESP_LOGW("eebus", "CS: §14a LPC limit cleared");
+
+  on_pairing_request:
+    - then:
+        - lambda: |-
+            ESP_LOGW("eebus", "CS: pairing request from SKI: %s", x.c_str());
+
+sensor:
+  # --- CS (sg_eebus_cs, weights 1-2) ---
+  - platform: template
+    name: "${device_name} CS §14a Leistungslimit"
+    id: eebus_vnb_power_limit
+    icon: "mdi:transmission-tower"
+    web_server:
+      sorting_group_id: sg_eebus_cs
+      sorting_weight: 1
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    update_interval: 5s
+    lambda: "return id(hems_cs).current_limit_w();"
+
+  - platform: template
+    name: "${device_name} CS Verfuegbare Restleistung"
+    id: eebus_available_power
+    icon: "mdi:gauge"
+    web_server:
+      sorting_group_id: sg_eebus_cs
+      sorting_weight: 2
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    update_interval: 5s
+    lambda: |-
+      if (!id(hems_cs).is_limit_active()) return NAN;
+      return id(hems_cs).current_limit_w() - id(hems_eg1).current_power_w();
+
+  # --- §14a active power limit (sg_netz) — EEBus value or 4200 W from DI1/simulation ---
+  - platform: template
+    name: "${device_name} §14a Leistungslimit"
+    icon: "mdi:transmission-tower-export"
+    web_server:
+      sorting_group_id: sg_netz
+      sorting_weight: 4
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    update_interval: 5s
+    lambda: |-
+      if (id(hems_cs).is_limit_active()) return id(hems_cs).current_limit_w();
+      if (id(grid_provider_switch).state || id(manual_enwg_test).state) return 4200.0f;
+      return NAN;
+
+  - platform: template
+    name: "${device_name} Power Limitation Events"
+    id: power_limit_events
+    icon: "mdi:counter"
+    web_server:
+      sorting_group_id: sg_netz
+      sorting_weight: 5
+    unit_of_measurement: "events"
+    state_class: "total_increasing"
+    accuracy_decimals: 0
+
+binary_sensor:
+  # --- CS Heartbeat (sg_eebus_cs, weight 2.5) ---
+  - platform: template
+    name: "${device_name} CS Heartbeat"
+    id: cs_heartbeat_ok
+    icon: "mdi:heart-pulse"
+    device_class: connectivity
+    web_server:
+      sorting_group_id: sg_eebus_cs
+      sorting_weight: 2.5
+    lambda: "return id(hems_cs).is_connected() && !id(hems_cs).is_heartbeat_lost();"
+
+  # DI1 = §14a grid-operator control input (GPIO4)
+  - platform: gpio
+    name: "${device_name} §14a Grid Provider Switch"
+    id: grid_provider_switch
+    device_class: power
+    icon: mdi:transmission-tower
+    web_server:
+      sorting_group_id: sg_netz
+      sorting_weight: 1
+    pin:
+      number: GPIO4
+      mode:
+        input: true
+        pullup: true
+      inverted: true  # Opto-Isolator: active-low
+    filters:
+      - delayed_on: 100ms
+      - delayed_off: 100ms
+    on_press:
+      then:
+        - lambda: |-
+            float _ev = id(power_limit_events).state;
+            id(power_limit_events).publish_state(std::isnan(_ev) ? 1.0f : _ev + 1.0f);
+            ESP_LOGW("enwg", "§14a EnWG: Netzbetreiber aktiviert Leistungsbegrenzung (DI1)");
+        - text_sensor.template.publish:
+            id: last_enwg_event
+            state: !lambda 'return std::string("Aktiviert (DI1): ") + id(ha_time).now().strftime("%d.%m.%Y %H:%M:%S");'
+        - number.set:
+            id: ct1addon
+            value: 45.0
+        - number.set:
+            id: ct2addon
+            value: 45.0
+        - number.set:
+            id: ct3addon
+            value: 45.0
+        - light.turn_on:
+            id: status_led
+            effect: "Paragraph14a Warning Flash"
+        - switch.turn_on: relay_1
+        - lambda: |-
+            id(hems_eg1).set_limit(4200.0f);
+    on_release:
+      then:
+        - lambda: |-
+            ESP_LOGW("enwg", "§14a EnWG: Netzbetreiber deaktiviert Leistungsbegrenzung (DI1)");
+        - text_sensor.template.publish:
+            id: last_enwg_event
+            state: !lambda 'return std::string("Beendet (DI1): ") + id(ha_time).now().strftime("%d.%m.%Y %H:%M:%S");'
+        - number.set:
+            id: ct1addon
+            value: !lambda "return id(ladebegrenzung_addon);"
+        - number.set:
+            id: ct2addon
+            value: !lambda "return id(ladebegrenzung_addon);"
+        - number.set:
+            id: ct3addon
+            value: !lambda "return id(ladebegrenzung_addon);"
+        - lambda: |-
+            id(hems_eg1).clear_limit();
+        - light.turn_off:
+            id: status_led
+        - switch.turn_off: relay_1
+
+interval:
+  - interval: 5s
+    then:
+      - binary_sensor.template.publish:
+          id: cs_heartbeat_ok
+          state: !lambda "return id(hems_cs).is_connected() && !id(hems_cs).is_heartbeat_lost();"
+
+text_sensor:
+  # --- CS (sg_eebus_cs, weights 3-7) ---
+  - platform: template
+    name: "${device_name} CS Verbindungsstatus"
+    icon: "mdi:lan-connect"
+    web_server:
+      sorting_group_id: sg_eebus_cs
+      sorting_weight: 3
+    update_interval: 5s
+    lambda: |-
+      std::string s = id(hems_cs).pairing_state();
+      // SKI is already shown in "CS Pairing ausstehend" / "CS Gepaarte SKI" —
+      // strip the trailing ": <ski>" (40 hex chars) from Verbindungsstatus
+      auto pos = s.rfind(": ");
+      if (pos != std::string::npos && s.size() - pos >= 42) {
+        s = s.substr(0, pos);
+      }
+      return s;
+
+  - platform: template
+    name: "${device_name} CS Pairing ausstehend"
+    icon: "mdi:key-alert"
+    web_server:
+      sorting_group_id: sg_eebus_cs
+      sorting_weight: 4
+    update_interval: 3s
+    lambda: |-
+      std::string ski = id(hems_cs).pending_remote_ski();
+      if (ski.empty() || ski == id(hems_cs).paired_remote_ski()) return std::string("(keine)");
+      return ski;
+
+  - platform: template
+    name: "${device_name} CS Gepaarte SKI"
+    icon: "mdi:key-chain"
+    web_server:
+      sorting_group_id: sg_eebus_cs
+      sorting_weight: 5
+    entity_category: diagnostic
+    update_interval: 10s
+    lambda: |-
+      std::string ski = id(hems_cs).paired_remote_ski();
+      return ski.empty() ? std::string("(keine)") : ski;
+
+  - platform: template
+    name: "${device_name} CS Eigene SKI (Port 4712)"
+    icon: "mdi:key"
+    web_server:
+      sorting_group_id: sg_eebus_cs
+      sorting_weight: 6
+    entity_category: diagnostic
+    update_interval: 60s
+    lambda: "return id(hems_cs).local_ski();"
+
+  - platform: template
+    name: "${device_name} CS Use Cases"
+    icon: "mdi:format-list-checks"
+    web_server:
+      sorting_group_id: sg_eebus_cs
+      sorting_weight: 7
+    entity_category: diagnostic
+    update_interval: 5s
+    lambda: "return id(hems_cs).active_use_cases();"
+
+  # --- §14a control channel (sg_netz) ---
+  - platform: template
+    name: "${device_name} §14a Steuerungskanal"
+    icon: "mdi:transmission-tower"
+    web_server:
+      sorting_group_id: sg_netz
+      sorting_weight: 4
+    update_interval: 5s
+    lambda: |-
+      if (id(hems_cs).is_limit_active()) return std::string("EEBus digital (CS)");
+      if (id(grid_provider_switch).state) return std::string("Relaiskontakt DI1");
+      if (id(manual_enwg_test).state) return std::string("Simulation 4200 W");
+      return std::string("Kein Eingriff aktiv");
+
+  - platform: template
+    name: "${device_name} §14a Status"
+    id: enwg_status
+    icon: "mdi:transmission-tower"
+    web_server:
+      sorting_group_id: sg_netz
+      sorting_weight: 3
+    update_interval: 2s
+    lambda: |-
+      if (id(hems_cs).is_limit_active()) return {"Active - EEBus digital (CS)"};
+      if (id(grid_provider_switch).state) return {"Active - Relay DI1"};
+      if (id(manual_enwg_test).state)     return {"Active - Simulation 4200 W"};
+      return {"Inactive - Normal Operation"};
+
+  - platform: template
+    name: "${device_name} Letztes §14a-Ereignis"
+    id: last_enwg_event
+    icon: "mdi:clock-alert"
+    web_server:
+      sorting_group_id: sg_netz
+      sorting_weight: 6
+    update_interval: never
+
+button:
+  # --- CS Pairing (sg_eebus_cs, weights 10-13) ---
+  - platform: template
+    name: "${device_name} CS Pairing-Modus starten"
+    icon: "mdi:account-plus"
+    web_server:
+      sorting_group_id: sg_eebus_cs
+      sorting_weight: 10
+    on_press:
+      - lambda: "id(hems_cs).enter_pairing_mode();"
+
+  - platform: template
+    name: "${device_name} CS Pairing akzeptieren"
+    icon: "mdi:check-circle"
+    web_server:
+      sorting_group_id: sg_eebus_cs
+      sorting_weight: 11
+    on_press:
+      - lambda: "id(hems_cs).accept_pairing();"
+
+  - platform: template
+    name: "${device_name} CS Pairing ablehnen"
+    icon: "mdi:close-circle"
+    web_server:
+      sorting_group_id: sg_eebus_cs
+      sorting_weight: 12
+    on_press:
+      - lambda: "id(hems_cs).reject_pairing();"
+
+  - platform: template
+    name: "${device_name} CS Pairing zurücksetzen"
+    icon: "mdi:lock-reset"
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: sg_eebus_cs
+      sorting_weight: 13
+    on_press:
+      - lambda: "id(hems_cs).forget_pairing(id(hems_cs).paired_remote_ski());"
+
+# §14a hardware relay (PCA9554 channel 0) — controlled by CS on_limit_active and DI1/simulation
+switch:
+  - platform: gpio
+    name: "${device_name} Fronius §14a Leistungslimit"
+    id: relay_1
+    icon: mdi:transmission-tower-off
+    web_server:
+      sorting_group_id: sg_fronius
+      sorting_weight: 1
+    pin:
+      pca9554: relay_expander
+      number: 0
+      mode:
+        output: true
+      inverted: false
+
+  - platform: template
+    name: "${device_name} §14a-Simulation (4200 W)"
+    id: manual_enwg_test
+    icon: "mdi:transmission-tower-import"
+    web_server:
+      sorting_group_id: sg_netz
+      sorting_weight: 2
+    optimistic: true
+    turn_on_action:
+      - lambda: |-
+          ESP_LOGW("enwg", "Simulation: Netzbetreiber aktiviert Leistungsbegrenzung 4200 W");
+          float _ev = id(power_limit_events).state;
+          id(power_limit_events).publish_state(std::isnan(_ev) ? 1.0f : _ev + 1.0f);
+      - text_sensor.template.publish:
+          id: last_enwg_event
+          state: !lambda 'return std::string("Aktiviert (Sim): ") + id(ha_time).now().strftime("%d.%m.%Y %H:%M:%S");'
+      - number.set:
+          id: ct1addon
+          value: 45.0
+      - number.set:
+          id: ct2addon
+          value: 45.0
+      - number.set:
+          id: ct3addon
+          value: 45.0
+      - light.turn_on:
+          id: status_led
+          effect: "Paragraph14a Warning Flash"
+      - switch.turn_on: relay_1
+      - lambda: |-
+          id(hems_eg1).set_limit(4200.0f);
+    turn_off_action:
+      - lambda: |-
+          ESP_LOGW("enwg", "Simulation: Netzbetreiber deaktiviert Leistungsbegrenzung");
+      - text_sensor.template.publish:
+          id: last_enwg_event
+          state: !lambda 'return std::string("Beendet (Sim): ") + id(ha_time).now().strftime("%d.%m.%Y %H:%M:%S");'
+      - number.set:
+          id: ct1addon
+          value: !lambda "return id(ladebegrenzung_addon);"
+      - number.set:
+          id: ct2addon
+          value: !lambda "return id(ladebegrenzung_addon);"
+      - number.set:
+          id: ct3addon
+          value: !lambda "return id(ladebegrenzung_addon);"
+      - light.turn_off:
+          id: status_led
+      - switch.turn_off: relay_1
+      - lambda: |-
+          id(hems_eg1).clear_limit();
+
+# WS2812 onboard RGB LED (GPIO38) — §14a status indicator
+light:
+  - platform: esp32_rmt_led_strip
+    rgb_order: GRB
+    pin: GPIO38
+    num_leds: 1
+    chipset: WS2812
+    name: "${device_name} Status LED"
+    id: status_led
+    icon: mdi:led-on
+    web_server:
+      sorting_group_id: sg_system
+      sorting_weight: 3
+    restore_mode: ALWAYS_OFF
+    effects:
+      - strobe:
+          name: "Paragraph14a Warning Flash"
+          colors:
+            - state: true
+              brightness: 100%
+              red: 100%
+              green: 0%
+              blue: 0%
+              duration: 500ms
+            - state: false
+              brightness: 0%
+              duration: 500ms

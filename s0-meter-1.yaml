@@ -1,0 +1,82 @@
+# S0 pulse meter 1 — water meter on DI2 (GPIO5), liters per pulse configurable at runtime.
+# Exports: water_flow_rate, water_total, water_lpr_number
+
+web_server:
+  sorting_groups:
+    - id: sg_wasser
+      name: "Wasser"
+      sorting_weight: 4
+
+globals:
+  - id: water_liter_per_pulse
+    type: float
+    restore_value: true
+    initial_value: "1.0"
+  - id: water_total_m3
+    type: float
+    restore_value: true
+    initial_value: "0.0"
+
+number:
+  - platform: template
+    name: "${device_name} Water Liters per Pulse"
+    id: water_lpr_number
+    icon: mdi:water-opacity
+    web_server:
+      sorting_group_id: sg_wasser
+      sorting_weight: 3
+    unit_of_measurement: "L/pulse"
+    min_value: 0.1
+    max_value: 100.0
+    step: 0.1
+    optimistic: true
+    restore_value: true
+    initial_value: "1.0"
+    set_action:
+      - globals.set:
+          id: water_liter_per_pulse
+          value: !lambda "return x;"
+      - logger.log:
+          format: "Water meter: %.1f L/pulse"
+          args: ["x"]
+
+sensor:
+  - platform: pulse_meter
+    name: "${device_name} Water Flow Rate"
+    id: water_flow_rate
+    icon: mdi:water-pump
+    web_server:
+      sorting_group_id: sg_wasser
+      sorting_weight: 1
+    unit_of_measurement: "L/min"
+    device_class: water
+    state_class: measurement
+    accuracy_decimals: 2
+    internal_filter: 10ms
+    timeout: 10s
+    pin:
+      number: GPIO5
+      mode:
+        input: true
+        pullup: true
+      inverted: true              # S0 active-low
+    filters:
+      - lambda: return x * id(water_liter_per_pulse);  # pulses → L/min
+    on_raw_value:
+      - globals.set:
+          id: water_total_m3
+          value: !lambda "return id(water_total_m3) + id(water_liter_per_pulse) * 0.001f;"
+
+  - platform: template
+    name: "${device_name} Water Total"
+    id: water_total
+    icon: mdi:water
+    web_server:
+      sorting_group_id: sg_wasser
+      sorting_weight: 2
+    unit_of_measurement: "m³"
+    device_class: water
+    state_class: total_increasing
+    accuracy_decimals: 3
+    update_interval: 10s
+    lambda: "return id(water_total_m3);"

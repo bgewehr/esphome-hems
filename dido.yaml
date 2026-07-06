@@ -1,0 +1,210 @@
+# Hardware DI/DO — TCA9554 I/O expander, opto-isolated digital inputs.
+# Exports: relay_expander (PCA9554), relay_2..8, di_3..8, sg_dido
+
+web_server:
+  sorting_groups:
+    - id: sg_dido
+      name: "DI/DO"
+      sorting_weight: 5
+
+# I²C bus for TCA9554 relay expander
+i2c:
+  id: i2c_bus
+  sda: GPIO42
+  scl: GPIO41
+  scan: true
+  frequency: 400kHz
+
+# TCA9554 I/O expander (0x20) — drives 8 relays
+pca9554:
+  - id: relay_expander
+    address: 0x20
+    i2c_id: i2c_bus
+
+switch:
+  # relay_1 (§14a Fronius) is in eebus-cs.yaml — it belongs to §14a control logic.
+  - platform: gpio
+    name: "${device_name} Relay 2"
+    id: relay_2
+    icon: mdi:electric-switch
+    web_server:
+      sorting_group_id: sg_dido
+      sorting_weight: 2
+    pin:
+      pca9554: relay_expander
+      number: 1
+      mode:
+        output: true
+      inverted: false
+
+  - platform: gpio
+    name: "${device_name} Relay 3"
+    id: relay_3
+    icon: mdi:electric-switch
+    web_server:
+      sorting_group_id: sg_dido
+      sorting_weight: 3
+    pin:
+      pca9554: relay_expander
+      number: 2
+      mode:
+        output: true
+      inverted: false
+
+  - platform: gpio
+    name: "${device_name} Relay 4"
+    id: relay_4
+    icon: mdi:electric-switch
+    web_server:
+      sorting_group_id: sg_dido
+      sorting_weight: 4
+    pin:
+      pca9554: relay_expander
+      number: 3
+      mode:
+        output: true
+      inverted: false
+
+  - platform: gpio
+    name: "${device_name} Relay 5"
+    id: relay_5
+    icon: mdi:electric-switch
+    web_server:
+      sorting_group_id: sg_dido
+      sorting_weight: 5
+    pin:
+      pca9554: relay_expander
+      number: 4
+      mode:
+        output: true
+      inverted: false
+
+  - platform: gpio
+    name: "${device_name} Relay 6"
+    id: relay_6
+    icon: mdi:electric-switch
+    web_server:
+      sorting_group_id: sg_dido
+      sorting_weight: 6
+    pin:
+      pca9554: relay_expander
+      number: 5
+      mode:
+        output: true
+      inverted: false
+
+  - platform: gpio
+    name: "${device_name} Relay 7"
+    id: relay_7
+    icon: mdi:electric-switch
+    web_server:
+      sorting_group_id: sg_dido
+      sorting_weight: 7
+    pin:
+      pca9554: relay_expander
+      number: 6
+      mode:
+        output: true
+      inverted: false
+
+  - platform: gpio
+    name: "${device_name} Relay 8"
+    id: relay_8
+    icon: mdi:electric-switch
+    web_server:
+      sorting_group_id: sg_dido
+      sorting_weight: 8
+    pin:
+      pca9554: relay_expander
+      number: 7
+      mode:
+        output: true
+      inverted: false
+
+# Digital inputs (opto-isolated, active-low) — DI1 (GPIO4) is §14a, defined in eebus-cs.yaml
+binary_sensor:
+  # DI2 (GPIO5) is the S0 pulse input — defined in s0-meter-1.yaml
+
+  - platform: gpio
+    name: "${device_name} Digital Input 3"
+    id: di_3
+    icon: mdi:electric-switch-closed
+    web_server:
+      sorting_group_id: sg_dido
+      sorting_weight: 13
+    pin:
+      number: GPIO6
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+
+  - platform: gpio
+    name: "${device_name} Digital Input 4"
+    id: di_4
+    icon: mdi:electric-switch-closed
+    web_server:
+      sorting_group_id: sg_dido
+      sorting_weight: 14
+    pin:
+      number: GPIO7
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+
+  - platform: gpio
+    name: "${device_name} Digital Input 5"
+    id: di_5
+    icon: mdi:electric-switch-closed
+    web_server:
+      sorting_group_id: sg_dido
+      sorting_weight: 15
+    pin:
+      number: GPIO8
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+
+  - platform: gpio
+    name: "${device_name} Digital Input 6"
+    id: di_6
+    icon: mdi:electric-switch-closed
+    web_server:
+      sorting_group_id: sg_dido
+      sorting_weight: 16
+    pin:
+      number: GPIO9
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+
+  - platform: gpio
+    name: "${device_name} Digital Input 7"
+    id: di_7
+    icon: mdi:electric-switch-closed
+    web_server:
+      sorting_group_id: sg_dido
+      sorting_weight: 17
+    pin:
+      number: GPIO10
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+
+  - platform: gpio
+    name: "${device_name} Digital Input 8"
+    id: di_8
+    icon: mdi:electric-switch-closed
+    web_server:
+      sorting_group_id: sg_dido
+      sorting_weight: 18
+    pin:
+      number: GPIO11
+      mode:
+        input: true
+        pullup: true
+      inverted: true
