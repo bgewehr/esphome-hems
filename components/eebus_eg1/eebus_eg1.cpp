@@ -547,9 +547,9 @@ void EebusEg1Component::set_limit(float watts) {
     return;
   }
 
-  /* §14a: never limit below 4200 W (WP also enforces this internally) */
+  /* §14a: never limit below 4200 W — WP silently ignores active limits below this threshold */
   if (watts > 0.0f && watts < 4200.0f) {
-    ESP_LOGW(TAG, "Clamping %.0f W → 4200 W (§14a minimum)", watts);
+    ESP_LOGW(TAG, "Clamping %.0f W → 4200 W (WP minimum)", watts);
     watts = 4200.0f;
   }
 
