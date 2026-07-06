@@ -495,7 +495,7 @@ void EebusEgComponent::loop() {
 
   /* Failsafe setup retry: DeviceConfiguration key descriptions arrive after on_entity_connect,
    * so the first attempt in on_entity_connect fails. Retry every 5 s until it succeeds. */
-  if (connected_ && have_remote_entity_ && !failsafe_set_ && now >= failsafe_retry_ms_) {
+  if (connected_ && have_remote_entity_ && !remote_ski_.empty() && !failsafe_set_ && now >= failsafe_retry_ms_) {
     ScaledValue fs_limit;
     fs_limit.value = (int64_t)failsafe_limit_w_;
     fs_limit.scale = 0;
@@ -695,6 +695,13 @@ void EebusEgComponent::subscribe_semp_() {
 }
 
 void EebusEgComponent::on_entity_connect(const EntityAddressType* addr) {
+  if (remote_ski_.empty() && !pairing_mode_active_) {
+    /* Entity connected but this instance has no paired device and pairing mode is off.
+     * The SHIP rejection (CANCEL_PAIRING_WITH_SKI) may not close the SPINE layer fast
+     * enough — refuse the entity connection here as well. */
+    ESP_LOGW(TAG, "%s: entity connect from unpaired device ignored", instance_name_.c_str());
+    return;
+  }
   ESP_LOGI(TAG, "%s entity connected", instance_name_.c_str());
   connected_          = true;
   heartbeat_alarm_    = false;
