@@ -1,3 +1,0 @@
-WebsocketCreator
-void Destruct()
-WebsocketObject* CreateWebsocket(WebsocketCallback cb, void* ctx) 

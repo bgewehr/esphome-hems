@@ -1,3 +1,0 @@
-MaMeasurement
-EebusMeasurementNameId GetName() const
-EebusError GetData(EntityLocalObject* local_entity, EntityRemoteObject* remote_entity, ScaledValue* measurement_value) const

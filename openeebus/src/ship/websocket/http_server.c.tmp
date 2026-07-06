@@ -1,4 +1,0 @@
-HttpServer
-void Destruct()
-EebusError Start()
-void Stop()

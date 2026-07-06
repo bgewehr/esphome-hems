@@ -1,8 +1,0 @@
-Operations
-void Destruct()
-bool GetRead() const
-bool GetReadPartial() const
-bool GetWrite() const
-bool GetWritePartial() const
-const char* ToString() const
-const PossibleOperationsType* GetInformation() const

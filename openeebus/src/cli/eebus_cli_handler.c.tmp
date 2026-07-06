@@ -1,3 +1,0 @@
-EebusCliHandler
-void Destruct()
-void HandleCmd(const char* const* tokens, size_t num_tokens) const

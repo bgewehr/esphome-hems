@@ -1,7 +1,0 @@
-HeartbeatManager
-void Destruct()
-bool IsHeartbeatRunning() const
-void SetLocalFeature(EntityLocalObject* entity, FeatureLocalObject* feature)
-void Tick()
-EebusError Start()
-void Stop()
