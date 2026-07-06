@@ -143,7 +143,8 @@ text_sensor:
     update_interval: 30s
     lambda: |-
       std::string ski = id(hems_eg1).remote_ski();
-      return ski.empty() ? std::string("(suche...)") : ski;
+      if (!ski.empty()) return ski;
+      return id(hems_eg1).is_pairing_mode() ? std::string("(suche...)") : std::string("(keine)");
 
   - platform: template
     name: "${device_name} EG1 Eigene SKI (Port 4713)"
