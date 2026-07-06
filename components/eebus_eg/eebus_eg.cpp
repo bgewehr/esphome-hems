@@ -295,9 +295,17 @@ static void SR_OnShipStateUpdate(
                ski ? ski : "null");
       return;
     }
+    /* Reconnect from a previously trusted remote can reach kDataExchange without
+     * going through IsWaitingForTrustAllowed.  Only accept if this instance already
+     * has this device paired, OR if pairing mode is currently active. */
+    bool known   = !r->self->remote_ski_.empty() && r->self->remote_ski_ == ski;
+    bool pairing = r->self->pairing_mode_active_ && millis() < r->self->pairing_deadline_ms_;
+    if (!known && !pairing) {
+      r->self->reject_reconnect(ski);
+      return;
+    }
     r->self->remote_ski_ = ski;
     r->self->pairing_state_ = "Gepairt: " + std::string(ski);
-    ESP_LOGW("eebus_eg", "EG1 pairing approved, remote SKI=%s", ski);
     r->self->save_remote_ski_nvs_(ski);
     r->self->on_ship_data_exchange_(ski);
   }
@@ -1089,6 +1097,12 @@ void EebusEgComponent::set_mdns_register(bool val) {
   ESP_LOGW(TAG, "%s: mDNS: register TXT -> %s", instance_name_.c_str(), val ? "true" : "false");
 }
 
+void EebusEgComponent::reject_reconnect(const char* ski) {
+  ESP_LOGW(TAG, "%s: rejecting reconnect from unregistered device %s (pairing mode off)",
+           instance_name_.c_str(), ski);
+  if (service_) EEBUS_SERVICE_CANCEL_PAIRING_WITH_SKI(service_, ski);
+}
+
 void EebusEgComponent::forget_pairing() {
   ESP_LOGW(TAG, "%s: pairing cleared", instance_name_.c_str());
   std::string old_ski = remote_ski_;
@@ -1096,9 +1110,11 @@ void EebusEgComponent::forget_pairing() {
   remote_ski_.clear();
   device_label_.clear();
   pairing_state_ = "Inaktiv";
-  /* Drop the existing connection — triggers on_entity_disconnect which resets all UI state */
   if (service_ && !old_ski.empty()) {
+    /* UNREGISTER removes the SKI from the outbound-connect whitelist.
+     * CANCEL_PAIRING tears down the active SHIP session and closes the connection. */
     EEBUS_SERVICE_UNREGISTER_REMOTE_SKI(service_, old_ski.c_str());
+    EEBUS_SERVICE_CANCEL_PAIRING_WITH_SKI(service_, old_ski.c_str());
   }
 }
 

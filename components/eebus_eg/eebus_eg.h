@@ -111,6 +111,7 @@ class EebusEgComponent : public Component {
   void forget_pairing();
   void set_mdns_register(bool val);
   bool is_pairing_mode() const { return pairing_mode_active_; }
+  void reject_reconnect(const char* ski);  /* called from vtable: cancel unsolicited reconnect */
 
   /* Diagnostic test: stop outbound heartbeat and block reconnect for 120 s.
    * The remote CS device will apply its failsafe after its heartbeat timeout (2× 60 s),
