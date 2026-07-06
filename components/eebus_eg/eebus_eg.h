@@ -254,7 +254,7 @@ static void MpcL_OnRemoteEntityConnect(MaMpcListenerObject* o, const EntityAddre
    * Without this, the SPINE/use-case layer fires independently of the SHIP-level rejection in
    * SR_OnShipStateUpdate/on_entity_connect, leaking mpc_connected_=true for unpaired devices. */
   if (!self->is_connected()) {
-    ESP_LOGW("eebus_eg", "%s: MPC entity connect ignored — SHIP entity not accepted",
+    ESP_LOGD("eebus_eg", "%s: MPC entity connect ignored — SHIP entity not accepted",
              self->instance_name());
     return;
   }

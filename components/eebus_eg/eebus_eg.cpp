@@ -699,7 +699,7 @@ void EebusEgComponent::on_entity_connect(const EntityAddressType* addr) {
     /* Entity connected but this instance has no paired device and pairing mode is off.
      * The SHIP rejection (CANCEL_PAIRING_WITH_SKI) may not close the SPINE layer fast
      * enough — refuse the entity connection here as well. */
-    ESP_LOGW(TAG, "%s: entity connect from unpaired device ignored", instance_name_.c_str());
+    ESP_LOGD(TAG, "%s: entity connect from unpaired device ignored", instance_name_.c_str());
     return;
   }
   ESP_LOGI(TAG, "%s entity connected", instance_name_.c_str());
