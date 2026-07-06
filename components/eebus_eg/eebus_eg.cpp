@@ -9,6 +9,7 @@
 #include <cstdarg>
 #include <cstring>
 #include <ctime>
+#include <set>
 
 #include "esphome/core/log.h"
 
@@ -193,6 +194,11 @@ static const uint32_t kHeartbeatTimeoutSeconds = 60;
  * EEBus heartbeats are sent every ~40 s; 3× that gives a safe margin. */
 static const uint32_t kInboundHeartbeatAlarmMs = 120000u;
 
+/* Tracks local SKIs already claimed by started EG instances in this boot.
+ * Used to detect bad cert migrations where multiple instances inherited the same cert
+ * from the legacy 'eebus_wp' NVS namespace. */
+static std::set<std::string> s_claimed_eg_skis;
+
 /* Pairing window: how long the explicit pairing mode stays open */
 static const uint32_t kPairingWindowMs = 300000;  /* 5 minutes */
 
@@ -320,7 +326,7 @@ static const ServiceReaderInterface kServiceReaderMethods = {
  * ====================================================================== */
 
 void EebusEgComponent::setup() {
-  ESP_LOGI(TAG, "Setting up EEBus EG1 controller");
+  ESP_LOGI(TAG, "Setting up EEBus %s", instance_name_.c_str());
 
   /* Derive per-instance NVS namespace from SHIP port (e.g. "eg4713").
    * Keeps instances isolated when MULTI_CONF is used.
@@ -343,6 +349,18 @@ void EebusEgComponent::setup() {
         if (!old_ski.empty()) save_remote_ski_nvs_(old_ski.c_str());
         ESP_LOGI(TAG, "Migrated NVS cert+SKI from '%s' to '%s'", NVS_NS_LEGACY, nvs_ns_.c_str());
         free(mc); free(mk); mc = nullptr; mk = nullptr; mcl = mkl = 0;
+        /* Erase legacy cert so no subsequent instance inherits the same certificate and SKI. */
+        {
+          nvs_handle_t h_leg;
+          if (nvs_open(NVS_NS_LEGACY, NVS_READWRITE, &h_leg) == ESP_OK) {
+            nvs_erase_key(h_leg, NVS_KEY_CERT);
+            nvs_erase_key(h_leg, NVS_KEY_KEY);
+            nvs_erase_key(h_leg, NVS_KEY_SKI);
+            nvs_commit(h_leg);
+            nvs_close(h_leg);
+            ESP_LOGI(TAG, "Erased legacy cert from '%s' after migration", NVS_NS_LEGACY);
+          }
+        }
       } else {
         nvs_ns_ = new_ns;
       }
@@ -359,7 +377,7 @@ void EebusEgComponent::setup() {
         save_remote_ski_nvs_("");
         remote_ski_.clear();
       } else {
-        ESP_LOGW(TAG, "Loaded paired EG1 SKI from NVS: %s", remote_ski_.c_str());
+        ESP_LOGW(TAG, "Loaded paired remote SKI from NVS: %s", remote_ski_.c_str());
       }
     }
   }
@@ -372,6 +390,33 @@ void EebusEgComponent::setup() {
     if (!load_or_generate_cert_() || !load_cert_nvs_(&cert, &cl, &key, &kl)) {
       ESP_LOGE(TAG, "Certificate setup failed");
       mark_failed(); return;
+    }
+  }
+
+  /* Detect shared cert from a bad legacy migration: if another EG instance already claimed
+   * this local SKI, the cert was copied from 'eebus_wp' without being erased first.
+   * Erase from NVS and generate a unique cert so each instance has its own EEBus identity. */
+  {
+    TlsCertificateObject* tls_tmp = TlsCertificateParseX509KeyPair(
+        (const char*)cert, (size_t)cl, (const char*)key, (size_t)kl);
+    const char* ski_tmp = tls_tmp ? TLS_CERTIFICATE_GET_SKI(tls_tmp) : nullptr;
+    if (ski_tmp && s_claimed_eg_skis.count(std::string(ski_tmp))) {
+      ESP_LOGW(TAG, "%s: local SKI %s already owned by another instance — regenerating unique cert",
+               instance_name_.c_str(), ski_tmp);
+      free(cert); free(key); cert = nullptr; key = nullptr; cl = kl = 0;
+      nvs_handle_t h_dup;
+      if (nvs_open(nvs_ns_.c_str(), NVS_READWRITE, &h_dup) == ESP_OK) {
+        nvs_erase_key(h_dup, NVS_KEY_CERT);
+        nvs_erase_key(h_dup, NVS_KEY_KEY);
+        nvs_erase_key(h_dup, NVS_KEY_SKI);
+        nvs_commit(h_dup);
+        nvs_close(h_dup);
+      }
+      remote_ski_.clear();
+      if (!load_or_generate_cert_() || !load_cert_nvs_(&cert, &cl, &key, &kl)) {
+        ESP_LOGE(TAG, "Certificate regeneration failed");
+        mark_failed(); return;
+      }
     }
   }
 
@@ -842,6 +887,7 @@ bool EebusEgComponent::start_eebus_service_(
 
   const char* local_ski = TLS_CERTIFICATE_GET_SKI(tls_cert);
   if (local_ski) local_ski_ = local_ski;
+  if (!local_ski_.empty()) s_claimed_eg_skis.insert(local_ski_);
   ESP_LOGI(TAG, "%s local SKI: %s", instance_name_.c_str(), local_ski ? local_ski : "(null)");
 
   /* Build service config */
