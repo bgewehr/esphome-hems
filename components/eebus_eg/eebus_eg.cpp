@@ -606,10 +606,12 @@ void EebusEgComponent::set_limit(float watts) {
     return;
   }
 
-  /* §14a: never limit below 4200 W — WP silently ignores active limits below this threshold */
-  if (watts > 0.0f && watts < 4200.0f) {
-    ESP_LOGW(TAG, "Clamping %.0f W → 4200 W (WP minimum)", watts);
-    watts = 4200.0f;
+  /* Device minimum: some devices silently ignore active limits below a threshold
+   * (WP: 4200 W). Configurable per instance via set_min_limit_w(); 0 disables. */
+  if (watts > 0.0f && min_limit_w_ > 0.0f && watts < min_limit_w_) {
+    ESP_LOGW(TAG, "%s: clamping %.0f W → %.0f W (device minimum)",
+             instance_name_.c_str(), watts, min_limit_w_);
+    watts = min_limit_w_;
   }
 
   LoadLimit limit;
@@ -720,6 +722,22 @@ void EebusEgComponent::on_entity_connect(const EntityAddressType* addr) {
      * enough — refuse the entity connection here as well. */
     ESP_LOGD(TAG, "%s: entity connect from unpaired device ignored", instance_name_.c_str());
     return;
+  }
+  /* Entity connects arrive from every device whose SHIP session reaches the SPINE
+   * layer — including foreign devices probing this port (the WP gateway connects to
+   * all EG instances). Accept only entities belonging to the paired device; a foreign
+   * entity would overwrite remote_entity_addr_ and all subsequent limit writes,
+   * failsafe writes and MPC readings would go to / come from the wrong device. */
+  if (!remote_ski_.empty() && service_ && addr && addr->device && addr->device[0] != '\0') {
+    DeviceLocalObject* local_dev = EEBUS_SERVICE_GET_LOCAL_DEVICE(service_);
+    DeviceRemoteObject* paired_dev = local_dev
+        ? DEVICE_LOCAL_GET_REMOTE_DEVICE_WITH_SKI(local_dev, remote_ski_.c_str()) : nullptr;
+    const char* paired_addr = paired_dev ? DEVICE_GET_ADDRESS(DEVICE_OBJECT(paired_dev)) : nullptr;
+    if (paired_addr && paired_addr[0] != '\0' && strcmp(paired_addr, addr->device) != 0) {
+      ESP_LOGW(TAG, "%s: entity connect from foreign device %s ignored (paired device: %s)",
+               instance_name_.c_str(), addr->device, paired_addr);
+      return;
+    }
   }
   ESP_LOGI(TAG, "%s entity connected", instance_name_.c_str());
   connected_          = true;

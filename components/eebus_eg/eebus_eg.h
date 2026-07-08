@@ -102,6 +102,11 @@ class EebusEgComponent : public Component {
   void set_limit(float watts);
   void clear_limit() { set_limit(0.0f); }
 
+  /* Minimum active limit in W. Limits below this are raised to it — needed for
+   * devices that silently ignore lower values (WP: 4200 W). Set to 0 for devices
+   * that accept any limit (wallbox). Default matches the WP behavior. */
+  void set_min_limit_w(float w) { min_limit_w_ = w; }
+
   /** Call from on_time_sync (SNTP or HA) to push a fresh heartbeat timestamp.
    *  Prevents the remote CS device from seeing an epoch timestamp on its first subscription. */
   void refresh_heartbeat();
@@ -199,6 +204,7 @@ class EebusEgComponent : public Component {
   uint32_t    pairing_advert_at_ms_{0};
   float       current_power_w_    {0.0f};
   float       active_limit_w_     {0.0f};
+  float       min_limit_w_        {4200.0f};
   float       pending_limit_w_    {-1.0f};  /* -1 = no pending limit */
   uint32_t    pending_limit_ms_   {0};
   uint32_t    uc_dump_at_ms_      {0};
@@ -305,6 +311,17 @@ static const MaMpcListenerInterface kMpcListenerMethods = {
 
 static void EgL_Destruct(EgLpListenerObject*) {}
 
+/* True when the event's entity belongs to the connected paired device.
+ * Foreign devices (the WP gateway probes every EG port) also generate
+ * listener events; without this check their limit ACKs and heartbeats
+ * would corrupt this instance's state. */
+static bool EgL_FromPairedDevice(EebusEgComponent* self, const EntityAddressType* addr) {
+  if (!self->is_connected()) return false;
+  const char* dev = (addr && addr->device) ? addr->device : "";
+  const std::string expected = self->remote_spine_addr();
+  return !expected.empty() && dev[0] != '\0' && expected == dev;
+}
+
 static void EgL_OnRemoteEntityConnect(EgLpListenerObject* o, const EntityAddressType* addr) {
   auto* self = reinterpret_cast<EebusEgComponent::EgListener*>(o)->self;
   ESP_LOGI("eebus", "%s SPINE remote EG/LPC entity connected: ski=%s",
@@ -315,17 +332,21 @@ static void EgL_OnRemoteEntityDisconnect(EgLpListenerObject* o, const EntityAddr
   reinterpret_cast<EebusEgComponent::EgListener*>(o)->self->on_entity_disconnect(addr);
 }
 static void EgL_OnPowerLimitReceive(
-    EgLpListenerObject* o, const EntityAddressType*,
+    EgLpListenerObject* o, const EntityAddressType* addr,
     const ScaledValue* limit, const DurationType*, bool active)
 {
   if (!limit) return;
+  auto* self = reinterpret_cast<EebusEgComponent::EgListener*>(o)->self;
+  if (!EgL_FromPairedDevice(self, addr)) return;
   float w = (float)limit->value * powf(10.0f, (float)limit->scale);
-  reinterpret_cast<EebusEgComponent::EgListener*>(o)->self->on_power_limit_ack(w, active);
+  self->on_power_limit_ack(w, active);
 }
 static void EgL_OnFailsafePowerLimitReceive(EgLpListenerObject*, const EntityAddressType*, const ScaledValue*) {}
 static void EgL_OnFailsafeDurationReceive(EgLpListenerObject*, const EntityAddressType*, const DurationType*) {}
-static void EgL_OnHeartbeatReceive(EgLpListenerObject* o, const EntityAddressType*, uint64_t /*hb_counter*/) {
-  reinterpret_cast<EebusEgComponent::EgListener*>(o)->self->on_heartbeat_received_();
+static void EgL_OnHeartbeatReceive(EgLpListenerObject* o, const EntityAddressType* addr, uint64_t /*hb_counter*/) {
+  auto* self = reinterpret_cast<EebusEgComponent::EgListener*>(o)->self;
+  if (!EgL_FromPairedDevice(self, addr)) return;
+  self->on_heartbeat_received_();
 }
 
 static const EgLpListenerInterface kEgListenerMethods = {

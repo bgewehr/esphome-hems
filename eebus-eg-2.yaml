@@ -24,6 +24,9 @@ select:
     initial_option: "Wärmepumpe"
     restore_value: true
     optimistic: true
+    on_value:
+      # WP silently ignores limits below 4200 W; a wallbox accepts any value.
+      - lambda: "id(hems_eg2).set_min_limit_w(x == \"Wärmepumpe\" ? 4200.0f : 0.0f);"
 
 # Plugin: forward CS limits to EG2 (trigger lists merge across packages)
 eebus_cs:

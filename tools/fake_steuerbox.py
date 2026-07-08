@@ -445,7 +445,11 @@ def drain_incoming(sock, timeout: float = 1.0, our_addr=None, hems_addr=None):
             except Exception:
                 frames.append((tag, raw[1:]))
                 print(f"  <- [{tag}] (raw) {raw[1:80]!r}")
-    except (TimeoutError, OSError):
+    except TimeoutError:
+        pass
+    except ConnectionError:
+        raise  # propagate so callers see the drop immediately
+    except OSError:
         pass
     finally:
         sock.settimeout(None)
@@ -541,7 +545,7 @@ def send_discovery_reply(sock, msg_counter_ref: int, our_addr: str, hems_addr: s
         {"deviceInformation": [{"description": [
             {"deviceAddress": [{"device": our_addr}]},
             {"deviceType": "ElectricitySupplySystem"},
-            {"networkFeatureSet": "simple"},
+            {"networkFeatureSet": "smart"},
         ]}]},
         {"entityInformation": [
             [{"description": [
@@ -561,42 +565,66 @@ def send_discovery_reply(sock, msg_counter_ref: int, our_addr: str, hems_addr: s
                 {"supportedFunction": [
                     [{"function": "nodeManagementUseCaseData"},
                      {"possibleOperations": [{"read": []}]}],
+                    [{"function": "nodeManagementSubscriptionData"},
+                     {"possibleOperations": [{"read": []}]}],
+                    [{"function": "nodeManagementBindingDeleteCall"},
+                     {"possibleOperations": []}],
                     [{"function": "nodeManagementDetailedDiscoveryData"},
                      {"possibleOperations": [{"read": []}]}],
                     [{"function": "nodeManagementSubscriptionRequestCall"},
                      {"possibleOperations": []}],
+                    [{"function": "nodeManagementSubscriptionDeleteCall"},
+                     {"possibleOperations": []}],
+                    [{"function": "nodeManagementBindingData"},
+                     {"possibleOperations": [{"read": []}]}],
                     [{"function": "nodeManagementBindingRequestCall"},
                      {"possibleOperations": []}],
+                    [{"function": "nodeManagementDestinationListData"},
+                     {"possibleOperations": [{"read": []}]}],
+                ]},
+            ]}],
+            [{"description": [
+                {"featureAddress": [{"device": our_addr}, {"entity": [0]}, {"feature": 1}]},
+                {"featureType": "DeviceClassification"},
+                {"role": "server"},
+                {"supportedFunction": [
+                    [{"function": "deviceClassificationManufacturerData"},
+                     {"possibleOperations": [{"read": []}]}],
                 ]},
             ]}],
             [{"description": [
                 {"featureAddress": [{"device": our_addr}, {"entity": [1]}, {"feature": 1}]},
                 {"featureType": "DeviceDiagnosis"},
                 {"role": "client"},
+                {"description": "DeviceDiagnosis Client"},
             ]}],
             [{"description": [
                 {"featureAddress": [{"device": our_addr}, {"entity": [1]}, {"feature": 2}]},
                 {"featureType": "LoadControl"},
                 {"role": "client"},
-                {"supportedFunction": [
-                    [{"function": "loadControlLimitListData"},
-                     {"possibleOperations": [{"read": []}, {"write": []}]}],
-                ]},
+                {"description": "LoadControl Client"},
             ]}],
             [{"description": [
                 {"featureAddress": [{"device": our_addr}, {"entity": [1]}, {"feature": 3}]},
                 {"featureType": "DeviceConfiguration"},
                 {"role": "client"},
+                {"description": "DeviceConfiguration Client"},
             ]}],
             [{"description": [
                 {"featureAddress": [{"device": our_addr}, {"entity": [1]}, {"feature": 4}]},
                 {"featureType": "ElectricalConnection"},
                 {"role": "client"},
+                {"description": "ElectricalConnection Client"},
             ]}],
             [{"description": [
                 {"featureAddress": [{"device": our_addr}, {"entity": [1]}, {"feature": 5}]},
                 {"featureType": "DeviceDiagnosis"},
                 {"role": "server"},
+                {"supportedFunction": [
+                    [{"function": "deviceDiagnosisHeartbeatData"},
+                     {"possibleOperations": [{"read": []}]}],
+                ]},
+                {"description": "DeviceDiagnosis Server"},
             ]}],
         ]},
     ]
@@ -640,6 +668,13 @@ def send_use_case_reply(sock, msg_counter_ref: int, our_addr: str, hems_addr: st
                 {"useCaseSupport": [
                     [
                         {"useCaseName": "limitationOfPowerConsumption"},
+                        {"useCaseVersion": "1.0.0"},
+                        {"useCaseAvailable": True},
+                        {"scenarioSupport": [1, 2, 3, 4]},
+                        {"useCaseDocumentSubRevision": "release"},
+                    ],
+                    [
+                        {"useCaseName": "limitationOfPowerProduction"},
                         {"useCaseVersion": "1.0.0"},
                         {"useCaseAvailable": True},
                         {"scenarioSupport": [1, 2, 3, 4]},
@@ -756,6 +791,8 @@ def _handle_spine_read(sock, parsed: dict, our_addr: str, hems_addr: str):
             print(f"  [SPINE] Auto-reply: heartbeat REPLY (msgCounter={msg_counter})")
             _heartbeat_counter = getattr(_handle_spine_read, "_hb_counter", 0) + 1
             _handle_spine_read._hb_counter = _heartbeat_counter
+            import datetime
+            ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
             hb_data = {
                 "datagram": [{
                     "header": [
@@ -767,8 +804,9 @@ def _handle_spine_read(sock, parsed: dict, our_addr: str, hems_addr: str):
                         {"cmdClassifier":      "reply"},
                     ],
                     "payload": [{"cmd": [[{"deviceDiagnosisHeartbeatData": [
+                        {"timestamp": ts},
                         {"heartbeatCounter": _heartbeat_counter},
-                        {"heartbeatTimeout": 60},
+                        {"heartbeatTimeout": "PT1M"},
                     ]}]]}],
                 }]
             }
@@ -803,18 +841,24 @@ def send_use_case_announce(sock, our_addr: str, hems_addr: str):
         cmd_sequence=[
             {"nodeManagementUseCaseData": [
                 {"useCaseInformation": [
-                    # Each useCaseInformation entry is a SEQUENCE
                     [
                         {"address": [{"device": our_addr}, {"entity": [1]}]},
                         {"actor": "EnergyGuard"},
                         {"useCaseSupport": [
-                            # Each useCaseSupport entry is a SEQUENCE
                             [
                                 {"useCaseName": "limitationOfPowerConsumption"},
                                 {"useCaseVersion": "1.0.0"},
                                 {"useCaseAvailable": True},
                                 {"scenarioSupport": [1, 2, 3, 4]},
-                            ]
+                                {"useCaseDocumentSubRevision": "release"},
+                            ],
+                            [
+                                {"useCaseName": "limitationOfPowerProduction"},
+                                {"useCaseVersion": "1.0.0"},
+                                {"useCaseAvailable": True},
+                                {"scenarioSupport": [1, 2, 3, 4]},
+                                {"useCaseDocumentSubRevision": "release"},
+                            ],
                         ]},
                     ]
                 ]},
@@ -1026,14 +1070,9 @@ Prerequisites (first-time pairing):
 +----------------------------------------------------------+
 """)
 
-        # Step 2: HEMS sends discovery READ immediately after DataExchange.
-        # drain_incoming auto-replies with our discovery REPLY.
-        print("\n[SPINE] Draining HEMS discovery + auto-replying...")
-        drain_incoming(sock, timeout=2.0, our_addr=our_addr, hems_addr=hems_addr)
-        time.sleep(0.5)
-
-        # Step 3: Subscribe our NM to HEMS NM (EG→CS, NM[0]:0→NM[0]:0).
-        # After this the HEMS will: subscribe back to our NM, then READ our use cases.
+        # Send our NMSubscription immediately — real devices subscribe right at
+        # DataExchange. Delaying until after the initial drain puts us past the
+        # window the HEMS expects the reciprocal subscription to arrive in.
         send_subscription_request(
             sock, our_addr, hems_addr,
             client_entity=[0], client_feature=0,
@@ -1041,17 +1080,24 @@ Prerequisites (first-time pairing):
             server_feature_type="NodeManagement",
             label="NMSubscription",
         )
-        time.sleep(0.5)
 
-        # Drain: RESULT for our NM sub + HEMS subscribes to our NM (auto-RESULT)
-        #        + HEMS reads our use cases (auto-REPLY)
-        drain_incoming(sock, timeout=2.5, our_addr=our_addr, hems_addr=hems_addr)
+        # Combined drain: catches HEMS discovery read, HEMS NM sub, HEMS UC read,
+        # and the RESULT for our NMSubscription — all interleaved.
+        print("\n[SPINE] Draining HEMS discovery + auto-replying...")
+        drain_incoming(sock, timeout=3.0, our_addr=our_addr, hems_addr=hems_addr)
         time.sleep(0.5)
 
         if args.scenario:
             # ── Full §14a scenario ────────────────────────────────────────
 
-            # Step 8: Subscribe our LC CLIENT to HEMS LC SERVER.
+            # Give the HEMS time to process our UC reply and send its DD
+            # subscription + heartbeat read (arrives after the initial drain).
+            drain_incoming(sock, timeout=3.0, our_addr=our_addr, hems_addr=hems_addr)
+            time.sleep(0.5)
+
+            # Step 8: Subscribe EG LC CLIENT [1]:2 → HEMS LC SERVER [1]:2.
+            # Required by the HEMS binding manager before a binding is accepted
+            # (test fixture cs_lpc_test.cpp SetUpRemoteConnection step 8 precedes step 9).
             send_subscription_request(
                 sock, our_addr, hems_addr,
                 client_entity=[1], client_feature=2,
@@ -1059,21 +1105,25 @@ Prerequisites (first-time pairing):
                 server_feature_type="LoadControl",
                 label="LCSubscription",
             )
-            time.sleep(0.5)
-            drain_incoming(sock, timeout=1.0, our_addr=our_addr, hems_addr=hems_addr)
-            time.sleep(0.5)
+            print("[LCSub] Waiting up to 3 s for LC subscription RESULT...")
+            drain_incoming(sock, timeout=3.0, our_addr=our_addr, hems_addr=hems_addr)
+            time.sleep(0.3)
 
-            # Step 9: Establish LoadControl binding before any write.
+            # Step 9: Establish LoadControl binding.
             send_binding_request(sock, our_addr=our_addr, hems_addr=hems_addr)
             time.sleep(0.5)
-            drain_incoming(sock, timeout=1.5, our_addr=our_addr, hems_addr=hems_addr)
+            print("[Bind] Waiting up to 5 s for binding RESULT...")
+            drain_incoming(sock, timeout=5.0, our_addr=our_addr, hems_addr=hems_addr)
+            print("[Bind] Drain complete — sending LPC write")
             time.sleep(0.5)
 
             send_lpc_limit(sock, args.limit, active=True, our_addr=our_addr, hems_addr=hems_addr)
 
-            # Drain any RESULT/ack frames
+            # Drain any RESULT/ack frames — ack_request=True so we expect RESULT_SUCCESS or RESULT_ERROR
             time.sleep(0.5)
-            drain_incoming(sock, timeout=0.5, our_addr=our_addr, hems_addr=hems_addr)
+            print("[Write] Waiting up to 3 s for write RESULT...")
+            drain_incoming(sock, timeout=3.0, our_addr=our_addr, hems_addr=hems_addr)
+            print("[Write] Drain complete")
 
             print(f"\n[§14a] Limit active for {args.hold} s. Check HEMS log for 'EEBUS LPC limit active'.")
             step = 5
@@ -1098,15 +1148,7 @@ Prerequisites (first-time pairing):
             # make the transition from active limit → failsafe visible in the HEMS UI.
             HEMS_HB_TIMEOUT = 60  # must match kHeartbeatTimeoutSeconds in eebus_cs.cpp
 
-            send_subscription_request(
-                sock, our_addr, hems_addr,
-                client_entity=[1], client_feature=2,
-                server_entity=[1], server_feature=2,
-                server_feature_type="LoadControl",
-                label="LCSubscription",
-            )
-            time.sleep(0.5)
-            drain_incoming(sock, timeout=1.0, our_addr=our_addr, hems_addr=hems_addr)
+            drain_incoming(sock, timeout=3.0, our_addr=our_addr, hems_addr=hems_addr)
             time.sleep(0.5)
 
             send_binding_request(sock, our_addr=our_addr, hems_addr=hems_addr)
@@ -1156,8 +1198,6 @@ Prerequisites (first-time pairing):
                 sock = ctx.wrap_socket(raw2, server_hostname=args.host)
                 ws_upgrade(sock, args.host, args.port)
                 ship_handshake(sock, local_id)
-                drain_incoming(sock, timeout=2.0, our_addr=our_addr, hems_addr=hems_addr)
-                time.sleep(0.5)
                 send_subscription_request(
                     sock, our_addr, hems_addr,
                     client_entity=[0], client_feature=0,
@@ -1165,18 +1205,9 @@ Prerequisites (first-time pairing):
                     server_feature_type="NodeManagement",
                     label="NMSub-reset",
                 )
+                drain_incoming(sock, timeout=3.0, our_addr=our_addr, hems_addr=hems_addr)
                 time.sleep(0.5)
-                drain_incoming(sock, timeout=2.5, our_addr=our_addr, hems_addr=hems_addr)
-                time.sleep(0.5)
-                send_subscription_request(
-                    sock, our_addr, hems_addr,
-                    client_entity=[1], client_feature=2,
-                    server_entity=[1], server_feature=2,
-                    server_feature_type="LoadControl",
-                    label="LCSub-reset",
-                )
-                time.sleep(0.5)
-                drain_incoming(sock, timeout=1.0, our_addr=our_addr, hems_addr=hems_addr)
+                drain_incoming(sock, timeout=3.0, our_addr=our_addr, hems_addr=hems_addr)
                 time.sleep(0.5)
                 send_binding_request(sock, our_addr=our_addr, hems_addr=hems_addr)
                 time.sleep(0.5)
@@ -1193,17 +1224,9 @@ Prerequisites (first-time pairing):
         elif args.send_limit:
             # ── Manual one-shot limit ─────────────────────────────────────
             if not args.no_pause:
-                input("\nPress Enter to send subscriptions + binding + LPC limit...")
-            send_subscription_request(
-                sock, our_addr, hems_addr,
-                client_entity=[1], client_feature=2,
-                server_entity=[1], server_feature=2,
-                server_feature_type="LoadControl",
-                label="LCSubscription",
-            )
+                input("\nPress Enter to send binding + LPC limit...")
+            drain_incoming(sock, timeout=3.0, our_addr=our_addr, hems_addr=hems_addr)
             time.sleep(0.5)
-            drain_incoming(sock, timeout=1.0, our_addr=our_addr, hems_addr=hems_addr)
-            time.sleep(0.3)
             send_binding_request(sock, our_addr=our_addr, hems_addr=hems_addr)
             time.sleep(0.5)
             drain_incoming(sock, timeout=1.0, our_addr=our_addr, hems_addr=hems_addr)
