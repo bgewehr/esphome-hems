@@ -28,12 +28,8 @@ select:
       # WP silently ignores limits below 4200 W; a wallbox accepts any value.
       - lambda: "id(hems_eg2).set_min_limit_w(x == \"Wärmepumpe\" ? 4200.0f : 0.0f);"
 
-# Plugin: forward CS limits to EG2 (trigger lists merge across packages)
-eebus_cs:
-  on_limit_active:
-    - lambda: "id(hems_eg2).set_limit(x);"
-  on_limit_cleared:
-    - lambda: "id(hems_eg2).clear_limit();"
+# CS-Limits erreichen EG2 über die Budget-Verteilung (budget-distributor.yaml),
+# nicht mehr als Direktweiterleitung des vollen Limits.
 
 eebus_eg:
   - id: hems_eg2

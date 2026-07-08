@@ -25,12 +25,8 @@ select:
     restore_value: true
     optimistic: true
 
-# Plugin: forward CS limits to EG1 (trigger lists merge across packages)
-eebus_cs:
-  on_limit_active:
-    - lambda: "id(hems_eg1).set_limit(x);"
-  on_limit_cleared:
-    - lambda: "id(hems_eg1).clear_limit();"
+# CS-Limits erreichen EG1 über die Budget-Verteilung (budget-distributor.yaml),
+# nicht mehr als Direktweiterleitung des vollen Limits.
 
 eebus_eg:
   - id: hems_eg1

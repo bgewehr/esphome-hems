@@ -264,6 +264,7 @@ packages:
   eebus_cs: !include eebus-cs.yaml
   eebus_eg1: !include eebus-eg-1.yaml
   eebus_eg2: !include eebus-eg-2.yaml
+  budget: !include budget-distributor.yaml
   s0_meter_1: !include s0-meter-1.yaml
 
 # §14a application glue — relay, LED, CT add-on, and event counter wired into EEBus CS triggers.
