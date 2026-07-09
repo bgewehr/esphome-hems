@@ -118,6 +118,12 @@ class EebusEgComponent : public Component {
   bool is_pairing_mode() const { return pairing_mode_active_; }
   void reject_reconnect(const char* ski);  /* called from vtable: cancel unsolicited reconnect */
   const char* instance_name() const { return instance_name_.c_str(); }
+  EebusServiceObject* service() const { return service_; }
+
+  /* Cross-instance check: true when the SKI is already paired with another
+   * EG instance in this process (used to keep foreign devices out of an open
+   * pairing window). */
+  static bool ski_paired_elsewhere(const EebusEgComponent* self, const char* ski);
 
   /* Diagnostic test: stop outbound heartbeat and block reconnect for 120 s.
    * The remote CS device will apply its failsafe after its heartbeat timeout (2× 60 s),
@@ -165,6 +171,7 @@ class EebusEgComponent : public Component {
   std::string local_ski_           {};
   std::string device_label_        {};
   std::string mdns_instance_name_  {};  /* per-instance mDNS service instance name */
+  static std::vector<EebusEgComponent*> instances_;  /* all EG instances in this process */
   bool        pairing_mode_active_ {false};
   uint32_t    pairing_deadline_ms_ {0};
   uint32_t    connected_since_ms_  {0};

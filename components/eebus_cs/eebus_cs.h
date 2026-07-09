@@ -117,6 +117,7 @@ class EebusCsComponent : public Component {
   /* -----------------------------------------------------------------------
    * State accessors (for sensors / text_sensors in YAML)
    * -------------------------------------------------------------------- */
+  EebusServiceObject* service() const { return service_; }
   bool        is_limit_active()      const { return limit_active_; }
   bool        is_connected()         const { return connected_; }
   bool        is_heartbeat_lost()    const { return heartbeat_lost_; }

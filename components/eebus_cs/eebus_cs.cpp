@@ -24,6 +24,7 @@ extern "C" {
 #include "src/ship/tls_certificate/tls_certificate.h"
 #include "src/spine/entity/entity_local.h"
 #include "src/spine/events/events.h"
+#include "src/spine/device/device_local.h"
 #include "src/spine/model/entity_types.h"
 #include "src/use_case/actor/cs/lpc/cs_lpc.h"
 }
@@ -34,6 +35,12 @@ static void lpc_spine_event_handler(const EventPayload* payload, void* ctx) {
   auto* self = static_cast<esphome::eebus_cs::EebusCsComponent*>(ctx);
   if (!payload) return;
   const char* ski = payload->ski ? payload->ski : "?";
+  /* Ownership gate: only events attributable to THIS instance's own device
+   * (the event bus is process-global across CS and EG instances). */
+  {
+    DeviceLocalObject* own_dl = self->service() ? EEBUS_SERVICE_GET_LOCAL_DEVICE(self->service()) : nullptr;
+    if (!own_dl || !DeviceLocalOwnsEvent(own_dl, payload)) return;
+  }
   if (payload->event_type != kEventTypeUseCaseChange) return;
   const UseCaseFilterType* f = payload->use_case_filter;
   if (!f) return;
