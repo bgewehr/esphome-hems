@@ -21,3 +21,4 @@ tools/.fake_steuerbox_cert.pem
 tools/.fake_steuerbox_key.pem
 tools/.fake_wallbox_cert.pem
 tools/.fake_wallbox_key.pem
+eg1_spine_fn_gt99.log

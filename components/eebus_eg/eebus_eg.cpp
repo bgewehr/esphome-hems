@@ -1050,6 +1050,11 @@ bool EebusEgComponent::start_eebus_service_(
 
   EebusServiceConfigSetRegisterAutoAccept(cfg, false);  /* pairing requires explicit activation */
 
+  /* Remember the mDNS service instance name the library will register —
+   * needed for instance-qualified TXT updates (three _ship services share
+   * one daemon; type-based lookups would hit the wrong instance). */
+  mdns_instance_name_ = EebusServiceConfigGetMdnsServiceName(cfg);
+
   /* Set up ServiceReader vtable */
   SERVICE_READER_INTERFACE(&service_reader_) = &kServiceReaderMethods;
   service_reader_.self = this;
@@ -1139,7 +1144,7 @@ void EebusEgComponent::on_ship_data_exchange_(const char* ski) {
     pairing_mode_active_ = false;
     pairing_deadline_ms_ = 0;
     if (service_) EEBUS_SERVICE_SET_PAIRING_POSSIBLE(service_, false);
-    mdns_service_txt_item_set("_ship", "_tcp", "register", "false");
+    set_mdns_register(false);
     ESP_LOGW(TAG, "%s: mDNS: register TXT -> false (data exchange active)", instance_name_.c_str());
     ESP_LOGW(TAG, "%s pairing mode exited after successful connection", instance_name_.c_str());
   }
@@ -1162,8 +1167,18 @@ void EebusEgComponent::enter_pairing_mode() {
 }
 
 void EebusEgComponent::set_mdns_register(bool val) {
-  mdns_service_txt_item_set("_ship", "_tcp", "register", val ? "true" : "false");
-  ESP_LOGW(TAG, "%s: mDNS: register TXT -> %s", instance_name_.c_str(), val ? "true" : "false");
+  if (mdns_instance_name_.empty()) {
+    ESP_LOGW(TAG, "%s: mDNS: register TXT skipped — service not created yet", instance_name_.c_str());
+    return;
+  }
+  /* Instance-qualified: three _ship services share one mDNS daemon; the
+   * type-based mdns_service_txt_item_set() would update the first match,
+   * i.e. potentially another instance's record. hostname=NULL = local host. */
+  esp_err_t err = mdns_service_txt_item_set_for_host(
+      mdns_instance_name_.c_str(), "_ship", "_tcp", nullptr,
+      "register", val ? "true" : "false");
+  ESP_LOGW(TAG, "%s: mDNS: register TXT -> %s (%s, err=%d)", instance_name_.c_str(),
+           val ? "true" : "false", mdns_instance_name_.c_str(), (int)err);
 }
 
 void EebusEgComponent::reject_reconnect(const char* ski) {

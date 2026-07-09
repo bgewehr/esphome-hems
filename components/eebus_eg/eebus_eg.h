@@ -164,6 +164,7 @@ class EebusEgComponent : public Component {
   std::string remote_spine_addr_   {};
   std::string local_ski_           {};
   std::string device_label_        {};
+  std::string mdns_instance_name_  {};  /* per-instance mDNS service instance name */
   bool        pairing_mode_active_ {false};
   uint32_t    pairing_deadline_ms_ {0};
   uint32_t    connected_since_ms_  {0};
