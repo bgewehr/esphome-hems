@@ -123,6 +123,14 @@ sensor:
     filters:
       - lambda: |-
           return x * pow(10, id(sf_ac_power));
+      # Ausreisser verwerfen: Wert/SF-Paarung kann um einen Poll-Zyklus versetzt
+      # sein (Faktor 10); Median glaettet Einzel-Fehlpaarungen und Lesefehler
+      - lambda: 'return (fabsf(x) > 30000.0f) ? NAN : x;'
+      - filter_out: nan
+      - median:
+          window_size: 5
+          send_every: 1
+          send_first_at: 1
 
   - platform: modbustcp_controller
     modbustcp_controller_id: fronius_inverter
@@ -172,8 +180,18 @@ sensor:
     state_class: measurement
     accuracy_decimals: 0
     lambda: |-
-      return id(fronius_mppt1_power).state + id(fronius_mppt2_power).state;
+      float m1 = id(fronius_mppt1_power).state;
+      float m2 = id(fronius_mppt2_power).state;
+      if (std::isnan(m1) || std::isnan(m2)) return {};
+      float p = m1 + m2;
+      if (p < -100.0f || p > 25000.0f) return {};
+      return p;
     update_interval: 2s
+    filters:
+      - median:
+          window_size: 3
+          send_every: 1
+          send_first_at: 1
 
   - platform: modbustcp_controller
     modbustcp_controller_id: fronius_inverter
@@ -207,6 +225,14 @@ sensor:
     filters:
       - lambda: |-
           return x * pow(10, id(sf_grid_power));
+      # Ausreisser verwerfen: Wert/SF-Paarung kann um einen Poll-Zyklus versetzt
+      # sein (Faktor 10); Median glaettet Einzel-Fehlpaarungen und Lesefehler
+      - lambda: 'return (fabsf(x) > 30000.0f) ? NAN : x;'
+      - filter_out: nan
+      - median:
+          window_size: 5
+          send_every: 1
+          send_first_at: 1
 
   - platform: modbustcp_controller
     modbustcp_controller_id: fronius_meter_grid
@@ -357,6 +383,14 @@ sensor:
     filters:
       - lambda: |-
           return -x * pow(10, id(sf_ev_power));
+      # Ausreisser verwerfen: Wert/SF-Paarung kann um einen Poll-Zyklus versetzt
+      # sein (Faktor 10); Median glaettet Einzel-Fehlpaarungen und Lesefehler
+      - lambda: 'return (fabsf(x) > 30000.0f) ? NAN : x;'
+      - filter_out: nan
+      - median:
+          window_size: 5
+          send_every: 1
+          send_first_at: 1
 
   - platform: modbustcp_controller
     modbustcp_controller_id: fronius_meter_ev
@@ -482,6 +516,14 @@ sensor:
     filters:
       - lambda: |-
           return -x * pow(10, id(sf_hp_power));
+      # Ausreisser verwerfen: Wert/SF-Paarung kann um einen Poll-Zyklus versetzt
+      # sein (Faktor 10); Median glaettet Einzel-Fehlpaarungen und Lesefehler
+      - lambda: 'return (fabsf(x) > 30000.0f) ? NAN : x;'
+      - filter_out: nan
+      - median:
+          window_size: 5
+          send_every: 1
+          send_first_at: 1
 
   - platform: modbustcp_controller
     modbustcp_controller_id: fronius_meter_hp
@@ -517,12 +559,16 @@ sensor:
       float ev = id(fronius_ev_power).state;
       float hp = id(fronius_hp_power).state;
       float ohm = id(fronius_ohmpilot_power).state;
-      if (std::isnan(ac)) ac = 0;
-      if (std::isnan(grid)) grid = 0;
-      if (std::isnan(ev)) ev = 0;
-      if (std::isnan(hp)) hp = 0;
-      if (std::isnan(ohm)) ohm = 0;
+      // Kern-Eingaenge fehlen -> Berechnung ueberspringen statt 0 anzunehmen
+      // (ein NaN-Grid-Sample wuerde sonst einen kW-Sprung erzeugen)
+      if (std::isnan(ac) || std::isnan(grid) || std::isnan(ev) || std::isnan(hp)) return {};
+      if (std::isnan(ohm)) ohm = 0;  // Solar-API, optional
       return ac + grid - ev - hp - ohm;
+    filters:
+      - median:
+          window_size: 3
+          send_every: 1
+          send_first_at: 1
 
   # ── Template: Schaltbare Leistungssumme ─────────────────────────────────────
   # Summe der aktivierten Verbraucher (House, EV, HP)
