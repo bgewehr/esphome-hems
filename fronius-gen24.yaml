@@ -25,6 +25,10 @@ web_server:
       sorting_weight: 1
 
 globals:
+  # Zeitstempel des letzten erfolgreichen PowerFlow-API-Polls (Frische-Check)
+  - id: pf_last_update_ms
+    type: uint32_t
+    initial_value: '0'
   # Fronius battery discharge control — booleans select which meters to include in SOC calculation
   - id: include_meter_ev
     type: bool
@@ -104,6 +108,36 @@ modbustcp_controller:
 
 # ── Fronius Sensoren ──────────────────────────────────────────────────────────
 sensor:
+  # ── Fronius PowerFlow API: atomare Momentaufnahme (primäre Quelle) ──────────
+  # Der Wechselrichter bilanziert seine Zähler intern zeitsynchron — keine
+  # Skalenfaktoren, keine Paarungs-/Summierungsartefakte wie bei Modbus.
+  # Konvention der API: P_Load negativ = Verbrauch, P_Grid positiv = Bezug,
+  # P_Akku positiv = Entladung.
+  - platform: template
+    name: "${device_name} Fronius PF Load"
+    id: fronius_pf_load
+    internal: true
+    unit_of_measurement: "W"
+    update_interval: never
+  - platform: template
+    name: "${device_name} Fronius PF PV"
+    id: fronius_pf_pv
+    internal: true
+    unit_of_measurement: "W"
+    update_interval: never
+  - platform: template
+    name: "${device_name} Fronius PF Grid"
+    id: fronius_pf_grid
+    internal: true
+    unit_of_measurement: "W"
+    update_interval: never
+  - platform: template
+    name: "${device_name} Fronius PF Akku"
+    id: fronius_pf_akku
+    internal: true
+    unit_of_measurement: "W"
+    update_interval: never
+
   # ── Wechselrichter: AC-Leistung (SunSpec Model 113) ─────────────────────────
   - platform: modbustcp_controller
     modbustcp_controller_id: fronius_inverter
@@ -180,6 +214,11 @@ sensor:
     state_class: measurement
     accuracy_decimals: 0
     lambda: |-
+      // Primärquelle: PowerFlow-API (atomar, ohne Skalenfaktoren)
+      float pv = id(fronius_pf_pv).state;
+      bool pf_fresh = (millis() - id(pf_last_update_ms)) <= 15000 && id(pf_last_update_ms) != 0;
+      if (pf_fresh && !std::isnan(pv) && pv >= 0.0f && pv <= 25000.0f) return pv;
+      // Fallback: Modbus MPPT-Summe
       float m1 = id(fronius_mppt1_power).state;
       float m2 = id(fronius_mppt2_power).state;
       if (std::isnan(m1) || std::isnan(m2)) return {};
@@ -554,16 +593,24 @@ sensor:
     accuracy_decimals: 0
     update_interval: 2s
     lambda: |-
-      float ac = id(fronius_ac_power).state;
-      float grid = id(fronius_grid_power).state;
+      // Primärquelle: PowerFlow-API-Snapshot (P_Load negativ = Gesamtverbrauch).
+      // EV/WP kommen von eigenen Sub-Zählern (Modbus, Median-geglättet).
+      float load = id(fronius_pf_load).state;
       float ev = id(fronius_ev_power).state;
       float hp = id(fronius_hp_power).state;
       float ohm = id(fronius_ohmpilot_power).state;
-      // Kern-Eingaenge fehlen -> Berechnung ueberspringen statt 0 anzunehmen
-      // (ein NaN-Grid-Sample wuerde sonst einen kW-Sprung erzeugen)
-      if (std::isnan(ac) || std::isnan(grid) || std::isnan(ev) || std::isnan(hp)) return {};
+      bool pf_fresh = (millis() - id(pf_last_update_ms)) <= 15000 && id(pf_last_update_ms) != 0;
+      if (!pf_fresh || std::isnan(load)) {
+        // Fallback: bisherige Modbus-Summe
+        float ac = id(fronius_ac_power).state;
+        float grid = id(fronius_grid_power).state;
+        if (std::isnan(ac) || std::isnan(grid) || std::isnan(ev) || std::isnan(hp)) return {};
+        if (std::isnan(ohm)) ohm = 0;
+        return ac + grid - ev - hp - ohm;
+      }
+      if (std::isnan(ev) || std::isnan(hp)) return {};
       if (std::isnan(ohm)) ohm = 0;  // Solar-API, optional
-      return ac + grid - ev - hp - ohm;
+      return -load - ev - hp - ohm;
     filters:
       - median:
           window_size: 3
@@ -806,6 +853,32 @@ interval:
               controller, 40348, 1, stor_cmd);
             controller->queue_command(cmd);
           }
+
+  # ── PowerFlow: HTTP-Poll der Fronius Solar API (atomarer Snapshot) ──────────
+  - interval: 3s
+    then:
+      - http_request.get:
+          url: "http://${fronius_ip}/solar_api/v1/GetPowerFlowRealtimeData.fcgi"
+          capture_response: true
+          max_response_buffer_size: 4096
+          on_response:
+            then:
+              - lambda: |-
+                  if (response->status_code == 200) {
+                    json::parse_json(body, [](JsonObject root) -> bool {
+                      JsonObject site = root["Body"]["Data"]["Site"];
+                      float load = site["P_Load"] | NAN;
+                      float pv   = site["P_PV"]   | 0.0f;   // null bei Nacht -> 0
+                      float grid = site["P_Grid"] | NAN;
+                      float akku = site["P_Akku"] | 0.0f;   // null ohne Batterie -> 0
+                      if (!std::isnan(load)) id(fronius_pf_load).publish_state(load);
+                      id(fronius_pf_pv).publish_state(pv < 0 ? 0 : pv);
+                      if (!std::isnan(grid)) id(fronius_pf_grid).publish_state(grid);
+                      id(fronius_pf_akku).publish_state(akku);
+                      if (!std::isnan(load)) id(pf_last_update_ms) = millis();
+                      return true;
+                    });
+                  }
 
   # ── Ohmpilot: HTTP-Poll der Fronius Solar API ────────────────────────────────
   - interval: 10s
