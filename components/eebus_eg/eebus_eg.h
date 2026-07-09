@@ -274,9 +274,19 @@ static void MpcL_OnRemoteEntityConnect(MaMpcListenerObject* o, const EntityAddre
            self->instance_name(), dev);
   self->on_mpc_state_(true);
 }
-static void MpcL_OnRemoteEntityDisconnect(MaMpcListenerObject* o, const EntityAddressType*) {
-  ESP_LOGW("eebus_eg", "MPC: remote measurement unit disconnected");
-  reinterpret_cast<EebusEgComponent::MpcListener*>(o)->self->on_mpc_state_(false);
+static void MpcL_OnRemoteEntityDisconnect(MaMpcListenerObject* o, const EntityAddressType* addr) {
+  auto* self = reinterpret_cast<EebusEgComponent::MpcListener*>(o)->self;
+  if (!self->mpc_connected()) return;
+  // Same guard as connect: ignore foreign devices' entity removals
+  const char* dev = (addr && addr->device) ? addr->device : "";
+  const std::string& expected = self->remote_spine_addr();
+  if (expected.empty() || dev[0] == '\0' || expected != dev) {
+    ESP_LOGD("eebus_eg", "%s: MPC entity disconnect from %s ignored — not paired device",
+             self->instance_name(), dev[0] ? dev : "?");
+    return;
+  }
+  ESP_LOGW("eebus_eg", "%s MPC: remote measurement unit disconnected", self->instance_name());
+  self->on_mpc_state_(false);
 }
 static void MpcL_OnMeasurementReceive(
     MaMpcListenerObject* o,
@@ -330,7 +340,17 @@ static void EgL_OnRemoteEntityConnect(EgLpListenerObject* o, const EntityAddress
   self->on_entity_connect(addr);
 }
 static void EgL_OnRemoteEntityDisconnect(EgLpListenerObject* o, const EntityAddressType* addr) {
-  reinterpret_cast<EebusEgComponent::EgListener*>(o)->self->on_entity_disconnect(addr);
+  auto* self = reinterpret_cast<EebusEgComponent::EgListener*>(o)->self;
+  /* Events are process-global: another instance's device disconnecting (e.g.
+   * EG2's wallbox) must not clear this instance's connection state. Real
+   * disconnects of our own SHIP session are additionally delivered per
+   * instance via SR_OnRemoteSkiDisconnected. */
+  if (!EgL_FromPairedDevice(self, addr)) {
+    ESP_LOGD("eebus_eg", "%s: entity disconnect from foreign device %s ignored",
+             self->instance_name(), (addr && addr->device) ? addr->device : "?");
+    return;
+  }
+  self->on_entity_disconnect(addr);
 }
 static void EgL_OnPowerLimitReceive(
     EgLpListenerObject* o, const EntityAddressType* addr,
