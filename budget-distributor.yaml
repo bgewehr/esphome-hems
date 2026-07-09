@@ -13,12 +13,6 @@
 # Requires: hems_cs (eebus-cs.yaml), hems_eg1 (eebus-eg-1.yaml),
 #           hems_eg2 (eebus-eg-2.yaml), fronius_solar_power (fronius-gen24.yaml)
 
-web_server:
-  sorting_groups:
-    - id: sg_budget
-      name: "§14a Budget-Verteilung"
-      sorting_weight: 4
-
 globals:
   # zuletzt gesendete Anteile — Hysterese (>100 W) und Neusenden nach Aktivierung
   - id: budget_last_eg1
@@ -28,96 +22,16 @@ globals:
     type: float
     initial_value: '-1.0f'
 
-number:
-  # --- Betreiber-Parameter je Gerät (NVS-persistent) ---
-  - platform: template
-    name: "${device_name} EG1 Budget Priorität"
-    id: eg1_budget_prio
-    icon: "mdi:sort-numeric-ascending"
-    web_server: { sorting_group_id: sg_budget, sorting_weight: 10 }
-    entity_category: config
-    min_value: 1
-    max_value: 9
-    step: 1
-    initial_value: 1
-    restore_value: true
-    optimistic: true
-
-  - platform: template
-    name: "${device_name} EG1 Budget Min"
-    id: eg1_budget_min
-    icon: "mdi:arrow-collapse-down"
-    web_server: { sorting_group_id: sg_budget, sorting_weight: 11 }
-    entity_category: config
-    unit_of_measurement: "W"
-    min_value: 0
-    max_value: 20000
-    step: 100
-    initial_value: 4200   # WP ignoriert kleinere aktive Limits ohnehin
-    restore_value: true
-    optimistic: true
-
-  - platform: template
-    name: "${device_name} EG1 Budget Max"
-    id: eg1_budget_max
-    icon: "mdi:arrow-collapse-up"
-    web_server: { sorting_group_id: sg_budget, sorting_weight: 12 }
-    entity_category: config
-    unit_of_measurement: "W"
-    min_value: 0
-    max_value: 20000
-    step: 100
-    initial_value: 9000
-    restore_value: true
-    optimistic: true
-
-  - platform: template
-    name: "${device_name} EG2 Budget Priorität"
-    id: eg2_budget_prio
-    icon: "mdi:sort-numeric-ascending"
-    web_server: { sorting_group_id: sg_budget, sorting_weight: 20 }
-    entity_category: config
-    min_value: 1
-    max_value: 9
-    step: 1
-    initial_value: 3
-    restore_value: true
-    optimistic: true
-
-  - platform: template
-    name: "${device_name} EG2 Budget Min"
-    id: eg2_budget_min
-    icon: "mdi:arrow-collapse-down"
-    web_server: { sorting_group_id: sg_budget, sorting_weight: 21 }
-    entity_category: config
-    unit_of_measurement: "W"
-    min_value: 0
-    max_value: 20000
-    step: 100
-    initial_value: 0
-    restore_value: true
-    optimistic: true
-
-  - platform: template
-    name: "${device_name} EG2 Budget Max"
-    id: eg2_budget_max
-    icon: "mdi:arrow-collapse-up"
-    web_server: { sorting_group_id: sg_budget, sorting_weight: 22 }
-    entity_category: config
-    unit_of_measurement: "W"
-    min_value: 0
-    max_value: 20000
-    step: 100
-    initial_value: 11000
-    restore_value: true
-    optimistic: true
+# Die Betreiber-Parameter (Priorität/Min/Max je Gerät) liegen bei den
+# jeweiligen Instanzen: eebus-eg-1.yaml / eebus-eg-2.yaml, unterhalb der
+# Failsafe-Optionen (sorting_weight 32-34).
 
 text_sensor:
   - platform: template
     name: "${device_name} Budget-Verteilung"
     id: budget_distribution_status
     icon: "mdi:chart-pie"
-    web_server: { sorting_group_id: sg_budget, sorting_weight: 1 }
+    web_server: { sorting_group_id: sg_netz, sorting_weight: 7 }
     update_interval: never
 
 script:

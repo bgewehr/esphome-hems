@@ -214,6 +214,55 @@ number:
     on_value:
       - lambda: "id(hems_eg2).update_failsafe_duration_s((uint32_t)x);"
 
+  # --- EG2 Budget-Verteilung (sg_eebus_eg2, weights 32-34) ---
+  # Betreiber-Parameter für den §14a-Verteiler (budget-distributor.yaml)
+  - platform: template
+    name: "${device_name} EG2 Budget Priorität"
+    id: eg2_budget_prio
+    icon: "mdi:sort-numeric-ascending"
+    web_server:
+      sorting_group_id: sg_eebus_eg2
+      sorting_weight: 32
+    entity_category: config
+    min_value: 1
+    max_value: 9
+    step: 1
+    initial_value: 3
+    restore_value: true
+    optimistic: true
+
+  - platform: template
+    name: "${device_name} EG2 Budget Min"
+    id: eg2_budget_min
+    icon: "mdi:arrow-collapse-down"
+    web_server:
+      sorting_group_id: sg_eebus_eg2
+      sorting_weight: 33
+    entity_category: config
+    unit_of_measurement: "W"
+    min_value: 0
+    max_value: 20000
+    step: 100
+    initial_value: 0
+    restore_value: true
+    optimistic: true
+
+  - platform: template
+    name: "${device_name} EG2 Budget Max"
+    id: eg2_budget_max
+    icon: "mdi:arrow-collapse-up"
+    web_server:
+      sorting_group_id: sg_eebus_eg2
+      sorting_weight: 34
+    entity_category: config
+    unit_of_measurement: "W"
+    min_value: 0
+    max_value: 20000
+    step: 100
+    initial_value: 11000
+    restore_value: true
+    optimistic: true
+
 button:
   # --- EG2 Pairing (sg_eebus_eg2, weights 10-11) ---
   - platform: template
