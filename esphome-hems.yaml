@@ -18,6 +18,22 @@ esphome:
       - text_sensor.template.publish:
           id: build_time_sensor
           state: !lambda 'return std::string(__DATE__) + "  " + std::string(__TIME__);'
+      # Boot-Log-Level als Session-Obergrenze einfrieren; Session-Select ggf.
+      # darauf zurueckholen. Erhoehen geht nur per Reboot (Ziel: keine
+      # vergessene Debug-Last auf einem stabilen Geraet).
+      - lambda: |-
+          auto to_num = [](const std::string& o) {
+            if (o == "ERROR") return 1;
+            if (o == "WARN")  return 2;
+            if (o == "INFO")  return 3;
+            return 4;  // DEBUG
+          };
+          int ceiling = to_num(id(boot_log_level_select).current_option());
+          id(boot_log_level_max) = ceiling;
+          if (to_num(id(log_level_select).current_option()) > ceiling) {
+            const char* names[5] = {"", "ERROR", "WARN", "INFO", "DEBUG"};
+            id(log_level_select).make_call().set_option(names[ceiling]).perform();
+          }
 
 esp32:
   board: esp32s3box
@@ -45,6 +61,12 @@ psram:
   mode: octal
   speed: 80MHz
 
+globals:
+  # Beim Boot aus boot_log_level_select eingefroren — Obergrenze der Session
+  - id: boot_log_level_max
+    type: int
+    initial_value: '4'
+
 logger:
   id: app_logger
   level: DEBUG  # Must compile at DEBUG; runtime level and tag filters set via Log Level/Log Filter selects
@@ -69,12 +91,47 @@ select:
     on_value:
       then:
         - lambda: |-
+            // Boot-Log-Level ist die Obergrenze dieser Session — hoehere Auswahl
+            // schnappt zurueck; mehr gibt es nur per Reboot mit hoeherem Boot-Level.
+            auto to_num = [](const std::string& o) {
+              if (o == "ERROR") return 1;
+              if (o == "WARN")  return 2;
+              if (o == "INFO")  return 3;
+              return 4;  // DEBUG
+            };
+            int ceiling = id(boot_log_level_max);
+            if (to_num(x) > ceiling) {
+              const char* names[5] = {"", "ERROR", "WARN", "INFO", "DEBUG"};
+              ESP_LOGW("system", "Log Level %s > Boot-Obergrenze %s — begrenzt (Reboot mit hoeherem Boot Log Level noetig)",
+                       x.c_str(), names[ceiling]);
+              id(log_level_select).make_call().set_option(names[ceiling]).perform();
+              return;
+            }
             int level = ESPHOME_LOG_LEVEL_WARN;
             if (x == "ERROR") level = ESPHOME_LOG_LEVEL_ERROR;
             else if (x == "WARN") level = ESPHOME_LOG_LEVEL_WARN;
             else if (x == "INFO") level = ESPHOME_LOG_LEVEL_INFO;
             else if (x == "DEBUG") level = ESPHOME_LOG_LEVEL_DEBUG;
             id(app_logger).set_log_level(level);
+
+  - platform: template
+    name: "${device_name} Boot Log Level"
+    id: boot_log_level_select
+    icon: "mdi:restart-alert"
+    entity_category: config
+    web_server:
+      sorting_group_id: sg_system
+      sorting_weight: 2.5
+    options:
+      - "ERROR"
+      - "WARN"
+      - "INFO"
+      - "DEBUG"
+    initial_option: "WARN"
+    optimistic: true
+    restore_value: true
+    # Bewusst KEIN on_value: der Wert wird nur beim Boot eingefroren.
+    # Aendern -> Restart-Button -> neue Session-Obergrenze.
 
   - platform: template
     name: "${device_name} Log Filter"
