@@ -895,6 +895,7 @@ interval:
 
 number:
   - platform: template
+    disabled_by_default: true
     name: "${device_name} Battery Max Discharge Power"
     id: battery_max_discharge_w
     icon: "mdi:battery-arrow-down"
@@ -913,6 +914,7 @@ number:
 # ── Battery discharge control switches ────────────────────────────────────────
 switch:
   - platform: template
+    disabled_by_default: true
     name: "${device_name} Charge EV from Battery"
     id: sw_include_ev
     web_server:
@@ -932,6 +934,7 @@ switch:
     lambda: return id(include_meter_ev);
 
   - platform: template
+    disabled_by_default: true
     name: "${device_name} Operate HP from Battery"
     id: sw_include_hp
     web_server:
@@ -951,6 +954,7 @@ switch:
     lambda: return id(include_meter_hp);
 
   - platform: template
+    disabled_by_default: true
     name: "${device_name} Operate House from Battery"
     id: sw_include_house
     web_server:

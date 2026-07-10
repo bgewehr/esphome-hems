@@ -11,6 +11,7 @@ web_server:
 select:
   # --- EG1 device type (sg_eebus_eg1, weight 0) — persists to NVS across reboots ---
   - platform: template
+    disabled_by_default: true
     name: "${device_name} EG1 Gerätetyp"
     id: eg1_device_type
     icon: "mdi:devices"
@@ -175,6 +176,7 @@ text_sensor:
 number:
   # --- EG1 failsafe configuration (sg_eebus_eg1, weights 30-31) ---
   - platform: template
+    disabled_by_default: true
     name: "${device_name} EG1 Failsafe Limit"
     id: eebus_eg_failsafe_limit
     icon: "mdi:shield-home"
@@ -193,6 +195,7 @@ number:
       - lambda: "id(hems_eg1).update_failsafe_limit_w(x);"
 
   - platform: template
+    disabled_by_default: true
     name: "${device_name} EG1 Failsafe Dauer"
     id: eebus_eg_failsafe_duration
     icon: "mdi:timer-outline"
@@ -213,6 +216,7 @@ number:
   # --- EG1 Budget-Verteilung (sg_eebus_eg1, weights 32-34) ---
   # Betreiber-Parameter für den §14a-Verteiler (budget-distributor.yaml)
   - platform: template
+    disabled_by_default: true
     name: "${device_name} EG1 Budget Priorität"
     id: eg1_budget_prio
     icon: "mdi:sort-numeric-ascending"
@@ -228,6 +232,7 @@ number:
     optimistic: true
 
   - platform: template
+    disabled_by_default: true
     name: "${device_name} EG1 Budget Min"
     id: eg1_budget_min
     icon: "mdi:arrow-collapse-down"
@@ -244,6 +249,7 @@ number:
     optimistic: true
 
   - platform: template
+    disabled_by_default: true
     name: "${device_name} EG1 Budget Max"
     id: eg1_budget_max
     icon: "mdi:arrow-collapse-up"
@@ -262,6 +268,7 @@ number:
 button:
   # --- EG1 Pairing (sg_eebus_eg1, weights 10-11) ---
   - platform: template
+    disabled_by_default: true
     name: "${device_name} EG1 Pairing-Modus starten"
     icon: "mdi:account-plus"
     web_server:
@@ -271,6 +278,7 @@ button:
       - lambda: "id(hems_eg1).enter_pairing_mode();"
 
   - platform: template
+    disabled_by_default: true
     name: "${device_name} EG1 Pairing zurücksetzen"
     icon: "mdi:lock-reset"
     entity_category: diagnostic
@@ -282,6 +290,7 @@ button:
 
   # --- EG1 diagnostics (sg_eebus_eg1, weight 20) ---
   - platform: template
+    disabled_by_default: true
     name: "${device_name} EG1 Failsafe testen"
     icon: "mdi:shield-check"
     entity_category: diagnostic

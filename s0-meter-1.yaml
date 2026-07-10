@@ -19,6 +19,7 @@ globals:
 
 number:
   - platform: template
+    disabled_by_default: true
     name: "${device_name} Water Liters per Pulse"
     id: water_lpr_number
     icon: mdi:water-opacity

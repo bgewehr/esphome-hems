@@ -273,6 +273,7 @@ text_sensor:
 button:
   # --- CS Pairing (sg_eebus_cs, weights 10-13) ---
   - platform: template
+    disabled_by_default: true
     name: "${device_name} CS Pairing-Modus starten"
     icon: "mdi:account-plus"
     web_server:
@@ -282,6 +283,7 @@ button:
       - lambda: "id(hems_cs).enter_pairing_mode();"
 
   - platform: template
+    disabled_by_default: true
     name: "${device_name} CS Pairing akzeptieren"
     icon: "mdi:check-circle"
     web_server:
@@ -291,6 +293,7 @@ button:
       - lambda: "id(hems_cs).accept_pairing();"
 
   - platform: template
+    disabled_by_default: true
     name: "${device_name} CS Pairing ablehnen"
     icon: "mdi:close-circle"
     web_server:
@@ -300,6 +303,7 @@ button:
       - lambda: "id(hems_cs).reject_pairing();"
 
   - platform: template
+    disabled_by_default: true
     name: "${device_name} CS Pairing zurücksetzen"
     icon: "mdi:lock-reset"
     entity_category: diagnostic
@@ -312,6 +316,7 @@ button:
 # §14a hardware relay (PCA9554 channel 0) — controlled by CS on_limit_active and DI1/simulation
 switch:
   - platform: gpio
+    disabled_by_default: true
     name: "${device_name} Fronius §14a Leistungslimit"
     id: relay_1
     icon: mdi:transmission-tower-off
@@ -326,6 +331,7 @@ switch:
       inverted: false
 
   - platform: template
+    disabled_by_default: true
     name: "${device_name} §14a-Simulation (4200 W)"
     id: manual_enwg_test
     icon: "mdi:transmission-tower-import"
@@ -380,6 +386,7 @@ switch:
 # WS2812 onboard RGB LED (GPIO38) — §14a status indicator
 light:
   - platform: esp32_rmt_led_strip
+    disabled_by_default: true
     rgb_order: GRB
     pin: GPIO38
     num_leds: 1

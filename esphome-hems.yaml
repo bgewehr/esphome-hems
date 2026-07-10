@@ -66,83 +66,15 @@ globals:
   - id: boot_log_level_max
     type: int
     initial_value: '4'
-  # UI-Vereinfachung: FNV-1a-Hash der Sperr-PIN (0 = keine PIN gesetzt)
-  - id: ui_pin_hash
-    type: uint32_t
-    restore_value: true
-    initial_value: '0'
-  # true = Erweitertes UI (alle Bedienelemente sichtbar)
-  - id: ui_advanced
-    type: bool
-    restore_value: true
-    initial_value: 'true'
 
 logger:
   id: app_logger
   level: DEBUG  # Must compile at DEBUG; runtime level and tag filters set via Log Level/Log Filter selects
   runtime_tag_levels: true
 
-# ── UI-Vereinfachung ─────────────────────────────────────────────────────────
-# Aus = Standardbetrieb: hems-ui.js blendet Bedien-/Konfigurationselemente und
-# ungepaarte EG-Sektionen aus; sichtbar bleiben Informationsanzeigen sowie
-# dieser Switch und das PIN-Feld.
-# PIN-Ablauf: beim Ausschalten kann im PIN-Feld eine PIN gesetzt werden
-# (leer = ohne PIN sperren). Zum Einschalten muss die PIN im Feld stehen;
-# erfolgreiches Einschalten loescht die PIN aus dem System.
-switch:
-  - platform: template
-    name: "${device_name} Erweitertes UI"
-    id: erweitertes_ui_switch
-    icon: "mdi:tune-variant"
-    web_server:
-      sorting_group_id: sg_system
-      sorting_weight: 1.0
-    lambda: "return id(ui_advanced);"
-    turn_on_action:
-      - lambda: |-
-          auto fnv = [](const std::string& s) {
-            uint32_t h = 2166136261u;
-            for (char c : s) { h ^= (uint8_t)c; h *= 16777619u; }
-            return h;
-          };
-          std::string pin = id(ui_pin_input).state;
-          if (id(ui_pin_hash) == 0 || (!pin.empty() && fnv(pin) == id(ui_pin_hash))) {
-            id(ui_pin_hash) = 0;  // erfolgreiches Freischalten loescht die PIN
-            id(ui_advanced) = true;
-            id(erweitertes_ui_switch).publish_state(true);
-            ESP_LOGW("ui", "Erweitertes UI freigeschaltet — PIN geloescht");
-          } else {
-            ESP_LOGW("ui", "Erweitertes UI: falsche oder fehlende PIN");
-            id(erweitertes_ui_switch).publish_state(false);
-          }
-          id(ui_pin_input).make_call().set_value("").perform();
-    turn_off_action:
-      - lambda: |-
-          auto fnv = [](const std::string& s) {
-            uint32_t h = 2166136261u;
-            for (char c : s) { h ^= (uint8_t)c; h *= 16777619u; }
-            return h;
-          };
-          std::string pin = id(ui_pin_input).state;
-          id(ui_pin_hash) = pin.empty() ? 0u : fnv(pin);  // leer = ohne PIN sperren
-          id(ui_advanced) = false;
-          id(erweitertes_ui_switch).publish_state(false);
-          id(ui_pin_input).make_call().set_value("").perform();
-          ESP_LOGW("ui", "Vereinfachtes UI aktiv%s", id(ui_pin_hash) ? " (PIN gesetzt)" : "");
-
-text:
-  - platform: template
-    name: "${device_name} PIN"
-    id: ui_pin_input
-    icon: "mdi:form-textbox-password"
-    mode: password
-    web_server:
-      sorting_group_id: sg_system
-      sorting_weight: 1.1
-    optimistic: true
-
 select:
   - platform: template
+    disabled_by_default: true
     name: "${device_name} Log Level"
     id: log_level_select
     icon: "mdi:tune"
@@ -184,6 +116,7 @@ select:
             id(app_logger).set_log_level(level);
 
   - platform: template
+    disabled_by_default: true
     name: "${device_name} Boot Log Level"
     id: boot_log_level_select
     icon: "mdi:restart-alert"
@@ -203,6 +136,7 @@ select:
     # Aendern -> Restart-Button -> neue Session-Obergrenze.
 
   - platform: template
+    disabled_by_default: true
     name: "${device_name} Log Filter"
     id: log_filter_select
     icon: "mdi:filter"
@@ -309,11 +243,8 @@ ethernet:
 
 web_server:
   port: 80
-  # local: true wuerde js_include ignorieren (fester Index-Blob) — ohne local
-  # laedt der Browser das UI-Framework vom esphome-CDN und unser hems-ui.js
-  # von /0.js (das Geraet selbst braucht kein Internet)
+  local: true
   version: 3
-  js_include: "hems-ui.js"
   sorting_groups:
     - id: sg_system
       name: "System"
@@ -380,6 +311,7 @@ text_sensor:
 
 button:
   - platform: restart
+    disabled_by_default: true
     name: "${device_name} Restart"
     icon: "mdi:restart"
     web_server:

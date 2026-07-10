@@ -11,6 +11,7 @@ web_server:
 select:
   # --- EG2 device type (sg_eebus_eg2, weight 0) — persists to NVS across reboots ---
   - platform: template
+    disabled_by_default: true
     name: "${device_name} EG2 Gerätetyp"
     id: eg2_device_type
     icon: "mdi:devices"
@@ -179,6 +180,7 @@ text_sensor:
 number:
   # --- EG2 failsafe configuration (sg_eebus_eg2, weights 30-31) ---
   - platform: template
+    disabled_by_default: true
     name: "${device_name} EG2 Failsafe Limit"
     id: eebus_eg2_failsafe_limit
     icon: "mdi:shield-home"
@@ -197,6 +199,7 @@ number:
       - lambda: "id(hems_eg2).update_failsafe_limit_w(x);"
 
   - platform: template
+    disabled_by_default: true
     name: "${device_name} EG2 Failsafe Dauer"
     id: eebus_eg2_failsafe_duration
     icon: "mdi:timer-outline"
@@ -217,6 +220,7 @@ number:
   # --- EG2 Budget-Verteilung (sg_eebus_eg2, weights 32-34) ---
   # Betreiber-Parameter für den §14a-Verteiler (budget-distributor.yaml)
   - platform: template
+    disabled_by_default: true
     name: "${device_name} EG2 Budget Priorität"
     id: eg2_budget_prio
     icon: "mdi:sort-numeric-ascending"
@@ -232,6 +236,7 @@ number:
     optimistic: true
 
   - platform: template
+    disabled_by_default: true
     name: "${device_name} EG2 Budget Min"
     id: eg2_budget_min
     icon: "mdi:arrow-collapse-down"
@@ -248,6 +253,7 @@ number:
     optimistic: true
 
   - platform: template
+    disabled_by_default: true
     name: "${device_name} EG2 Budget Max"
     id: eg2_budget_max
     icon: "mdi:arrow-collapse-up"
@@ -266,6 +272,7 @@ number:
 button:
   # --- EG2 Pairing (sg_eebus_eg2, weights 10-11) ---
   - platform: template
+    disabled_by_default: true
     name: "${device_name} EG2 Pairing-Modus starten"
     icon: "mdi:account-plus"
     web_server:
@@ -275,6 +282,7 @@ button:
       - lambda: "id(hems_eg2).enter_pairing_mode();"
 
   - platform: template
+    disabled_by_default: true
     name: "${device_name} EG2 Pairing zurücksetzen"
     icon: "mdi:lock-reset"
     entity_category: diagnostic
@@ -286,6 +294,7 @@ button:
 
   # --- EG2 diagnostics (sg_eebus_eg2, weight 20) ---
   - platform: template
+    disabled_by_default: true
     name: "${device_name} EG2 Failsafe testen"
     icon: "mdi:shield-check"
     entity_category: diagnostic
