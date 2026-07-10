@@ -157,8 +157,8 @@ script:
                 float amps = d.share / 693.0f;   // 3 Phasen x 231 V
                 float addon;
                 if (d.share >= 11400.0f)   addon = 1.0f;
-                else if (amps < 6.0f)      addon = 48.6f;  // Wallbox pausiert
-                else                       addon = 50.0f - amps - 1.4f;
+                else if (amps < 6.0f)      addon = 47.4f;  // Wallbox pausiert
+                else                       addon = 50.0f - amps - 2.6f;
                 id(ct1addon).make_call().set_value(addon).perform();
                 id(ct2addon).make_call().set_value(addon).perform();
                 id(ct3addon).make_call().set_value(addon).perform();

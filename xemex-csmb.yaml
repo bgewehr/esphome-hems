@@ -26,8 +26,8 @@ esphome:
             float amps = w / 693.0f;
             float addon;
             if (w >= 11400.0f)     addon = 1.0f;
-            else if (amps < 6.0f)  addon = 48.6f;
-            else                   addon = 50.0f - amps - 1.4f;
+            else if (amps < 6.0f)  addon = 47.4f;
+            else                   addon = 50.0f - amps - 2.6f;
             id(ladebegrenzung_addon) = addon;
             if (!id(hems_cs).is_limit_active()) {
               id(ct1addon).make_call().set_value(addon).perform();
@@ -143,8 +143,8 @@ modbus_server:
 # Kontinuierlicher W-Slider statt Dropdown — gleiche Behandlung wie die
 # Leistungsgrenzen der anderen SteuVE. Umrechnung W -> Addon-Ampere:
 #   amps  = W / 693        (3 Phasen x 231 V)
-#   addon = 50 - amps - 1.4  (2.0 A Sicherheitspuffer - 0.6 A Kalibrierkorrektur)
-# Unter 6 A pausiert die Wallbox -> Addon 48.6 stoppt das Laden;
+#   addon = 50 - amps - 2.6  (2.0 A Sicherheitspuffer + 0.6 A Kalibrierabsenkung)
+# Unter 6 A pausiert die Wallbox -> Addon 47.4 stoppt das Laden;
 # ab ~11.4 kW gilt "unbegrenzt" (Addon 1.0, Fahrzeug limitiert selbst).
 # Ändert die CT-Addons NUR wenn §14a nicht aktiv ist; während eines aktiven
 # Limits setzt der Budget-Verteiler (netzdienliche-steuerung.yaml) die Addons
@@ -171,8 +171,8 @@ number:
             float amps = x / 693.0f;
             float addon;
             if (x >= 11400.0f)     addon = 1.0f;   // unbegrenzt
-            else if (amps < 6.0f)  addon = 48.6f;  // Wallbox pausiert unter 6 A
-            else                   addon = 50.0f - amps - 1.4f;
+            else if (amps < 6.0f)  addon = 47.4f;  // Wallbox pausiert unter 6 A
+            else                   addon = 50.0f - amps - 2.6f;
             id(ladebegrenzung_addon) = addon;
             if (!id(hems_cs).is_limit_active() &&
                 !id(grid_provider_switch).state &&
