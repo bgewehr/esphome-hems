@@ -31,15 +31,7 @@ eebus_cs:
     - text_sensor.template.publish:
         id: last_enwg_event
         state: !lambda 'return std::string("Aktiviert (EEBus): ") + id(ha_time).now().strftime("%d.%m.%Y %H:%M:%S");'
-    - number.set:
-        id: ct1addon
-        value: 45.0
-    - number.set:
-        id: ct2addon
-        value: 45.0
-    - number.set:
-        id: ct3addon
-        value: 45.0
+    # CT-Addons setzt der Budget-Verteiler aus dem EV-Anteil (distribute_budget)
     - light.turn_on:
         id: status_led
         effect: "Paragraph14a Warning Flash"
@@ -64,6 +56,7 @@ eebus_cs:
     - lambda: |-
         id(budget_last_eg1) = -1.0f;
         id(budget_last_eg2) = -1.0f;
+        id(budget_last_ev)  = -1.0f;
         id(hems_eg1).clear_limit();
         id(hems_eg2).clear_limit();
         id(budget_distribution_status).publish_state("kein Limit aktiv");
@@ -74,6 +67,9 @@ globals:
     type: float
     initial_value: '-1.0f'
   - id: budget_last_eg2
+    type: float
+    initial_value: '-1.0f'
+  - id: budget_last_ev
     type: float
     initial_value: '-1.0f'
 
@@ -100,25 +96,36 @@ script:
           if (std::isnan(pv) || pv < 0.0f) pv = 0.0f;
           float budget = limit + 0.8f * pv;
 
+          // Drei steuerbare Verbraucher: WP (EG1), EV (Xemex CSMB), WB (EG2).
+          // kind 0 = EEBus-EG-Instanz, kind 1 = EV-Ladepfad (CT-Addons)
           struct Dev {
-            esphome::eebus_eg::EebusEgComponent* eg;
             const char* tag;
+            int kind;
+            esphome::eebus_eg::EebusEgComponent* eg;
             float prio, pmin, pmax, share;
           };
-          Dev devs[2] = {
-            { id(hems_eg1), "WP", id(eg1_budget_prio).state,
+          // EV-Deckel: Budget-Max UND manueller Slider (Nutzerwunsch) gelten beide
+          float ev_cap = std::min(id(ev_budget_max).state, id(ev_limit_w).state);
+          Dev devs[3] = {
+            { "WP", 0, id(hems_eg1), id(eg1_budget_prio).state,
               id(eg1_budget_min).state, id(eg1_budget_max).state, 0.0f },
-            { id(hems_eg2), "WB", id(eg2_budget_prio).state,
+            { "EV", 1, nullptr, id(ev_budget_prio).state,
+              std::min(id(ev_budget_min).state, ev_cap), ev_cap, 0.0f },
+            { "WB", 0, id(hems_eg2), id(eg2_budget_prio).state,
               id(eg2_budget_min).state, id(eg2_budget_max).state, 0.0f },
           };
-          // verbunden zählt nur mit gültiger Remote-SKI (kein Halbzustand)
-          auto dev_ok = [](decltype(devs[0])& d) {
+          // verbunden zaehlt fuer EG nur mit gueltiger Remote-SKI; EV ist lokal
+          auto dev_ok = [](Dev& d) {
+            if (d.kind == 1) return true;
             return d.eg->is_connected() && !d.eg->remote_ski().empty();
           };
-          if (devs[1].prio < devs[0].prio) std::swap(devs[0], devs[1]);
+          // Prioritaet sortieren (3 Elemente, insertion sort)
+          for (int i = 1; i < 3; i++)
+            for (int j = i; j > 0 && devs[j].prio < devs[j-1].prio; j--)
+              std::swap(devs[j], devs[j-1]);
 
           float rest = budget;
-          // Runde 1: Sockel in Prioritätsreihenfolge
+          // Runde 1: Sockel in Prioritaetsreihenfolge
           for (auto &d : devs) {
             if (!dev_ok(d)) continue;
             d.share = std::min(d.pmin, rest);
@@ -131,9 +138,9 @@ script:
             if (take > 0.0f) { d.share += take; rest -= take; }
           }
 
-          // Anwenden mit 100-W-Hysterese. share==0 wird als 1 W gesendet:
-          // set_limit(0) würde das Limit LÖSCHEN (Gerät unbegrenzt) statt
-          // eine aktive 0-W-Zuteilung zu setzen.
+          // Anwenden mit 100-W-Hysterese.
+          // EG: share==0 wird als 1 W aktives Limit gesendet (set_limit(0) = loeschen).
+          // EV: share -> Addon-Ampere fuers CSMB (Formel wie EV-Leistungsbegrenzung).
           std::string status;
           for (auto &d : devs) {
             char buf[48];
@@ -142,12 +149,27 @@ script:
               status += status.empty() ? buf : std::string(" | ") + buf;
               continue;
             }
-            float send_w = d.share > 0.0f ? d.share : 1.0f;
-            float* last = (d.eg == id(hems_eg1)) ? &id(budget_last_eg1)
+            float* last = (d.kind == 1) ? &id(budget_last_ev)
+                        : (d.eg == id(hems_eg1)) ? &id(budget_last_eg1)
                                                  : &id(budget_last_eg2);
-            if (fabsf(send_w - *last) > 100.0f || *last < 0.0f) {
-              d.eg->set_limit(send_w);
-              *last = send_w;
+            if (d.kind == 1) {
+              if (fabsf(d.share - *last) > 100.0f || *last < 0.0f) {
+                float amps = d.share / 693.0f;   // 3 Phasen x 231 V
+                float addon;
+                if (d.share >= 11400.0f)   addon = 1.0f;
+                else if (amps < 6.0f)      addon = 48.6f;  // Wallbox pausiert
+                else                       addon = 50.0f - amps - 1.4f;
+                id(ct1addon).make_call().set_value(addon).perform();
+                id(ct2addon).make_call().set_value(addon).perform();
+                id(ct3addon).make_call().set_value(addon).perform();
+                *last = d.share;
+              }
+            } else {
+              float send_w = d.share > 0.0f ? d.share : 1.0f;
+              if (fabsf(send_w - *last) > 100.0f || *last < 0.0f) {
+                d.eg->set_limit(send_w);
+                *last = send_w;
+              }
             }
             snprintf(buf, sizeof(buf), "%s: %.0f W", d.tag, d.share);
             status += status.empty() ? buf : std::string(" | ") + buf;

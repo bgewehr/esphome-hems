@@ -8,10 +8,32 @@ web_server:
       sorting_weight: 2
 
 globals:
+  # Abgeleiteter Wert: wird beim Boot und bei jeder Slider-Aenderung aus
+  # ev_limit_w berechnet — KEIN eigener NVS-Restore (sonst ueberlebt ein
+  # veralteter Wert den Slider-Restore und wird beim Limit-Ende angewendet)
   - id: ladebegrenzung_addon
     type: float
-    restore_value: true
     initial_value: "1.0"
+
+# Boot: Global + CT-Addons einmalig aus dem (NVS-restaurierten) Slider ableiten
+esphome:
+  on_boot:
+    - priority: -100.0
+      then:
+        - lambda: |-
+            float w = id(ev_limit_w).state;
+            if (std::isnan(w)) w = 11500.0f;
+            float amps = w / 693.0f;
+            float addon;
+            if (w >= 11400.0f)     addon = 1.0f;
+            else if (amps < 6.0f)  addon = 48.6f;
+            else                   addon = 50.0f - amps - 1.4f;
+            id(ladebegrenzung_addon) = addon;
+            if (!id(hems_cs).is_limit_active()) {
+              id(ct1addon).make_call().set_value(addon).perform();
+              id(ct2addon).make_call().set_value(addon).perform();
+              id(ct3addon).make_call().set_value(addon).perform();
+            }
 
 # TX=GPIO17 (DE/DI zum RS485-Chip), RX=GPIO18 (RO vom RS485-Chip)
 uart:
@@ -117,44 +139,40 @@ modbus_server:
         default: 0x399A
         number: 1
 
-# ── EV Ladebegrenzung ─────────────────────────────────────────────────────────
-# Setzt ct1/2/3 Addons so, dass das CSMB die Ladeströme auf den gewählten
-# Wert begrenzt. Formel: addon = 50 - limit_A - 0.5 (0.5 A Sicherheitspuffer).
-# Ändert die Addons NUR wenn §14a nicht aktiv ist.
-select:
+# ── EV Leistungsbegrenzung ────────────────────────────────────────────────────
+# Kontinuierlicher W-Slider statt Dropdown — gleiche Behandlung wie die
+# Leistungsgrenzen der anderen SteuVE. Umrechnung W -> Addon-Ampere:
+#   amps  = W / 693        (3 Phasen x 231 V)
+#   addon = 50 - amps - 1.4  (2.0 A Sicherheitspuffer - 0.6 A Kalibrierkorrektur)
+# Unter 6 A pausiert die Wallbox -> Addon 48.6 stoppt das Laden;
+# ab ~11.4 kW gilt "unbegrenzt" (Addon 1.0, Fahrzeug limitiert selbst).
+# Ändert die CT-Addons NUR wenn §14a nicht aktiv ist; während eines aktiven
+# Limits setzt der Budget-Verteiler (netzdienliche-steuerung.yaml) die Addons
+# aus dem EV-Anteil.
+number:
   - platform: template
-    name: "${device_name} EV Ladebegrenzung"
-    id: ladebegrenzung_select
+    name: "${device_name} EV Leistungsbegrenzung"
+    id: ev_limit_w
     icon: "mdi:ev-station"
     web_server:
       sorting_group_id: sg_wallbox
       sorting_weight: 10
-    options:
-      - "6 A (4.16 kW)"
-      - "8 A (5.54 kW)"
-      - "10 A (6.93 kW)"
-      - "12 A (8.31 kW)"
-      - "14 A (9.70 kW)"
-      - "16 A (11.09 kW)"
-      - "unbegrenzt"
-    initial_option: "unbegrenzt"
-    optimistic: true
+    unit_of_measurement: "W"
+    min_value: 0
+    max_value: 11500
+    step: 100
+    initial_value: 11500
     restore_value: true
+    optimistic: true
+    mode: slider
     on_value:
       then:
         - lambda: |-
+            float amps = x / 693.0f;
             float addon;
-            if (x == "unbegrenzt") {
-              addon = 1.0f;  /* minimaler Puffer, Shell lädt bis ~49 A */
-            } else {
-              float amps = 6.0f;
-              if (x == "8 A (5.54 kW)") amps = 8.0f;
-              else if (x == "10 A (6.93 kW)") amps = 10.0f;
-              else if (x == "12 A (8.31 kW)") amps = 12.0f;
-              else if (x == "14 A (9.70 kW)") amps = 14.0f;
-              else if (x == "16 A (11.09 kW)") amps = 16.0f;
-              addon = 50.0f - amps - 2.0f;  /* 2.0 A Sicherheitspuffer */
-            }
+            if (x >= 11400.0f)     addon = 1.0f;   // unbegrenzt
+            else if (amps < 6.0f)  addon = 48.6f;  // Wallbox pausiert unter 6 A
+            else                   addon = 50.0f - amps - 1.4f;
             id(ladebegrenzung_addon) = addon;
             if (!id(hems_cs).is_limit_active() &&
                 !id(grid_provider_switch).state &&
@@ -164,8 +182,55 @@ select:
               id(ct3addon).make_call().set_value(addon).perform();
             }
 
+  # --- EV Budget-Verteilung (analog EG1/EG2, weights 11-13) ---
+  - platform: template
+    name: "${device_name} EV Budget Priorität"
+    id: ev_budget_prio
+    icon: "mdi:sort-numeric-ascending"
+    web_server:
+      sorting_group_id: sg_wallbox
+      sorting_weight: 11
+    entity_category: config
+    min_value: 1
+    max_value: 9
+    step: 1
+    initial_value: 2
+    restore_value: true
+    optimistic: true
+
+  - platform: template
+    name: "${device_name} EV Budget Min"
+    id: ev_budget_min
+    icon: "mdi:arrow-collapse-down"
+    web_server:
+      sorting_group_id: sg_wallbox
+      sorting_weight: 12
+    entity_category: config
+    unit_of_measurement: "W"
+    min_value: 0
+    max_value: 11500
+    step: 100
+    initial_value: 0
+    restore_value: true
+    optimistic: true
+
+  - platform: template
+    name: "${device_name} EV Budget Max"
+    id: ev_budget_max
+    icon: "mdi:arrow-collapse-up"
+    web_server:
+      sorting_group_id: sg_wallbox
+      sorting_weight: 13
+    entity_category: config
+    unit_of_measurement: "W"
+    min_value: 0
+    max_value: 11500
+    step: 100
+    initial_value: 11000
+    restore_value: true
+    optimistic: true
+
 # ── CT-Strom-Regler (Xemex Modbus-Register) ──────────────────────────────────
-number:
   - platform: template
     name: "${device_name} CT1 Current"
     id: ct1current

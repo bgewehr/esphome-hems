@@ -162,7 +162,7 @@ sensor:
       - lambda: 'return (fabsf(x) > 30000.0f) ? NAN : x;'
       - filter_out: nan
       - median:
-          window_size: 5
+          window_size: 3
           send_every: 1
           send_first_at: 1
 
@@ -226,11 +226,6 @@ sensor:
       if (p < -100.0f || p > 25000.0f) return {};
       return p;
     update_interval: 2s
-    filters:
-      - median:
-          window_size: 3
-          send_every: 1
-          send_first_at: 1
 
   - platform: modbustcp_controller
     modbustcp_controller_id: fronius_inverter
@@ -269,7 +264,7 @@ sensor:
       - lambda: 'return (fabsf(x) > 30000.0f) ? NAN : x;'
       - filter_out: nan
       - median:
-          window_size: 5
+          window_size: 3
           send_every: 1
           send_first_at: 1
 
@@ -427,7 +422,7 @@ sensor:
       - lambda: 'return (fabsf(x) > 30000.0f) ? NAN : x;'
       - filter_out: nan
       - median:
-          window_size: 5
+          window_size: 3
           send_every: 1
           send_first_at: 1
 
@@ -560,7 +555,7 @@ sensor:
       - lambda: 'return (fabsf(x) > 30000.0f) ? NAN : x;'
       - filter_out: nan
       - median:
-          window_size: 5
+          window_size: 3
           send_every: 1
           send_first_at: 1
 
@@ -611,11 +606,6 @@ sensor:
       if (std::isnan(ev) || std::isnan(hp)) return {};
       if (std::isnan(ohm)) ohm = 0;  // Solar-API, optional
       return -load - ev - hp - ohm;
-    filters:
-      - median:
-          window_size: 3
-          send_every: 1
-          send_first_at: 1
 
   # ── Template: Schaltbare Leistungssumme ─────────────────────────────────────
   # Summe der aktivierten Verbraucher (House, EV, HP)
