@@ -133,6 +133,7 @@ binary_sensor:
   # DI2 (GPIO5) is the S0 pulse input — defined in s0-meter-1.yaml
 
   - platform: gpio
+    disabled_by_default: true
     name: "${device_name} Digital Input 3"
     id: di_3
     icon: mdi:electric-switch-closed
@@ -147,6 +148,7 @@ binary_sensor:
       inverted: true
 
   - platform: gpio
+    disabled_by_default: true
     name: "${device_name} Digital Input 4"
     id: di_4
     icon: mdi:electric-switch-closed
@@ -161,6 +163,7 @@ binary_sensor:
       inverted: true
 
   - platform: gpio
+    disabled_by_default: true
     name: "${device_name} Digital Input 5"
     id: di_5
     icon: mdi:electric-switch-closed
@@ -175,6 +178,7 @@ binary_sensor:
       inverted: true
 
   - platform: gpio
+    disabled_by_default: true
     name: "${device_name} Digital Input 6"
     id: di_6
     icon: mdi:electric-switch-closed
@@ -189,6 +193,7 @@ binary_sensor:
       inverted: true
 
   - platform: gpio
+    disabled_by_default: true
     name: "${device_name} Digital Input 7"
     id: di_7
     icon: mdi:electric-switch-closed
@@ -203,6 +208,7 @@ binary_sensor:
       inverted: true
 
   - platform: gpio
+    disabled_by_default: true
     name: "${device_name} Digital Input 8"
     id: di_8
     icon: mdi:electric-switch-closed

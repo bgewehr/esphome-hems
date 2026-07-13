@@ -29,6 +29,21 @@ globals:
   - id: pf_last_update_ms
     type: uint32_t
     initial_value: '0'
+  - id: solar_power_last_update_ms
+    type: uint32_t
+    initial_value: '0'
+  - id: house_power_last_update_ms
+    type: uint32_t
+    initial_value: '0'
+  - id: ev_power_last_update_ms
+    type: uint32_t
+    initial_value: '0'
+  - id: hp_power_last_update_ms
+    type: uint32_t
+    initial_value: '0'
+  - id: discharge_limit_last_update_ms
+    type: uint32_t
+    initial_value: '0'
   # Fronius battery discharge control — booleans select which meters to include in SOC calculation
   - id: include_meter_ev
     type: bool
@@ -76,7 +91,7 @@ globals:
 
 http_request:
   useragent: "ESPHome"
-  timeout: 10s
+  timeout: 3s
 
 modbustcp:
   - id: fronius_modbus_tcp
@@ -108,32 +123,10 @@ modbustcp_controller:
 
 # ── Fronius Sensoren ──────────────────────────────────────────────────────────
 sensor:
-  # ── Fronius PowerFlow API: atomare Momentaufnahme (primäre Quelle) ──────────
-  # Der Wechselrichter bilanziert seine Zähler intern zeitsynchron — keine
-  # Skalenfaktoren, keine Paarungs-/Summierungsartefakte wie bei Modbus.
-  # Konvention der API: P_Load negativ = Verbrauch, P_Grid positiv = Bezug,
-  # P_Akku positiv = Entladung.
-  - platform: template
-    name: "${device_name} Fronius PF Load"
-    id: fronius_pf_load
-    internal: true
-    unit_of_measurement: "W"
-    update_interval: never
+  # ── Fronius PowerFlow API: PV-Momentaufnahme (primäre Solarquelle) ──────────
   - platform: template
     name: "${device_name} Fronius PF PV"
     id: fronius_pf_pv
-    internal: true
-    unit_of_measurement: "W"
-    update_interval: never
-  - platform: template
-    name: "${device_name} Fronius PF Grid"
-    id: fronius_pf_grid
-    internal: true
-    unit_of_measurement: "W"
-    update_interval: never
-  - platform: template
-    name: "${device_name} Fronius PF Akku"
-    id: fronius_pf_akku
     internal: true
     unit_of_measurement: "W"
     update_interval: never
@@ -226,6 +219,11 @@ sensor:
       if (p < -100.0f || p > 25000.0f) return {};
       return p;
     update_interval: 2s
+    on_value:
+      then:
+        - globals.set:
+            id: solar_power_last_update_ms
+            value: !lambda 'return millis();'
 
   - platform: modbustcp_controller
     modbustcp_controller_id: fronius_inverter
@@ -320,6 +318,7 @@ sensor:
   # Register 40072-40074 = AphA/B/C (unsigned!), 40075 = A_SF
   # Vorzeichen wird von WphA/B/C (40088-40090) übernommen: positiv=Bezug, negativ=Einspeisung
   - platform: modbustcp_controller
+    disabled_by_default: true
     modbustcp_controller_id: fronius_meter_grid
     name: "${device_name} Fronius Grid Current A"
     id: fronius_grid_current_a
@@ -342,6 +341,7 @@ sensor:
           return current;
 
   - platform: modbustcp_controller
+    disabled_by_default: true
     modbustcp_controller_id: fronius_meter_grid
     name: "${device_name} Fronius Grid Current B"
     id: fronius_grid_current_b
@@ -364,6 +364,7 @@ sensor:
           return current;
 
   - platform: modbustcp_controller
+    disabled_by_default: true
     modbustcp_controller_id: fronius_meter_grid
     name: "${device_name} Fronius Grid Current C"
     id: fronius_grid_current_c
@@ -425,6 +426,11 @@ sensor:
           window_size: 3
           send_every: 1
           send_first_at: 1
+    on_value:
+      then:
+        - globals.set:
+            id: ev_power_last_update_ms
+            value: !lambda 'return millis();'
 
   - platform: modbustcp_controller
     modbustcp_controller_id: fronius_meter_ev
@@ -456,6 +462,7 @@ sensor:
         - lambda: 'if ((int)x >= -10 && (int)x <= 10) id(sf_ev_current) = (int)x;'
 
   - platform: modbustcp_controller
+    disabled_by_default: true
     modbustcp_controller_id: fronius_meter_ev
     name: "${device_name} Fronius EV Current A"
     id: fronius_ev_current_a
@@ -474,13 +481,25 @@ sensor:
       - lambda: |-
           if (id(sf_ev_current) > 10 || id(sf_ev_current) < -10) return NAN;
           return std::abs(x * pow(10, id(sf_ev_current)));
+      - median:
+          window_size: 3
+          send_every: 1
+          send_first_at: 1
     on_value:
       then:
         - number.set:
             id: ct1current
-            value: !lambda "return std::max(0.0f, x) + id(ct1addon).state;"
+            value: !lambda |-
+              float target = std::max(0.0f, x) + id(ct1addon).state;
+              float current = id(ct1current).state;
+              if (std::isnan(current)) return target;
+              float diff = target - current;
+              // Original-Verhalten: CT hoch (Wallbox soll reduzieren) → halber Schritt
+              if (diff > 0.0f) return current + diff * 0.5f;
+              return target;
 
   - platform: modbustcp_controller
+    disabled_by_default: true
     modbustcp_controller_id: fronius_meter_ev
     name: "${device_name} Fronius EV Current B"
     id: fronius_ev_current_b
@@ -499,13 +518,24 @@ sensor:
       - lambda: |-
           if (id(sf_ev_current) > 10 || id(sf_ev_current) < -10) return NAN;
           return std::abs(x * pow(10, id(sf_ev_current)));
+      - median:
+          window_size: 3
+          send_every: 1
+          send_first_at: 1
     on_value:
       then:
         - number.set:
             id: ct2current
-            value: !lambda "return std::max(0.0f, x) + id(ct2addon).state;"
+            value: !lambda |-
+              float target = std::max(0.0f, x) + id(ct2addon).state;
+              float current = id(ct2current).state;
+              if (std::isnan(current)) return target;
+              float diff = target - current;
+              if (diff > 0.0f) return current + diff * 0.5f;
+              return target;
 
   - platform: modbustcp_controller
+    disabled_by_default: true
     modbustcp_controller_id: fronius_meter_ev
     name: "${device_name} Fronius EV Current C"
     id: fronius_ev_current_c
@@ -524,11 +554,21 @@ sensor:
       - lambda: |-
           if (id(sf_ev_current) > 10 || id(sf_ev_current) < -10) return NAN;
           return std::abs(x * pow(10, id(sf_ev_current)));
+      - median:
+          window_size: 3
+          send_every: 1
+          send_first_at: 1
     on_value:
       then:
         - number.set:
             id: ct3current
-            value: !lambda "return std::max(0.0f, x) + id(ct3addon).state;"
+            value: !lambda |-
+              float target = std::max(0.0f, x) + id(ct3addon).state;
+              float current = id(ct3current).state;
+              if (std::isnan(current)) return target;
+              float diff = target - current;
+              if (diff > 0.0f) return current + diff * 0.5f;
+              return target;
 
   # ── Smart Meter Wärmepumpe (Unit 242): Leistung ─────────────────────────────
   # Gleiche Register wie Grid Meter, aber andere Unit-ID
@@ -558,6 +598,11 @@ sensor:
           window_size: 3
           send_every: 1
           send_first_at: 1
+    on_value:
+      then:
+        - globals.set:
+            id: hp_power_last_update_ms
+            value: !lambda 'return millis();'
 
   - platform: modbustcp_controller
     modbustcp_controller_id: fronius_meter_hp
@@ -588,24 +633,30 @@ sensor:
     accuracy_decimals: 0
     update_interval: 2s
     lambda: |-
-      // Primärquelle: PowerFlow-API-Snapshot (P_Load negativ = Gesamtverbrauch).
-      // EV/WP kommen von eigenen Sub-Zählern (Modbus, Median-geglättet).
-      float load = id(fronius_pf_load).state;
+      // Modbus: AC + Grid - EV - HP - Ohm
+      // Alle Einzelsensoren haben bereits Median-Filter gegen SF-Ausreisser.
+      // Der Median(5) auf dem Ergebnis glaettet Transitionen-Artefakte:
+      // Wenn EV oder AC sich aendern, aktualisieren die Modbus-Register
+      // nicht exakt gleichzeitig (100ms command_throttle) — fuer 1-2 Zyklen
+      // kann die Differenz kurzzeitig springen.
+      float ac = id(fronius_ac_power).state;
+      float grid = id(fronius_grid_power).state;
       float ev = id(fronius_ev_power).state;
       float hp = id(fronius_hp_power).state;
       float ohm = id(fronius_ohmpilot_power).state;
-      bool pf_fresh = (millis() - id(pf_last_update_ms)) <= 15000 && id(pf_last_update_ms) != 0;
-      if (!pf_fresh || std::isnan(load)) {
-        // Fallback: bisherige Modbus-Summe
-        float ac = id(fronius_ac_power).state;
-        float grid = id(fronius_grid_power).state;
-        if (std::isnan(ac) || std::isnan(grid) || std::isnan(ev) || std::isnan(hp)) return {};
-        if (std::isnan(ohm)) ohm = 0;
-        return ac + grid - ev - hp - ohm;
-      }
-      if (std::isnan(ev) || std::isnan(hp)) return {};
-      if (std::isnan(ohm)) ohm = 0;  // Solar-API, optional
-      return -load - ev - hp - ohm;
+      if (std::isnan(ac) || std::isnan(grid) || std::isnan(ev) || std::isnan(hp)) return {};
+      if (std::isnan(ohm)) ohm = 0;
+      return std::max(0.0f, ac + grid - ev - hp - ohm);
+    filters:
+      - median:
+          window_size: 5
+          send_every: 1
+          send_first_at: 1
+    on_value:
+      then:
+        - globals.set:
+            id: house_power_last_update_ms
+            value: !lambda 'return millis();'
 
   # ── Template: Schaltbare Leistungssumme ─────────────────────────────────────
   # Summe der aktivierten Verbraucher (House, EV, HP)
@@ -674,14 +725,21 @@ sensor:
     accuracy_decimals: 1
     update_interval: 2s
     lambda: |-
+      const uint32_t now = millis();
+      const uint32_t max_age_ms = 10000;
+      if (id(solar_power_last_update_ms) == 0 || now - id(solar_power_last_update_ms) > max_age_ms ||
+          id(house_power_last_update_ms) == 0 || now - id(house_power_last_update_ms) > max_age_ms ||
+          id(ev_power_last_update_ms) == 0 || now - id(ev_power_last_update_ms) > max_age_ms ||
+          id(hp_power_last_update_ms) == 0 || now - id(hp_power_last_update_ms) > max_age_ms) {
+        return {};
+      }
+
       float solar = id(fronius_solar_power).state;
-      if (std::isnan(solar)) solar = 0;
       float house = id(fronius_house_power).state;
-      if (std::isnan(house)) house = 0;
       float ev = id(fronius_ev_power).state;
-      if (std::isnan(ev)) ev = 0;
       float hp = id(fronius_hp_power).state;
-      if (std::isnan(hp)) hp = 0;
+      if (!std::isfinite(solar) || !std::isfinite(house) ||
+          !std::isfinite(ev) || !std::isfinite(hp)) return {};
 
       // Check if a disabled consumer is drawing >30 W (discharge limiting needed)
       bool limit_needed = false;
@@ -689,8 +747,10 @@ sensor:
       if (!id(include_meter_ev) && ev > 30) limit_needed = true;
       if (!id(include_meter_hp) && hp > 30) limit_needed = true;
 
-      // No limiting needed or battery is charging
-      if (!limit_needed || id(fronius_battery_power).state < 0) {
+      // No limiting needed — Batterie-State wird NICHT geprüft, da
+      // battery < 0 → 100% → Entladung frei → battery > 0 → 0% eine
+      // Oszillation erzeugt.
+      if (!limit_needed) {
         return 100.0f;
       }
 
@@ -708,6 +768,11 @@ sensor:
 
       float percentage = deficit / id(battery_max_discharge_w).state * 100.0f;
       return std::min(100.0f, percentage);
+    on_value:
+      then:
+        - globals.set:
+            id: discharge_limit_last_update_ms
+            value: !lambda 'return millis();'
   # ── Wechselrichter: Batterie DC-Leistung ────────────────────────────────────
   # Register 40314 = DC Power Charge (U_WORD), SF at 40257
   # Register 40334 = DC Power Discharge (U_WORD), SF at 40257
@@ -817,7 +882,20 @@ interval:
     then:
       - lambda: |-
           float pct = id(fronius_discharge_limit).state;
-          if (std::isnan(pct)) pct = 100.0f;
+          const bool fresh = id(discharge_limit_last_update_ms) != 0 &&
+                             millis() - id(discharge_limit_last_update_ms) <= 10000;
+          static bool stale_logged = false;
+          if (!fresh || !std::isfinite(pct)) {
+            if (!stale_logged) {
+              ESP_LOGW("fronius", "Entladegrenze wird nicht geschrieben: Leistungsdaten sind veraltet");
+              stale_logged = true;
+            }
+            return;
+          }
+          if (stale_logged) {
+            ESP_LOGI("fronius", "Leistungsdaten wieder aktuell, Entladesteuerung wird fortgesetzt");
+            stale_logged = false;
+          }
 
           // OutWRte: Registerwert = pct / 10^SF (SF ist typisch -2 bei Fronius)
           int16_t outwrte_val = (int16_t)(pct / pow(10, id(sf_outwrte)));
@@ -845,7 +923,7 @@ interval:
           }
 
   # ── PowerFlow: HTTP-Poll der Fronius Solar API (atomarer Snapshot) ──────────
-  - interval: 3s
+  - interval: 5s
     then:
       - http_request.get:
           url: "http://${fronius_ip}/solar_api/v1/GetPowerFlowRealtimeData.fcgi"
@@ -857,15 +935,9 @@ interval:
                   if (response->status_code == 200) {
                     json::parse_json(body, [](JsonObject root) -> bool {
                       JsonObject site = root["Body"]["Data"]["Site"];
-                      float load = site["P_Load"] | NAN;
                       float pv   = site["P_PV"]   | 0.0f;   // null bei Nacht -> 0
-                      float grid = site["P_Grid"] | NAN;
-                      float akku = site["P_Akku"] | 0.0f;   // null ohne Batterie -> 0
-                      if (!std::isnan(load)) id(fronius_pf_load).publish_state(load);
                       id(fronius_pf_pv).publish_state(pv < 0 ? 0 : pv);
-                      if (!std::isnan(grid)) id(fronius_pf_grid).publish_state(grid);
-                      id(fronius_pf_akku).publish_state(akku);
-                      if (!std::isnan(load)) id(pf_last_update_ms) = millis();
+                      id(pf_last_update_ms) = millis();
                       return true;
                     });
                   }

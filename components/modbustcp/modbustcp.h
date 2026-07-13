@@ -48,6 +48,8 @@ class ModbusTCP : public Component {
   uint32_t last_send_{0};
   std::vector<ModbusDevice *> devices_;
   uint16_t Transaction_Identifier{0};
+  uint16_t pending_transaction_id_{0};
+  uint8_t pending_function_code_{0};
   uint32_t last_attempt_{0};
   uint16_t port_{502};
   std::string host_;

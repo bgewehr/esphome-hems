@@ -86,6 +86,8 @@ void ModbusTCP::disconnect_() {
   }
   connected_ = false;
   rx_pos_ = 0;
+  waiting_for_response = 0;
+  pending_function_code_ = 0;
 }
 
 void ModbusTCP::on_shutdown() {
@@ -146,31 +148,50 @@ void ModbusTCP::read_available_() {
 }
 
 void ModbusTCP::try_parse_response_() {
-  // Need at least MBAP header (7 bytes)
-  if (rx_pos_ < 7) return;
+  while (rx_pos_ >= 7) {
+    uint16_t pdu_len = (rx_buf_[4] << 8) | rx_buf_[5];
+    if (pdu_len < 2 || pdu_len > 253) {
+      ESP_LOGW(TAG, "Invalid PDU length: %d, disconnecting", pdu_len);
+      disconnect_();
+      return;
+    }
 
-  uint16_t pdu_len = (rx_buf_[4] << 8) | rx_buf_[5];
-  if (pdu_len < 2 || pdu_len > 253) {
-    ESP_LOGW(TAG, "Invalid PDU length: %d, resetting", pdu_len);
-    rx_pos_ = 0;
-    waiting_for_response = 0;
-    return;
+    // Total frame = 6 (MBAP header without unit) + pdu_len
+    size_t frame_len = 6 + pdu_len;
+    if (rx_pos_ < frame_len) return;
+
+    const uint16_t transaction_id = (rx_buf_[0] << 8) | rx_buf_[1];
+    const uint16_t protocol_id = (rx_buf_[2] << 8) | rx_buf_[3];
+    const uint8_t address = rx_buf_[6];
+    const uint8_t function_code = rx_buf_[7];
+    const bool function_matches = function_code == pending_function_code_ ||
+                                  function_code == (pending_function_code_ | 0x80);
+    const bool matches_request = protocol_id == 0 &&
+                                 transaction_id == pending_transaction_id_ &&
+                                 address == waiting_for_response && function_matches;
+
+    if (matches_request) {
+      dispatch_message_(rx_buf_, frame_len);
+    } else {
+      ESP_LOGW(TAG,
+               "Ignoring unmatched response tx=%u protocol=%u unit=%u FC=0x%02X "
+               "(expected tx=%u unit=%u FC=0x%02X)",
+               transaction_id, protocol_id, address, function_code,
+               pending_transaction_id_, waiting_for_response, pending_function_code_);
+    }
+
+    size_t remaining = rx_pos_ - frame_len;
+    if (remaining > 0) {
+      memmove(rx_buf_, rx_buf_ + frame_len, remaining);
+    }
+    rx_pos_ = remaining;
+
+    if (matches_request) {
+      waiting_for_response = 0;
+      pending_function_code_ = 0;
+      return;
+    }
   }
-
-  // Total frame = 6 (MBAP header without unit) + pdu_len
-  size_t frame_len = 6 + pdu_len;
-  if (rx_pos_ < frame_len) return;  // Not enough data yet
-
-  // Full frame received - dispatch it
-  dispatch_message_(rx_buf_, frame_len);
-
-  // Remove processed frame from buffer
-  size_t remaining = rx_pos_ - frame_len;
-  if (remaining > 0) {
-    memmove(rx_buf_, rx_buf_ + frame_len, remaining);
-  }
-  rx_pos_ = remaining;
-  waiting_for_response = 0;
 }
 
 void ModbusTCP::dispatch_message_(uint8_t *buf, size_t len) {
@@ -231,8 +252,21 @@ float ModbusTCP::get_setup_priority() const { return setup_priority::AFTER_WIFI 
 
 void ModbusTCP::send(uint8_t address, uint8_t function_code, uint16_t start_address, uint16_t number_of_entities,
                      uint8_t payload_len, const uint8_t *payload) {
-  if (number_of_entities > 128 && function_code <= 0x10) {
-    ESP_LOGE(TAG, "Too many registers: %d", number_of_entities);
+  if ((function_code == 0x03 || function_code == 0x04) &&
+      (number_of_entities == 0 || number_of_entities > 125)) {
+    ESP_LOGE(TAG, "Invalid read register count: %u", number_of_entities);
+    return;
+  }
+  if (function_code == 0x10 &&
+      (number_of_entities == 0 || number_of_entities > 123 || payload == nullptr ||
+       payload_len != number_of_entities * 2)) {
+    ESP_LOGE(TAG, "Invalid FC16 request: count=%u payload=%u", number_of_entities, payload_len);
+    return;
+  }
+  if (function_code == 0x0F &&
+      (number_of_entities == 0 || number_of_entities > 1968 || payload == nullptr ||
+       payload_len != (number_of_entities + 7) / 8)) {
+    ESP_LOGE(TAG, "Invalid FC15 request: count=%u payload=%u", number_of_entities, payload_len);
     return;
   }
 
@@ -272,9 +306,17 @@ void ModbusTCP::send(uint8_t address, uint8_t function_code, uint16_t start_addr
 
   if (payload != nullptr) {
     if (function_code == 0x10 || function_code == 0x0F) {
+      if (pos + 1 + payload_len > sizeof(frame)) {
+        ESP_LOGE(TAG, "Modbus TCP frame too large: %zu bytes", pos + 1 + payload_len);
+        return;
+      }
       frame[pos++] = payload_len;
     } else {
       payload_len = 2;
+      if (pos + payload_len > sizeof(frame)) {
+        ESP_LOGE(TAG, "Modbus TCP frame too large: %zu bytes", pos + payload_len);
+        return;
+      }
     }
     for (int i = 0; i < payload_len; i++) {
       frame[pos++] = payload[i];
@@ -296,6 +338,8 @@ void ModbusTCP::send(uint8_t address, uint8_t function_code, uint16_t start_addr
     return;
   }
 
+  pending_transaction_id_ = Transaction_Identifier;
+  pending_function_code_ = function_code;
   Transaction_Identifier++;
   waiting_for_response = address;
   last_send_ = millis();

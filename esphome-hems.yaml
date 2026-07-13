@@ -285,7 +285,10 @@ external_components:
       - modbustcp
       - eebus_eg
       - eebus_cs
-  - source: github://creepystefan/esphome_modbus_tcp
+  - source:
+      type: git
+      url: https://github.com/creepystefan/esphome_modbus_tcp.git
+      ref: f7f035cb816b99069adab2fa99919a998773d512
     refresh: 1d
     components:
       - modbustcp_controller

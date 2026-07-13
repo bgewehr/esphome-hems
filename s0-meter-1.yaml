@@ -16,6 +16,9 @@ globals:
     type: float
     restore_value: true
     initial_value: "0.0"
+  - id: water_last_pulse_count
+    type: uint32_t
+    initial_value: "0"
 
 number:
   - platform: template
@@ -63,10 +66,17 @@ sensor:
       inverted: true              # S0 active-low
     filters:
       - lambda: return x * id(water_liter_per_pulse);  # pulses → L/min
-    on_raw_value:
-      - globals.set:
-          id: water_total_m3
-          value: !lambda "return id(water_total_m3) + id(water_liter_per_pulse) * 0.001f;"
+    total:
+      id: water_pulse_total
+      internal: true
+      unit_of_measurement: "pulses"
+      accuracy_decimals: 0
+      on_value:
+        - lambda: |-
+            const uint32_t pulses = static_cast<uint32_t>(x);
+            const uint32_t delta = pulses - id(water_last_pulse_count);
+            id(water_last_pulse_count) = pulses;
+            id(water_total_m3) += delta * id(water_liter_per_pulse) * 0.001f;
 
   - platform: template
     name: "${device_name} Water Total"

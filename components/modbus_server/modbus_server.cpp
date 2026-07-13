@@ -83,10 +83,16 @@ void ModbusServer::process_frame_() {
 
   switch (fc) {
     case 0x03: {  // Read Holding Registers
-      if (rx_pos_ < 8) { send_exception_(fc, 0x03); return; }
+      if (rx_pos_ != 8) { send_exception_(fc, 0x03); return; }
       uint16_t start = (uint16_t) rx_buf_[2] << 8 | rx_buf_[3];
       uint16_t count = (uint16_t) rx_buf_[4] << 8 | rx_buf_[5];
       if (count == 0 || count > 125) { send_exception_(fc, 0x03); return; }
+      for (uint32_t addr = start; addr < (uint32_t) start + count; addr++) {
+        if (addr > UINT16_MAX || holding_regs_.find((uint16_t) addr) == holding_regs_.end()) {
+          send_exception_(fc, 0x02);
+          return;
+        }
+      }
       uint8_t resp[3 + count * 2];  // addr(1)+fc(1)+byte_count(1)+data — CRC appended by send_response_
       resp[0] = address_;
       resp[1] = fc;
@@ -105,10 +111,16 @@ void ModbusServer::process_frame_() {
       break;
     }
     case 0x04: {  // Read Input Registers
-      if (rx_pos_ < 8) { send_exception_(fc, 0x03); return; }
+      if (rx_pos_ != 8) { send_exception_(fc, 0x03); return; }
       uint16_t start = (uint16_t) rx_buf_[2] << 8 | rx_buf_[3];
       uint16_t count = (uint16_t) rx_buf_[4] << 8 | rx_buf_[5];
       if (count == 0 || count > 125) { send_exception_(fc, 0x03); return; }
+      for (uint32_t addr = start; addr < (uint32_t) start + count; addr++) {
+        if (addr > UINT16_MAX || input_regs_.find((uint16_t) addr) == input_regs_.end()) {
+          send_exception_(fc, 0x02);
+          return;
+        }
+      }
       uint8_t resp[3 + count * 2];  // addr(1)+fc(1)+byte_count(1)+data — CRC appended by send_response_
       resp[0] = address_;
       resp[1] = fc;
@@ -127,9 +139,13 @@ void ModbusServer::process_frame_() {
       break;
     }
     case 0x06: {  // Write Single Holding Register
-      if (rx_pos_ < 8) { send_exception_(fc, 0x03); return; }
+      if (rx_pos_ != 8) { send_exception_(fc, 0x03); return; }
       uint16_t addr = (uint16_t) rx_buf_[2] << 8 | rx_buf_[3];
       uint16_t val  = (uint16_t) rx_buf_[4] << 8 | rx_buf_[5];
+      if (holding_regs_.find(addr) == holding_regs_.end()) {
+        send_exception_(fc, 0x02);
+        return;
+      }
       if (hreg_write_cbs_.count(addr))
         val = hreg_write_cbs_[addr](addr, val);
       holding_regs_[addr] = val;
@@ -142,7 +158,17 @@ void ModbusServer::process_frame_() {
       uint16_t start     = (uint16_t) rx_buf_[2] << 8 | rx_buf_[3];
       uint16_t reg_count = (uint16_t) rx_buf_[4] << 8 | rx_buf_[5];
       uint8_t  byte_cnt  = rx_buf_[6];
-      if (byte_cnt != reg_count * 2) { send_exception_(fc, 0x03); return; }
+      if (reg_count == 0 || reg_count > 123 || byte_cnt != reg_count * 2 ||
+          rx_pos_ != (uint16_t)(9 + byte_cnt)) {
+        send_exception_(fc, 0x03);
+        return;
+      }
+      for (uint32_t addr = start; addr < (uint32_t) start + reg_count; addr++) {
+        if (addr > UINT16_MAX || holding_regs_.find((uint16_t) addr) == holding_regs_.end()) {
+          send_exception_(fc, 0x02);
+          return;
+        }
+      }
       for (uint16_t i = 0; i < reg_count; i++) {
         uint16_t addr = start + i;
         uint16_t val  = (uint16_t) rx_buf_[7 + i * 2] << 8 | rx_buf_[8 + i * 2];

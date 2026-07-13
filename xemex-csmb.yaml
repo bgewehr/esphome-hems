@@ -151,7 +151,7 @@ modbus_server:
 # aus dem EV-Anteil.
 number:
   - platform: template
-    disabled_by_default: true
+    disabled_by_default: false
     name: "${device_name} EV Leistungsbegrenzung"
     id: ev_limit_w
     icon: "mdi:ev-station"
@@ -236,7 +236,7 @@ number:
 
 # ── CT-Strom-Regler (Xemex Modbus-Register) ──────────────────────────────────
   - platform: template
-    disabled_by_default: true
+    disabled_by_default: false
     name: "${device_name} CT1 Current"
     id: ct1current
     icon: "mdi:current-ac"
@@ -265,7 +265,7 @@ number:
             id(ct1current).publish_state(x);
 
   - platform: template
-    disabled_by_default: true
+    disabled_by_default: false
     name: "${device_name} CT2 Current"
     id: ct2current
     icon: "mdi:current-ac"
@@ -294,7 +294,7 @@ number:
             id(ct2current).publish_state(x);
 
   - platform: template
-    disabled_by_default: true
+    disabled_by_default: false
     name: "${device_name} CT3 Current"
     id: ct3current
     icon: "mdi:current-ac"
