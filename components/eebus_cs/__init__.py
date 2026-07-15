@@ -14,10 +14,10 @@ import os
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome import automation
-from esphome.components import socket
+from esphome.components import socket, text_sensor
 from esphome.const import CONF_ID, CONF_TRIGGER_ID
 
-DEPENDENCIES = ["network", "esp32"]
+DEPENDENCIES = ["network", "esp32", "text_sensor"]
 CODEOWNERS   = ["@bgewehr"]
 MULTI_CONF   = False
 
@@ -40,6 +40,8 @@ CONF_FAILSAFE_LIMIT     = "failsafe_limit_w"
 CONF_ON_LIMIT_ACTIVE    = "on_limit_active"
 CONF_ON_LIMIT_CLEARED   = "on_limit_cleared"
 CONF_ON_PAIRING_REQUEST = "on_pairing_request"
+CONF_ACTIVE_USE_CASES_TEXT_SENSOR = "active_use_cases_text_sensor"
+CONF_SUPPORTED_USE_CASES_TEXT_SENSOR = "supported_use_cases_text_sensor"
 
 def _consume_eebus_cs_sockets(config):
     # httpd_ssl instance: 1 HTTPS listen + 2 active WS connections + 1 ctrl_port = 4 sockets
@@ -57,6 +59,8 @@ CONFIG_SCHEMA = cv.All(
         cv.Optional(CONF_DEVICE_TYPE,    default="HEMS"):        cv.string_strict,
         cv.Optional(CONF_DEVICE_MODEL,   default="ESP32-HEMS-14a"): cv.string_strict,
         cv.Optional(CONF_FAILSAFE_LIMIT, default=4200.0):        cv.positive_float,
+        cv.Optional(CONF_ACTIVE_USE_CASES_TEXT_SENSOR): cv.use_id(text_sensor.TextSensor),
+        cv.Optional(CONF_SUPPORTED_USE_CASES_TEXT_SENSOR): cv.use_id(text_sensor.TextSensor),
         cv.Optional(CONF_ON_LIMIT_ACTIVE): automation.validate_automation({
             cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(LimitActiveTrigger),
         }),
@@ -236,6 +240,14 @@ async def to_code(config):
     cg.add(var.set_device_type(config[CONF_DEVICE_TYPE]))
     cg.add(var.set_device_model(config[CONF_DEVICE_MODEL]))
     cg.add(var.set_failsafe_limit_w(config[CONF_FAILSAFE_LIMIT]))
+
+    if CONF_ACTIVE_USE_CASES_TEXT_SENSOR in config:
+        active_use_cases_sensor = await cg.get_variable(config[CONF_ACTIVE_USE_CASES_TEXT_SENSOR])
+        cg.add(var.set_active_use_cases_text_sensor(active_use_cases_sensor))
+
+    if CONF_SUPPORTED_USE_CASES_TEXT_SENSOR in config:
+        supported_use_cases_sensor = await cg.get_variable(config[CONF_SUPPORTED_USE_CASES_TEXT_SENSOR])
+        cg.add(var.set_supported_use_cases_text_sensor(supported_use_cases_sensor))
 
     for conf in config.get(CONF_ON_LIMIT_ACTIVE, []):
         trigger = cg.new_Pvariable(conf[CONF_TRIGGER_ID], var)

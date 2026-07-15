@@ -4,6 +4,7 @@
  */
 
 #include "eebus_eg.h"
+#include "semp_decoder.h"
 
 #include <cmath>
 #include <cstdarg>
@@ -44,6 +45,7 @@ extern "C" {
 #include "src/use_case/actor/eg/lpc/eg_lpc.h"
 #include "src/use_case/actor/ma/mpc/ma_mpc.h"
 #include "src/use_case/model/load_limit_types.h"
+#include "src/use_case/specialization/feature_info_client.h"
 }
 
 #include "port/esp32/websocket/websocket_server_esp32.h"
@@ -181,6 +183,12 @@ static void spine_event_handler(const EventPayload* payload, void* ctx) {
           ESP_LOGW("eebus_eg", "%s OSSHPCF msg from %s: %s (fn=%d) — data=%s",
                    self->instance_name(), ski, e.name, (int)payload->function_type,
                    payload->function_data ? "present" : "null");
+          if (e.fn == kFunctionTypeSmartEnergyManagementPsData) {
+            const auto *data = static_cast<const SmartEnergyManagementPsDataType *>(payload->function_data);
+            const auto decoded = esphome::eebus_eg::decode_semp_data(data);
+            for (const auto &line : decoded.lines)
+              ESP_LOGW("eebus_eg", "%s OSSHPCF data: %s", self->instance_name(), line.c_str());
+          }
           break;
         }
       }
@@ -697,6 +705,7 @@ void EebusEgComponent::on_remote_use_case(int actor, int uc_name_id, const char*
     if (remote_uc_seen_.find(buf) == std::string::npos) {
       remote_uc_seen_ += buf;
       ESP_LOGW(TAG, "%s use case added by remote: %s", instance_name_.c_str(), buf + 3);  /* skip " | " */
+      publish_supported_use_cases_();
     }
     if (actor == 4 && uc_name_id == 30)
       semp_subscribe_pending_ = true;
@@ -705,8 +714,14 @@ void EebusEgComponent::on_remote_use_case(int actor, int uc_name_id, const char*
     if (pos != std::string::npos) {
       remote_uc_seen_.erase(pos, strlen(buf));
       ESP_LOGW(TAG, "%s use case removed by remote: %s", instance_name_.c_str(), buf + 3);  /* skip " | " */
+      publish_supported_use_cases_();
     }
   }
+}
+
+void EebusEgComponent::publish_supported_use_cases_() {
+  if (supported_use_cases_text_sensor_)
+    supported_use_cases_text_sensor_->publish_state(supported_use_cases());
 }
 
 void EebusEgComponent::subscribe_semp_() {
@@ -729,14 +744,22 @@ void EebusEgComponent::subscribe_semp_() {
     FeatureRemoteObject* semp = ENTITY_REMOTE_GET_FEATURE_WITH_TYPE_AND_ROLE(
         ent, kFeatureTypeTypeSmartEnergyManagementPs, kRoleTypeServer);
     if (!semp) continue;
-    const FeatureAddressType* addr = FEATURE_GET_ADDRESS(FEATURE_OBJECT(semp));
-    if (!addr) continue;
-    if (FEATURE_LOCAL_INTERFACE(local_semp_feature_)->has_subscription_to_remote(local_semp_feature_, addr)) {
-      ESP_LOGD(TAG, "%s OSSHPCF: already subscribed to SEMP", instance_name_.c_str());
-      return;
+    FeatureInfoClient client;
+    EebusError construct_err = FeatureInfoClientConstruct(
+        &client, kFeatureTypeTypeSmartEnergyManagementPs, local_entity_, ent);
+    if (construct_err != kEebusErrorOk) {
+      ESP_LOGW(TAG, "%s OSSHPCF: SEMP client setup failed err=%d", instance_name_.c_str(),
+               (int) construct_err);
+      continue;
     }
-    EebusError err = FEATURE_LOCAL_INTERFACE(local_semp_feature_)->subscribe_to_remote(local_semp_feature_, addr);
-    ESP_LOGW(TAG, "%s OSSHPCF: subscribed to remote SEMP (entity %zu) err=%d", instance_name_.c_str(), i, (int)err);
+
+    EebusError subscribe_err = kEebusErrorOk;
+    if (!HasSubscription(&client))
+      subscribe_err = Subscribe(&client);
+    EebusError read_err = RequestData(
+        &client, kFunctionTypeSmartEnergyManagementPsData, nullptr, nullptr);
+    ESP_LOGW(TAG, "%s OSSHPCF: remote SEMP entity %zu subscribe_err=%d read_err=%d",
+             instance_name_.c_str(), i, (int) subscribe_err, (int) read_err);
     return;
   }
   ESP_LOGW(TAG, "%s OSSHPCF: no SEMP server feature found on remote device (%zu entities)", instance_name_.c_str(), n);
@@ -780,6 +803,7 @@ void EebusEgComponent::on_entity_connect(const EntityAddressType* addr) {
   failsafe_set_       = false;   /* loop() will retry until DeviceConfiguration data is available */
   failsafe_retry_ms_  = 0;
   uc_dump_at_ms_      = millis() + 5000;
+  publish_supported_use_cases_();
 
   for (auto* t : connected_triggers_) t->trigger();
 }
@@ -796,6 +820,7 @@ void EebusEgComponent::on_entity_disconnect(const EntityAddressType* /*addr*/) {
   pending_limit_w_         = -1.0f;
   uc_dump_at_ms_           = 0;
   remote_uc_seen_          = {};
+  publish_supported_use_cases_();
   remote_spine_addr_       = {};
   semp_subscribe_pending_  = false;
   pairing_state_      = remote_ski_.empty() ? "Inaktiv" : "Getrennt — suche Gerät...";

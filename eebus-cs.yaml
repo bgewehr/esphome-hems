@@ -15,6 +15,8 @@ web_server:
 
 eebus_cs:
   id: hems_cs
+  active_use_cases_text_sensor: cs_active_use_cases
+  supported_use_cases_text_sensor: cs_supported_use_cases
   remote_ski: !secret eebus_cs_remote_ski
   device_brand: "DIY"
   device_type: "HEMS"
@@ -224,14 +226,24 @@ text_sensor:
     lambda: "return id(hems_cs).local_ski();"
 
   - platform: template
-    name: "${device_name} CS Use Cases"
+    name: "${device_name} CS Aktive UC"
+    id: cs_active_use_cases
     icon: "mdi:format-list-checks"
     web_server:
       sorting_group_id: sg_eebus_cs
       sorting_weight: 7
     entity_category: diagnostic
-    update_interval: 5s
-    lambda: "return id(hems_cs).active_use_cases();"
+    update_interval: never
+
+  - platform: template
+    name: "${device_name} CS Unterstützte UC"
+    id: cs_supported_use_cases
+    icon: "mdi:format-list-bulleted"
+    web_server:
+      sorting_group_id: sg_eebus_cs
+      sorting_weight: 8
+    entity_category: diagnostic
+    update_interval: never
 
   # --- §14a control channel (sg_netz) ---
   - platform: template

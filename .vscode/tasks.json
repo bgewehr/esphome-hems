@@ -1,0 +1,143 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Validate ESPHome firmware",
+			"type": "shell",
+			"command": "esphome",
+			"args": [
+				"compile",
+				"esphome-hems.yaml"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Upload ESPHome firmware OTA",
+			"type": "process",
+			"command": "esphome",
+			"args": [
+				"upload",
+				"esphome-hems.yaml",
+				"--device",
+				"192.168.178.24"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Capture ESPHome restart logs",
+			"type": "process",
+			"command": "python",
+			"args": [
+				"tools/diagnostics/capture_esphome_restart.py",
+				"--host",
+				"192.168.178.24",
+				"--duration",
+				"90"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Capture OSSHPCF for 24 hours",
+			"type": "process",
+			"command": "python",
+			"args": [
+				"tools/diagnostics/capture_oshpcf.py",
+				"--host",
+				"192.168.178.24",
+				"--duration",
+				"86400"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Test OSSHPCF capture",
+			"type": "process",
+			"command": "python",
+			"args": [
+				"tools/diagnostics/capture_oshpcf.py",
+				"--host",
+				"192.168.178.24",
+				"--duration",
+				"15"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Check live device status",
+			"type": "process",
+			"command": "python",
+			"args": [
+				"tools/diagnostics/check_device_status.py",
+				"--host",
+				"192.168.178.24"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Clean ESPHome build",
+			"type": "shell",
+			"command": "esphome",
+			"args": [
+				"clean",
+				"esphome-hems.yaml"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Check current diff",
+			"type": "shell",
+			"command": "git",
+			"args": [
+				"diff",
+				"--check"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Run host tests in Docker",
+			"type": "process",
+			"command": "docker",
+			"args": [
+				"run",
+				"--rm",
+				"-v",
+				"${workspaceFolder}:/workspace",
+				"-w",
+				"/workspace",
+				"gcc:14-bookworm",
+				"bash",
+				"-lc",
+				"apt-get update && apt-get install -y --no-install-recommends cmake && cmake -S tests -B /tmp/host-tests -DCMAKE_BUILD_TYPE=Release && cmake --build /tmp/host-tests --parallel && ctest --test-dir /tmp/host-tests --output-on-failure"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "Validate GitHub workflows",
+			"type": "process",
+			"command": "docker",
+			"args": [
+				"run",
+				"--rm",
+				"-v",
+				"${workspaceFolder}:/repo",
+				"-w",
+				"/repo",
+				"rhysd/actionlint:latest"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		}
+	]
+}

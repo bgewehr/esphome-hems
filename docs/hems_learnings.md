@@ -212,3 +212,21 @@ debugging session) doesn't have to rediscover them.
   instead of pushing a no-op change.
 - Rebase PR branches onto current `main` before discussion — stale bases make
   the diff show unrelated merged changes and confuse review.
+
+## 9. Bosch heat-pump flexibility (OSSHPCF)
+
+- OSSHPCF is not a direct compressor power setpoint. The heat pump publishes
+  alternatives, sequences, time slots and constraints through
+  `SmartEnergyManagementPs`; the HEMS may select an offered `sequenceId` only
+  when the node and sequence are marked remote-controllable.
+- OpenEEBus currently provides the complete SPINE data model but no active
+  OHPCF/OSSHPCF actor implementation or current unit-test fixture in this
+  fork. Bosch behavior therefore has to be established from decoded captures,
+  not inferred from type names.
+- Keep OSSHPCF read-only until the concrete Bosch units, time base, mandatory
+  slots, state transition after selection and behavior under concurrent LPC
+  are documented. The capture matrix and staged implementation plan are in
+  `docs/oss-hpcf-bosch.md`.
+- LPC and device failsafe always take precedence over flexibility scheduling.
+  OSSHPCF may shift heat-pump operation but must never increase its allocated
+  §14a budget.

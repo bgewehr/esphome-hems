@@ -28,6 +28,7 @@
 #include "esphome/core/component.h"
 #include "esphome/core/automation.h"
 #include "esphome/core/log.h"
+#include "esphome/components/text_sensor/text_sensor.h"
 
 extern "C" {
 #include "src/service/api/eebus_service_interface.h"
@@ -78,6 +79,9 @@ class EebusEgComponent : public Component {
   void set_device_model(const std::string& m)  { device_model_        = m; }
   void set_failsafe_limit_w(float w)           { failsafe_limit_w_    = w; }
   void set_failsafe_duration_s(uint32_t s)     { failsafe_duration_s_ = s; }
+  void set_supported_use_cases_text_sensor(text_sensor::TextSensor* sensor) {
+    supported_use_cases_text_sensor_ = sensor;
+  }
 
   /* Runtime update from UI — re-triggers failsafe negotiation with new value */
   void update_failsafe_limit_w(float w) {
@@ -155,6 +159,7 @@ class EebusEgComponent : public Component {
     return r.empty() ? std::string("(keine)") : r.substr(3);
   }
   void on_remote_use_case(int actor, int uc_name_id, const char* uc_str, const char* actor_str, bool add);
+  void publish_supported_use_cases_();
 
   /* Called from C vtable (public for EgServiceReader friend access) */
   void on_entity_connect(const EntityAddressType* addr);
@@ -217,6 +222,7 @@ class EebusEgComponent : public Component {
   uint32_t    pending_limit_ms_   {0};
   uint32_t    uc_dump_at_ms_      {0};
   uint32_t    last_heartbeat_ms_  {0};
+  text_sensor::TextSensor* supported_use_cases_text_sensor_ {nullptr};
 
   EntityAddressType remote_entity_addr_{};
   bool              have_remote_entity_{false};

@@ -26,6 +26,7 @@
 #include "esphome/core/component.h"
 #include "esphome/core/automation.h"
 #include "esphome/core/log.h"
+#include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/core/preferences.h"
 
 extern "C" {
@@ -90,6 +91,12 @@ class EebusCsComponent : public Component {
   void set_device_type(const std::string& t)  { device_type_      = t; }
   void set_device_model(const std::string& m) { device_model_     = m; }
   void set_failsafe_limit_w(float w)          { failsafe_limit_w_ = w; }
+  void set_active_use_cases_text_sensor(text_sensor::TextSensor* sensor) {
+    active_use_cases_text_sensor_ = sensor;
+  }
+  void set_supported_use_cases_text_sensor(text_sensor::TextSensor* sensor) {
+    supported_use_cases_text_sensor_ = sensor;
+  }
 
   /* -----------------------------------------------------------------------
    * Trigger registration
@@ -130,11 +137,14 @@ class EebusCsComponent : public Component {
   bool        is_paired()            const { return !paired_remote_ski_.empty(); }
   bool        has_pending_pairing()  const { return !pending_remote_ski_.empty(); }
   bool        is_pairing_mode()      const { return pairing_mode_active_; }
-  std::string active_use_cases()     const {
+  std::string active_use_cases() const {
+    return connected_ ? std::string("EG/LPC") : std::string("(keine)");
+  }
+  std::string supported_use_cases() const {
     if (!remote_uc_seen_.empty()) {
       return remote_uc_seen_.size() > 3 ? remote_uc_seen_.substr(3) : remote_uc_seen_;
     }
-    if (is_paired()) return std::string("verbunden, UC ausstehend");
+    if (connected_) return std::string("(ausstehend)");
     return std::string("(keine)");
   }
 
@@ -151,6 +161,7 @@ class EebusCsComponent : public Component {
   void on_failsafe_limit_receive(float limit_w);
   void on_heartbeat_receive(uint64_t counter);
   void on_remote_use_case(int actor, int uc_name_id, const char* uc_str, const char* actor_str);
+  void publish_use_cases_();
 
  protected:
   bool load_or_generate_cert_();
@@ -188,6 +199,9 @@ class EebusCsComponent : public Component {
   bool        pairing_mode_active_ {false}; /* true only while explicit pairing window is open */
   uint32_t    pairing_deadline_ms_ {0};     /* absolute millis() deadline for pairing window */
   bool        service_started_     {false}; /* EEBUS_SERVICE_START has been called */
+  uint32_t    initial_use_cases_publish_at_ms_ {0};
+  text_sensor::TextSensor* active_use_cases_text_sensor_ {nullptr};
+  text_sensor::TextSensor* supported_use_cases_text_sensor_ {nullptr};
 
   /* openeebus handles */
   EebusServiceObject*  service_       {nullptr};

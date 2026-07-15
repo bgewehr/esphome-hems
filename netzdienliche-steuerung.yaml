@@ -7,14 +7,14 @@
 #         Geräte auf. Konzept: docs/power-distribution-concept.md
 #         (strikte Priorität mit Sockeln).
 #
-#         Budget = P_Limit(VNB) + 0.8 × PV-Leistung  (Saldierung, 20 %
-#                  Sicherheitsmarge; Batterie-Entladung noch nicht angerechnet)
+#         Budget = P_Limit(VNB) + 0.8 × PV-Überschuss  (PV abzüglich
+#                  Haushaltsverbrauch; Batterie-Entladung noch nicht angerechnet)
 #         Runde 1: jedem verbundenen Gerät in Prioritätsreihenfolge seinen
 #                  Sockel (Min). Runde 2: Rest bis zum Deckel (Max).
 #         Betreiber-Parameter (Priorität/Min/Max) liegen bei den Instanzen:
 #         eebus-eg-1.yaml / eebus-eg-2.yaml, unterhalb der Failsafe-Optionen.
-#         Der EV-Ladepfad (ct*addon + relay_1) hat eine eigene feste
-#         Begrenzung und wird erst in V2 in die Verteilung integriert.
+#         Der lokale EV-Ladepfad (ct*addon + relay_1) nimmt als dritter
+#         Verbraucher an derselben Budget-Verteilung teil.
 #
 # Requires: hems_cs, relay_1, power_limit_events, last_enwg_event, sg_netz
 #           (eebus-cs.yaml), hems_eg1 (eebus-eg-1.yaml), hems_eg2
@@ -36,20 +36,16 @@ eebus_cs:
         id: status_led
         effect: "Paragraph14a Warning Flash"
     - switch.turn_on: relay_1
+    - lambda: "id(ev_budget_override_active) = true;"
     - script.execute: distribute_budget
   on_limit_cleared:
     - text_sensor.template.publish:
         id: last_enwg_event
         state: !lambda 'return std::string("Beendet (EEBus): ") + id(ha_time).now().strftime("%d.%m.%Y %H:%M:%S");'
+    - lambda: "id(ev_budget_override_active) = false;"
     - number.set:
-        id: ct1addon
-        value: !lambda "return id(ladebegrenzung_addon);"
-    - number.set:
-        id: ct2addon
-        value: !lambda "return id(ladebegrenzung_addon);"
-    - number.set:
-        id: ct3addon
-        value: !lambda "return id(ladebegrenzung_addon);"
+        id: ev_limit_w
+        value: !lambda "return id(ev_user_limit_w);"
     - light.turn_off:
         id: status_led
     - switch.turn_off: relay_1
@@ -93,8 +89,11 @@ script:
 
           const float limit = id(hems_cs).current_limit_w();
           float pv = id(fronius_solar_power).state;
-          if (std::isnan(pv) || pv < 0.0f) pv = 0.0f;
-          float budget = limit + 0.8f * pv;
+          float house = id(fronius_house_power).state;
+          if (!std::isfinite(pv) || pv < 0.0f) pv = 0.0f;
+          if (!std::isfinite(house) || house < 0.0f) house = pv;
+          const float pv_surplus = std::max(0.0f, pv - house);
+          float budget = limit + 0.8f * pv_surplus;
 
           // Drei steuerbare Verbraucher: WP (EG1), EV (Xemex CSMB), WB (EG2).
           // kind 0 = EEBus-EG-Instanz, kind 1 = EV-Ladepfad (CT-Addons)
@@ -103,16 +102,17 @@ script:
             int kind;
             esphome::eebus_eg::EebusEgComponent* eg;
             float prio, pmin, pmax, share;
+            bool can_run;
           };
           // EV-Deckel: Budget-Max UND manueller Slider (Nutzerwunsch) gelten beide
-          float ev_cap = std::min(id(ev_budget_max).state, id(ev_limit_w).state);
+          float ev_cap = std::min(id(ev_budget_max).state, id(ev_user_limit_w));
           Dev devs[3] = {
             { "WP", 0, id(hems_eg1), id(eg1_budget_prio).state,
-              id(eg1_budget_min).state, id(eg1_budget_max).state, 0.0f },
+              id(eg1_budget_min).state, id(eg1_budget_max).state, 0.0f, true },
             { "EV", 1, nullptr, id(ev_budget_prio).state,
-              std::min(id(ev_budget_min).state, ev_cap), ev_cap, 0.0f },
+              std::min(id(ev_budget_min).state, ev_cap), ev_cap, 0.0f, true },
             { "WB", 0, id(hems_eg2), id(eg2_budget_prio).state,
-              id(eg2_budget_min).state, id(eg2_budget_max).state, 0.0f },
+              id(eg2_budget_min).state, id(eg2_budget_max).state, 0.0f, true },
           };
           // verbunden zaehlt fuer EG nur mit gueltiger Remote-SKI; EV ist lokal
           auto dev_ok = [](Dev& d) {
@@ -128,12 +128,14 @@ script:
           // Runde 1: Sockel in Prioritaetsreihenfolge
           for (auto &d : devs) {
             if (!dev_ok(d)) continue;
-            d.share = std::min(d.pmin, rest);
+            d.can_run = d.pmin <= 0.0f || rest >= d.pmin;
+            if (!d.can_run) continue;
+            d.share = d.pmin;
             rest -= d.share;
           }
           // Runde 2: Rest bis zum Deckel
           for (auto &d : devs) {
-            if (!dev_ok(d)) continue;
+            if (!dev_ok(d) || !d.can_run) continue;
             float take = std::min(d.pmax - d.share, rest);
             if (take > 0.0f) { d.share += take; rest -= take; }
           }
@@ -153,15 +155,9 @@ script:
                         : (d.eg == id(hems_eg1)) ? &id(budget_last_eg1)
                                                  : &id(budget_last_eg2);
             if (d.kind == 1) {
-              if (fabsf(d.share - *last) > 100.0f || *last < 0.0f) {
-                float amps = d.share / 693.0f;   // 3 Phasen x 231 V
-                float addon;
-                if (d.share >= 11400.0f)   addon = 1.0f;
-                else if (amps < 6.0f)      addon = 47.4f;  // Wallbox pausiert
-                else                       addon = 50.0f - amps - 2.6f;
-                id(ct1addon).make_call().set_value(addon).perform();
-                id(ct2addon).make_call().set_value(addon).perform();
-                id(ct3addon).make_call().set_value(addon).perform();
+              if (fabsf(d.share - *last) > 100.0f ||
+                  fabsf(id(ev_limit_w).state - d.share) > 100.0f || *last < 0.0f) {
+                id(ev_limit_w).make_call().set_value(d.share).perform();
                 *last = d.share;
               }
             } else {
@@ -175,7 +171,7 @@ script:
             status += status.empty() ? buf : std::string(" | ") + buf;
           }
           char head[64];
-          snprintf(head, sizeof(head), "Limit %.0f + PV %.0f -> ", limit, 0.8f * pv);
+          snprintf(head, sizeof(head), "Limit %.0f + PV-Überschuss %.0f -> ", limit, 0.8f * pv_surplus);
           id(budget_distribution_status).publish_state(std::string(head) + status);
           ESP_LOGW("budget", "Verteilung: %s%s (Rest %.0f W)", head, status.c_str(), rest);
 

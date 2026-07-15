@@ -14,26 +14,23 @@ globals:
   - id: ladebegrenzung_addon
     type: float
     initial_value: "1.0"
+  - id: ev_user_limit_w
+    type: float
+    restore_value: true
+    initial_value: "11500.0"
+  - id: ev_budget_override_active
+    type: bool
+    initial_value: "false"
 
-# Boot: Global + CT-Addons einmalig aus dem (NVS-restaurierten) Slider ableiten
+# Boot: Slider und CT-Addons aus der persistenten Benutzergrenze ableiten
 esphome:
   on_boot:
     - priority: -100.0
       then:
         - lambda: |-
-            float w = id(ev_limit_w).state;
+            float w = id(ev_user_limit_w);
             if (std::isnan(w)) w = 11500.0f;
-            float amps = w / 693.0f;
-            float addon;
-            if (w >= 11400.0f)     addon = 1.0f;
-            else if (amps < 6.0f)  addon = 47.4f;
-            else                   addon = 50.0f - amps - 2.6f;
-            id(ladebegrenzung_addon) = addon;
-            if (!id(hems_cs).is_limit_active()) {
-              id(ct1addon).make_call().set_value(addon).perform();
-              id(ct2addon).make_call().set_value(addon).perform();
-              id(ct3addon).make_call().set_value(addon).perform();
-            }
+            id(ev_limit_w).make_call().set_value(w).perform();
 
 # TX=GPIO17 (DE/DI zum RS485-Chip), RX=GPIO18 (RO vom RS485-Chip)
 uart:
@@ -163,20 +160,20 @@ number:
     max_value: 11500
     step: 100
     initial_value: 11500
-    restore_value: true
+    restore_value: false
     optimistic: true
     mode: slider
     on_value:
       then:
         - lambda: |-
+            if (!id(ev_budget_override_active)) id(ev_user_limit_w) = x;
             float amps = x / 693.0f;
             float addon;
             if (x >= 11400.0f)     addon = 1.0f;   // unbegrenzt
             else if (amps < 6.0f)  addon = 47.4f;  // Wallbox pausiert unter 6 A
             else                   addon = 50.0f - amps - 2.6f;
             id(ladebegrenzung_addon) = addon;
-            if (!id(hems_cs).is_limit_active() &&
-                !id(grid_provider_switch).state &&
+            if (!id(grid_provider_switch).state &&
                 !id(manual_enwg_test).state) {
               id(ct1addon).make_call().set_value(addon).perform();
               id(ct2addon).make_call().set_value(addon).perform();
@@ -202,7 +199,7 @@ number:
 
   - platform: template
     disabled_by_default: true
-    name: "${device_name} EV Budget Min"
+    name: "${device_name} EV Budget Sockel"
     id: ev_budget_min
     icon: "mdi:arrow-collapse-down"
     web_server:

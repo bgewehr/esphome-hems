@@ -25,10 +25,10 @@ import os
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome import automation
-from esphome.components import socket
+from esphome.components import socket, text_sensor
 from esphome.const import CONF_ID, CONF_TRIGGER_ID
 
-DEPENDENCIES = ["network", "esp32"]
+DEPENDENCIES = ["network", "esp32", "text_sensor"]
 CODEOWNERS   = ["@bgewehr"]
 MULTI_CONF   = True
 
@@ -50,6 +50,7 @@ CONF_FAILSAFE_DURATION_S = "failsafe_duration_s"
 CONF_ON_EG_CONNECTED    = "on_eg_connected"
 CONF_ON_EG_DISCONNECTED = "on_eg_disconnected"
 CONF_ON_POWER_READING    = "on_power_reading"
+CONF_SUPPORTED_USE_CASES_TEXT_SENSOR = "supported_use_cases_text_sensor"
 
 def _consume_eebus_eg_sockets(config):
     # httpd_ssl instance: 1 HTTPS listen + 2 active WS connections + 1 ctrl_port = 4 sockets
@@ -69,6 +70,7 @@ CONFIG_SCHEMA = cv.All(
         cv.Optional(CONF_DEVICE_MODEL,        default="ESP32-HEMS-14a"): cv.string_strict,
         cv.Optional(CONF_FAILSAFE_LIMIT_W,    default=4200.0):  cv.positive_float,
         cv.Optional(CONF_FAILSAFE_DURATION_S, default=7200):    cv.positive_int,  # 2h default
+        cv.Optional(CONF_SUPPORTED_USE_CASES_TEXT_SENSOR): cv.use_id(text_sensor.TextSensor),
         cv.Optional(CONF_ON_EG_CONNECTED): automation.validate_automation({
             cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(EgConnectedTrigger),
         }),
@@ -99,6 +101,10 @@ async def to_code(config):
     cg.add(var.set_device_model(config[CONF_DEVICE_MODEL]))
     cg.add(var.set_failsafe_limit_w(config[CONF_FAILSAFE_LIMIT_W]))
     cg.add(var.set_failsafe_duration_s(config[CONF_FAILSAFE_DURATION_S]))
+
+    if CONF_SUPPORTED_USE_CASES_TEXT_SENSOR in config:
+        supported_use_cases_sensor = await cg.get_variable(config[CONF_SUPPORTED_USE_CASES_TEXT_SENSOR])
+        cg.add(var.set_supported_use_cases_text_sensor(supported_use_cases_sensor))
 
     for conf in config.get(CONF_ON_EG_CONNECTED, []):
         trigger = cg.new_Pvariable(conf[CONF_TRIGGER_ID], var)

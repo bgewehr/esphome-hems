@@ -21,7 +21,8 @@ Netzentgelte):
    VNB-Limit verbrauchen. Formal:
 
    ```
-   netzwirksame SteuVE-Leistung = max(0, Σ P_SteuVE − P_PV − P_Batt,Entladung)
+   verfügbarer Erzeugungsüberschuss = max(0, P_PV + P_Batt,Entladung − P_Haus)
+   netzwirksame SteuVE-Leistung = max(0, Σ P_SteuVE − verfügbarer Erzeugungsüberschuss)
    Bedingung:  netzwirksame SteuVE-Leistung ≤ P_Limit(VNB)
    ```
 
@@ -38,21 +39,28 @@ Netzentgelte):
    Regelabweichungen). Bei Ausfall der Steuerbox-Verbindung gilt der
    vereinbarte Failsafe-Wert (hier: 4200 W, bereits implementiert).
 
-## 2. Ist-Zustand im esphome-hems (Stand 2026-07-08)
+## 2. Ist-Zustand im esphome-hems (Stand 2026-07-13)
 
-Heute wird das CS-Limit `x` **parallel und ungeteilt** an alle Verbraucher
-weitergereicht (Trigger-Merge über die Packages):
+Der Prioritätsverteiler in `netzdienliche-steuerung.yaml` berechnet bei
+aktivem CS-Limit und alle 30 Sekunden `P_Limit + 0,8 × PV-Überschuss`. Der
+PV-Überschuss ist die positive Differenz aus Solarleistung und unsteuerbarem
+Hausverbrauch. Anschließend sortiert der Verteiler Wärmepumpe, lokalen
+EV-Ladepfad und Wallbox nach Betreiberpriorität und verteilt atomare Sockel
+sowie Restbudget bis zum jeweiligen Deckel. Die Parameter Priorität, Sockel
+und Maximum sind persistente ESPHome-Entities. Der aktuelle Verteilstand wird
+als Textsensor ausgegeben.
 
-| Verbraucher | Mechanismus | erhält heute |
-|---|---|---|
-| EG1 — Wärmepumpe (Bosch) | `hems_eg1.set_limit(x)` via EEBus LPC | volles Limit |
-| EG2 — Wallbox (EEBus, künftig) | `hems_eg2.set_limit(x)` via EEBus LPC | volles Limit |
-| EV-Laden (Fronius/CT-Addon) | `ct1..3addon = 45` + `relay_1` | Festwert |
-| Status/Events | LED, Zähler, Textsensor | — |
+Noch nicht vollständig umgesetzt sind:
 
-Problem: Bei `x = 4200 W` dürfen WP **und** Wallbox **und** EV-Laden je bis
-4200 W ziehen — in Summe ein Vielfaches des Budgets. Das erfüllt die
-§14a-Anforderung nur zufällig (wenn nie zwei Geräte gleichzeitig laufen).
+- Batterieentladung und Messwertalter/-qualität in der Budgetformel,
+- explizite Quantisierung auf zulässige ganzzahlige Ladestromstufen,
+- erzwungenes Neusenden nach 60 Sekunden unabhängig von der 100-W-Hysterese,
+- Closed-Loop-Prüfung anhand der gemessenen netzwirksamen SteuVE-Leistung,
+- Trennung von Allokationskern und YAML-/Geräteadaptern sowie automatisierte
+   Tests der Verteilregeln.
+
+Der bestehende Verteiler ist damit eine funktionsfähige erste Stufe, aber
+noch kein vollständig verifizierter Compliance-Regelkreis.
 
 ## 3. Budget-Modell
 
@@ -60,9 +68,11 @@ Bei aktivem Limit berechnet das HEMS zyklisch (alle 10 s und bei jeder
 Limit-/PV-Änderung):
 
 ```
-Budget = P_Limit                     # vom VNB via EEBus LPC
-       + max(0, P_PV_aktuell)        # Fronius Solar Power (Saldierung erlaubt)
-       + max(0, P_Batt_Entladung)    # Batterie-Entladung wirkt wie Erzeugung
+PV_Überschuss = max(0, P_PV_aktuell - P_Haus)
+Budget = P_Limit + 0,8 × PV_Überschuss
+
+# Künftig zusätzlich:
+PV_Überschuss = max(0, P_PV_aktuell + P_Batt_Entladung - P_Haus)
 ```
 
 Messgrößen sind vorhanden: Fronius Solar Power, Battery Power, Grid Power,
@@ -76,7 +86,7 @@ Der Betreiber konfiguriert **pro Gerät drei Werte** in der ESPHome-UI
 | Parameter | Bedeutung | Beispiel WP | Beispiel Wallbox | Beispiel EV (Fronius) |
 |---|---|---|---|---|
 | **Priorität** (1 = höchste) | Reihenfolge bei Knappheit | 1 | 3 | 2 |
-| **P_min** (Komfort-Sockel) | bekommt das Gerät zuerst, wenn Budget reicht | 4200 W¹ | 0 W | 1380 W (6 A) |
+| **Sockel** (optional) | atomare technische/komfortbezogene Zuteilung; reicht das Budget nicht vollständig, erhält das Gerät 0 | 4200 W¹ | 0 W | 1380 W (6 A) |
 | **P_max** | Deckel, mehr wird nie zugeteilt | 9000 W | 11000 W | 11000 W |
 
 ¹ Die WP ignoriert Limits < 4200 W ohnehin (Geräteverhalten, im Component als
@@ -86,7 +96,7 @@ Der Betreiber konfiguriert **pro Gerät drei Werte** in der ESPHome-UI
 
 ```
 1. Sortiere verbundene steuerbare Geräte nach Priorität.
-2. Runde 1 (Sockel): Teile jedem Gerät der Reihe nach sein P_min zu,
+2. Runde 1 (Sockel): Teile jedem Gerät der Reihe nach seinen Sockel zu,
    solange Budget vorhanden. Reicht das Budget nicht einmal für alle
    Sockel, bekommen die niedrig priorisierten Geräte 0 (Wallbox pausiert,
    EV-Laden stoppt) — die WP bekommt als Prio 1 immer ihre 4200 W
@@ -97,7 +107,11 @@ Der Betreiber konfiguriert **pro Gerät drei Werte** in der ESPHome-UI
    (230 V × Phasen × ganze Ampere; unter 6 A → 0 / Pause).
 5. Anwenden:  EG1.set_limit(share_WP)
               EG2.set_limit(share_Wallbox)
-              ct1..3addon = share_EV / (230 × Phasen)
+              EV-Leistungsbegrenzungs-Slider = share_EV
+
+   Der vorhandene Slider-Handler ist der einzige Ort, der den EV-Leistungswert
+   in Xemex-Addonwerte umrechnet. Nach Ende des §14a-Eingriffs wird der zuvor
+   vom Benutzer eingestellte Sliderwert wiederhergestellt.
 ```
 
 **Alternative Strategien** (per Select wählbar, wenn gewünscht):
@@ -117,8 +131,10 @@ entspricht dem üblichen Komfortempfinden (Heizen vor Laden).
 - **Verifikation:** `netzwirksame SteuVE-Leistung` aus Messwerten berechnen.
   Liegt sie > 2 min über `P_Limit` (z. B. weil ein Gerät sein Limit ignoriert),
   Anteile stufenweise um 10 % kürzen und Ereignis loggen.
-- **PV-Einbruch:** Wolkenzug reduziert das Budget sofort — deshalb PV-Anteil
-  mit 60-s-Mittelwert glätten und nur 80 % der PV-Leistung anrechnen
+- **PV-Einbruch:** Wolkenzug oder steigender Hausverbrauch reduziert den
+   Überschuss sofort. Nur 80 % des nach Hausverbrauch verbleibenden
+   PV-Überschusses werden angerechnet; eine Zeit-/Qualitätsprüfung bleibt als
+   weitere Absicherung vorgesehen.
   (Sicherheitsmarge gegen Überschreitung).
 
 ## 6. Failsafe-Verhalten (Verbindung zur Steuerbox verloren)
@@ -131,31 +147,105 @@ ihren Failsafe (4200 W / 7200 s). Bei Heartbeat-Verlust der CS-Verbindung:
 - EV-Laden → `ladebegrenzung_addon` (bestehender Mechanismus)
 - Verteil-Logik pausiert, bis die Steuerbox wieder verbunden ist.
 
-## 7. Umsetzungsschritte im Repo
+## 7. Entwicklungsplan
 
-1. **`budget_distributor`-Logik** (Lambda-Interval oder kleines Custom
-   Component in `eebus-cs.yaml`): Budget-Formel + Runden 1/2 + Quantisierung.
-   Ersetzt die heutigen direkten `set_limit(x)`-Weiterleitungen in
-   `eebus-eg-1.yaml` / `eebus-eg-2.yaml` / `esphome-hems.yaml`.
-2. **UI-Entities je Gerät**: `number` P_min/P_max + `select` Priorität
-   (analog zu den vorhandenen Failsafe-Numbers, `restore_value: true`).
-3. **Statusanzeige**: Textsensor „Budget-Verteilung" (z. B.
-   `4200 → WP 4200 | WB 0 | EV 0 (PV +1200)`), Ereigniszähler wiederverwenden.
-4. **Closed-Loop-Wächter**: Interval 30 s, vergleicht Messwerte gegen Limit,
-   kürzt bei Überschreitung (Abschnitt 5).
-5. Voraussetzung (erledigt 2026-07-08): EG2-Fremdgeräte-Guard und
-   konfigurierbares `min_limit_w`, damit Zuteilungen < 4200 W die Wallbox
-   erreichen statt aufgerundet zu werden.
+Die Aufgaben-IDs werden auch in der zentralen [TODO-Liste](../TODO.md)
+verwendet. Eine Phase beginnt erst, wenn die Abnahmekriterien der vorherigen
+Phase erfüllt sind.
+
+### Phase 0: Vorhandene Basis
+
+- **BD-00 (erledigt):** Prioritätsverteiler für EG1, EV und EG2 inklusive
+   Betreiberparametern, 80-%-Anrechnung des PV-Überschusses nach Hausverbrauch,
+   100-W-Hysterese und Statusanzeige.
+- **BD-01 (erledigt):** Konfigurierbares `min_limit_w` und
+   Fremdgeräte-Guard in den EEBus-EG-Instanzen.
+
+### Phase 1: Testbarer Allokationskern
+
+- **BD-10:** Verteilalgorithmus aus der YAML-Lambda in eine kleine lokale
+   Komponente mit reinem Eingabe-/Ausgabemodell extrahieren. Gerätezugriffe
+   bleiben in separaten Adaptern; das Verhalten wird dabei nicht geändert.
+- **BD-11:** Tests für Priorität, Sockel, Deckel, getrennte Geräte,
+   Budgetmangel, ungültige Parameter und deterministische Gleichstände
+   ergänzen.
+
+Abnahme: Derselbe Eingabesatz erzeugt auf Host und ESP dieselbe Zuteilung;
+alle bisherigen Verteilfälle sind automatisiert reproduzierbar.
+
+### Phase 2: Eingangsqualität und korrekte Zuteilung
+
+- **BD-20:** Für Limit, PV, Batterie und Geräteleistungen Wert, Zeitstempel,
+   Gültigkeit und Qualitätsstatus gemeinsam auswerten. Veraltete oder
+   nicht-finite Zusatzleistung darf das Budget nicht erhöhen.
+- **BD-21:** Positive Batterieentladung mit dokumentiertem Vorzeichen und
+   Sicherheitsmarge in die Saldierung aufnehmen; Laden zählt nicht als
+   Erzeugung.
+- **BD-22 (erledigt):** Technische Sockelleistung atomar behandeln: Reicht das
+   Budget nicht für den Sockel, erhält das Gerät 0 statt eines nicht
+   ausführbaren Zwischenwertes.
+- **BD-23:** EV und Wallbox auf tatsächlich unterstützte Phasen- und
+   Ganzampere-Stufen abrunden. Angezeigte, angeforderte und erwartete Leistung
+   müssen dieselbe quantisierte Zuteilung verwenden.
+
+Abnahme: Stale-/NaN-Tests können das Budget nie erhöhen; kein Adapter hebt
+eine Zuteilung nachträglich über das vom Allokationskern vergebene Budget an.
+
+### Phase 3: Befehls- und Rückmeldezyklus
+
+- **BD-30:** 100-W-Hysterese beibehalten, aber unveränderte aktive Limits
+   spätestens nach 60 Sekunden erneut senden.
+- **BD-31:** Pro Verbraucher `requested`, `acknowledged` und `measured`
+   getrennt führen; Disconnect, Timeout und Ablehnung sichtbar machen.
+- **BD-32:** Closed-Loop-Wächter implementieren. Eine Überschreitung des
+   netzwirksamen Limits wird zeitlich integriert und nach zwei Minuten durch
+   definierte, stufenweise Reduktion beantwortet.
+- **BD-33:** Rückkehr aus Degradierung und Failsafe deterministisch machen;
+   Reconnect darf keine veraltete Zuteilung reaktivieren.
+
+Abnahme: Simulationen für ACK-Verlust, ignoriertes Limit, PV-Einbruch und
+Reconnect halten das VNB-Limit ein oder wechseln nachvollziehbar in den
+Failsafe-Zustand.
+
+### Phase 4: Nachweis und Betrieb
+
+- **BD-40:** Diagnose-Entities und strukturierte Ereignisse für Budget,
+   Quellenqualität, Zuteilung, Quantisierung und Compliance-Abweichung
+   bereitstellen.
+- **BD-41:** Szenariotests mit den Fake-Geräten sowie einen kontrollierten
+   Hardwaretest für gleichzeitigen WP-/EV-/Wallbox-Betrieb dokumentieren.
+- **BD-42:** Soll-/Ist-Verhalten, Reaktionszeit und Failsafe-Nachweis als
+   reproduzierbares Abnahmeprotokoll ablegen.
+
+Abnahme: Alle Szenarien aus Abschnitt 5 und 6 sind mit Zeitstempeln und
+Messwerten nachvollziehbar; offene Abweichungen sind im TODO erfasst.
 
 ## 8. Beispielrechnung
 
-VNB dimmt auf 4200 W, PV liefert 3000 W, Batterie idle:
+VNB dimmt auf 4200 W, PV liefert 3000 W, der unsteuerbare Hausverbrauch
+beträgt 1000 W und die Batterie ist idle:
 
 ```
-Budget = 4200 + 0.8 × 3000 = 6600 W
-Runde 1: WP 4200 (Prio 1) → Rest 2400; EV 1380 (Prio 2, 6 A) → Rest 1020;
+PV-Überschuss = max(0, 3000 - 1000) = 2000 W
+Budget = 4200 + 0.8 × 2000 = 5800 W
+Runde 1: WP 4200 (Prio 1) → Rest 1600; EV 1380 (Prio 2, 6 A) → Rest 220;
          Wallbox 0 (Prio 3, Sockel 0)
-Runde 2: EV +920 → 2300 W → quantisiert 2070 W (9 A); Rest 330 W → Wallbox 0
-Ergebnis: WP 4200 | EV 2070 | WB 0  — netzwirksam ≤ 4200 W eingehalten,
+Runde 2: WP +220 → 4420 W; Rest 0 W
+Ergebnis: WP 4420 | EV 1380 | WB 0  — netzwirksam ≤ 4200 W eingehalten,
           Haushaltsverbrauch unbegrenzt zusätzlich.
 ```
+
+## 9. Abgrenzung zu OSSHPCF
+
+Die Budget-Verteilung und die PV-Optimierung der Bosch-Waermepumpe verfolgen
+unterschiedliche Ziele:
+
+- LPC und dieser Verteiler begrenzen die momentane netzwirksame Leistung.
+- OSSHPCF verschiebt einen von der Waermepumpe angebotenen Verdichterablauf
+   innerhalb seiner Zeit-, Leistungs- und Komfort-Constraints.
+
+OSSHPCF darf das zugeteilte §14a-Budget nicht erhoehen. Eine ausgewaehlte
+Waermepumpen-Sequenz wird daher weiterhin durch den fuer EG1 berechneten
+Leistungsanteil begrenzt. Bosch-spezifische Steuerdaten und die notwendigen
+Captures sind in [Bosch-Waermepumpe: OSSHPCF / SEMP](oss-hpcf-bosch.md)
+dokumentiert.

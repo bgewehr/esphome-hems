@@ -253,7 +253,17 @@ no changes to existing files.
 | MonitoringOfPowerConsumption | MPC | StVE→HEMS | Power feedback |
 | OptimizationOfSelfConsumptionByHPCF | OSSHPCF | StVE→HEMS | Compressor flexibility (PV) |
 
-**OSSHPCF/SEMP** is detected automatically when the heat pump announces its compressor entity. The controller then subscribes to the SEMP data points (`fn=103`) and logs incoming compressor schedules — the basis for future PV self-consumption optimisation.
+**OSSHPCF/SEMP** is detected automatically when the heat pump announces its compressor entity. The controller then subscribes to the remote `SmartEnergyManagementPs` server and observes `smartEnergyManagementPsData` plus the related configuration and price functions — the basis for future PV self-consumption optimisation.
+
+The current implementation is deliberately read-only: the exact sequence,
+slot and constraint data exposed by the Bosch gateway still needs to be
+captured and documented before control requests are enabled. See
+[Bosch heat pump OSSHPCF / SEMP](docs/oss-hpcf-bosch.md) for the known SPINE
+contract, open Bosch-specific questions and the staged implementation plan.
+
+The project-wide target architecture and phased roadmap are documented in
+[System architecture](docs/system-architecture.md). Work status and execution
+order are tracked in the central [development TODO](TODO.md).
 
 ---
 

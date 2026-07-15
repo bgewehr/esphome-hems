@@ -172,6 +172,7 @@ void EebusCsComponent::setup() {
     service_started_ = true;
   }
   update_pairing_state_("Inaktiv");
+  initial_use_cases_publish_at_ms_ = millis() + 30000;
   ESP_LOGI(TAG, "EEBus LPC CS ready — local SKI: %s", local_ski_.c_str());
 }
 
@@ -183,6 +184,12 @@ void EebusCsComponent::loop() {
   if (!service_) return;
 
   uint32_t now = millis();
+
+  if (initial_use_cases_publish_at_ms_ != 0 &&
+      (int32_t)(now - initial_use_cases_publish_at_ms_) >= 0) {
+    initial_use_cases_publish_at_ms_ = 0;
+    publish_use_cases_();
+  }
 
   /* Heartbeat watchdog: spec requires CS to enter failsafe on EG heartbeat loss,
    * regardless of whether a limit is currently active. Guard on paired SKI so
@@ -272,6 +279,7 @@ void EebusCsComponent::on_remote_ski_disconnected(const char* ski) {
   if (paired_remote_ski_ == ski)  paired_remote_ski_.clear();
   if (pending_remote_ski_ == ski) pending_remote_ski_.clear();
   remote_uc_seen_ = {};
+  publish_use_cases_();
   /* pairing_mode_active_ stays — allow reconnect within the window */
 
   if (heartbeat_lost_) {
@@ -307,6 +315,7 @@ void EebusCsComponent::on_ship_state_update(const char* ski, SmeState state) {
     }
     pending_remote_ski_.clear();  // always clear on DataExchange, even on reconnect
     connected_ = true;
+    publish_use_cases_();
     /* Reset heartbeat timer on every DataExchange — gives the EG a fresh 60 s
      * window before the watchdog fires, even if the device ran for a long time
      * before this connection. */
@@ -379,6 +388,8 @@ void EebusCsComponent::forget_pairing(const std::string& ski) {
   if (pending_remote_ski_ == ski) pending_remote_ski_.clear();
   if (remote_ski_ == ski)         remote_ski_.clear();
   connected_ = false;
+  remote_uc_seen_ = {};
+  publish_use_cases_();
   nvs_handle_t h;
   if (nvs_open(NVS_NS, NVS_READWRITE, &h) == ESP_OK) {
     nvs_erase_key(h, NVS_KEY_TSKI); nvs_commit(h); nvs_close(h);
@@ -650,7 +661,17 @@ void EebusCsComponent::on_remote_use_case(int actor, int uc_name_id, const char*
   if (remote_uc_seen_.find(buf) == std::string::npos) {
     remote_uc_seen_ += buf;
     ESP_LOGI(TAG, "CS use case announced by remote EG: %s", buf + 3);  // skip " | "
+    publish_use_cases_();
   }
+}
+
+void EebusCsComponent::publish_use_cases_() {
+  ESP_LOGD(TAG, "CS use cases: active=%s supported=%s",
+           active_use_cases().c_str(), supported_use_cases().c_str());
+  if (active_use_cases_text_sensor_)
+    active_use_cases_text_sensor_->publish_state(active_use_cases());
+  if (supported_use_cases_text_sensor_)
+    supported_use_cases_text_sensor_->publish_state(supported_use_cases());
 }
 
 void EebusCsComponent::update_pairing_state_(const std::string& state) {

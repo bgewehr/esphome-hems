@@ -1,0 +1,26 @@
+name: Host tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  host-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Configure host tests
+        run: cmake -S tests -B build/host-tests -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build host tests
+        run: cmake --build build/host-tests --config Release --parallel
+
+      - name: Run host tests
+        run: ctest --test-dir build/host-tests --build-config Release --output-on-failure

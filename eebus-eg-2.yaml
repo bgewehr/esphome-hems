@@ -40,6 +40,7 @@ eebus_eg:
     device_brand: "DIY"
     device_type: "HEMS"
     device_model: "esphome-hems"
+    supported_use_cases_text_sensor: eg2_supported_use_cases
 
     on_eg_connected:
       - lambda: |-
@@ -169,13 +170,13 @@ text_sensor:
 
   - platform: template
     name: "${device_name} EG2 Unterstützte UC"
+    id: eg2_supported_use_cases
     icon: "mdi:format-list-bulleted"
     web_server:
       sorting_group_id: sg_eebus_eg2
       sorting_weight: 8
     entity_category: diagnostic
-    update_interval: 60s
-    lambda: "return id(hems_eg2).supported_use_cases();"
+    update_interval: never
 
 number:
   # --- EG2 failsafe configuration (sg_eebus_eg2, weights 30-31) ---
@@ -237,7 +238,7 @@ number:
 
   - platform: template
     disabled_by_default: true
-    name: "${device_name} EG2 Budget Min"
+    name: "${device_name} EG2 Budget Sockel"
     id: eg2_budget_min
     icon: "mdi:arrow-collapse-down"
     web_server:
