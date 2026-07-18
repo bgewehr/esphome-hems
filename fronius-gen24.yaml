@@ -113,7 +113,7 @@ modbustcp_controller:
   - id: fronius_meter_ev
     modbustcp_id: fronius_modbus_tcp
     address: 0xF2
-    update_interval: 2s
+    update_interval: 1s
     command_throttle: 100ms
   - id: fronius_meter_hp
     modbustcp_id: fronius_modbus_tcp
@@ -480,23 +480,29 @@ sensor:
     filters:
       - lambda: |-
           if (id(sf_ev_current) > 10 || id(sf_ev_current) < -10) return NAN;
-          return std::abs(x * pow(10, id(sf_ev_current)));
-      - median:
-          window_size: 3
-          send_every: 1
-          send_first_at: 1
+          float current = std::abs(x * pow(10, id(sf_ev_current)));
+          if (current > 32.0f) return NAN;
+          float power = std::abs(id(fronius_ev_power).state);
+          if (!std::isnan(power) && power > 1000.0f) {
+            float expected = power / 693.0f;
+            float tolerance = std::max(3.0f, expected * 0.5f);
+            if (std::abs(current - expected) > tolerance) return NAN;
+          }
+          return current;
+      - filter_out: nan
     on_value:
       then:
         - number.set:
             id: ct1current
             value: !lambda |-
-              float target = std::max(0.0f, x) + id(ct1addon).state;
-              float current = id(ct1current).state;
-              if (std::isnan(current)) return target;
-              float diff = target - current;
-              // Original-Verhalten: CT hoch (Wallbox soll reduzieren) → halber Schritt
-              if (diff > 0.0f) return current + diff * 0.5f;
-              return target;
+              float addon = id(ct1addon).state;
+              float target = std::max(0.0f, x) + addon;
+              constexpr float control_threshold = 47.4f;
+              constexpr float control_gain = 0.2f;
+              float power = std::abs(id(fronius_ev_power).state);
+              if (addon <= 1.0f || addon >= 47.3f) return target;
+              if (std::isnan(power) || power < 5000.0f) return target;
+              return control_threshold + (target - control_threshold) * control_gain;
 
   - platform: modbustcp_controller
     disabled_by_default: true
@@ -517,22 +523,29 @@ sensor:
     filters:
       - lambda: |-
           if (id(sf_ev_current) > 10 || id(sf_ev_current) < -10) return NAN;
-          return std::abs(x * pow(10, id(sf_ev_current)));
-      - median:
-          window_size: 3
-          send_every: 1
-          send_first_at: 1
+          float current = std::abs(x * pow(10, id(sf_ev_current)));
+          if (current > 32.0f) return NAN;
+          float power = std::abs(id(fronius_ev_power).state);
+          if (!std::isnan(power) && power > 1000.0f) {
+            float expected = power / 693.0f;
+            float tolerance = std::max(3.0f, expected * 0.5f);
+            if (std::abs(current - expected) > tolerance) return NAN;
+          }
+          return current;
+      - filter_out: nan
     on_value:
       then:
         - number.set:
             id: ct2current
             value: !lambda |-
-              float target = std::max(0.0f, x) + id(ct2addon).state;
-              float current = id(ct2current).state;
-              if (std::isnan(current)) return target;
-              float diff = target - current;
-              if (diff > 0.0f) return current + diff * 0.5f;
-              return target;
+              float addon = id(ct2addon).state;
+              float target = std::max(0.0f, x) + addon;
+              constexpr float control_threshold = 47.4f;
+              constexpr float control_gain = 0.2f;
+              float power = std::abs(id(fronius_ev_power).state);
+              if (addon <= 1.0f || addon >= 47.3f) return target;
+              if (std::isnan(power) || power < 5000.0f) return target;
+              return control_threshold + (target - control_threshold) * control_gain;
 
   - platform: modbustcp_controller
     disabled_by_default: true
@@ -553,22 +566,29 @@ sensor:
     filters:
       - lambda: |-
           if (id(sf_ev_current) > 10 || id(sf_ev_current) < -10) return NAN;
-          return std::abs(x * pow(10, id(sf_ev_current)));
-      - median:
-          window_size: 3
-          send_every: 1
-          send_first_at: 1
+          float current = std::abs(x * pow(10, id(sf_ev_current)));
+          if (current > 32.0f) return NAN;
+          float power = std::abs(id(fronius_ev_power).state);
+          if (!std::isnan(power) && power > 1000.0f) {
+            float expected = power / 693.0f;
+            float tolerance = std::max(3.0f, expected * 0.5f);
+            if (std::abs(current - expected) > tolerance) return NAN;
+          }
+          return current;
+      - filter_out: nan
     on_value:
       then:
         - number.set:
             id: ct3current
             value: !lambda |-
-              float target = std::max(0.0f, x) + id(ct3addon).state;
-              float current = id(ct3current).state;
-              if (std::isnan(current)) return target;
-              float diff = target - current;
-              if (diff > 0.0f) return current + diff * 0.5f;
-              return target;
+              float addon = id(ct3addon).state;
+              float target = std::max(0.0f, x) + addon;
+              constexpr float control_threshold = 47.4f;
+              constexpr float control_gain = 0.2f;
+              float power = std::abs(id(fronius_ev_power).state);
+              if (addon <= 1.0f || addon >= 47.3f) return target;
+              if (std::isnan(power) || power < 5000.0f) return target;
+              return control_threshold + (target - control_threshold) * control_gain;
 
   # ── Smart Meter Wärmepumpe (Unit 242): Leistung ─────────────────────────────
   # Gleiche Register wie Grid Meter, aber andere Unit-ID

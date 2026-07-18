@@ -62,6 +62,14 @@ Konzept: [§14a-Leistungsbudget-Verteilung](docs/power-distribution-concept.md)
 - [ ] **BD-21** Batterieentladung korrekt und konservativ saldieren.
 - [ ] **BD-22** Technische Mindestleistung atomar behandeln.
 - [ ] **BD-23** EV und Wallbox auf reale Leistungsstufen quantisieren.
+- [ ] **BD-24** Stromverlaeufe der Wallbox auswerten und das CSMB-Regelkonzept
+  bei Bedarf auf eine feine, schwingungsarme Steuerung ueberarbeiten. Als
+  Referenz die bewaehrte Umsetzung in
+  [thomase1234/esphome-fake-xemex-csmb](https://github.com/thomase1234/esphome-fake-xemex-csmb)
+  heranziehen. Anschliessend erneut am realen Geraet messen, den Leistungssollwert
+  mehrfach variieren und den Zyklus aus Auswertung, Anpassung und Test bei Bedarf
+  wiederholen. Messbefund, Regelgesetz und Hardware-Abnahme stehen in
+  [Xemex CSMB EV-Regelung](docs/xemex-control.md).
 - [ ] **BD-30** Aktive Limits spaetestens alle 60 Sekunden neu senden.
 - [ ] **BD-31** Requested/acknowledged/measured je Verbraucher verfolgen.
 - [ ] **BD-32** Closed-Loop-Compliance-Waechter implementieren.
