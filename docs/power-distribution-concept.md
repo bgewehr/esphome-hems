@@ -39,7 +39,7 @@ Netzentgelte):
    Regelabweichungen). Bei Ausfall der Steuerbox-Verbindung gilt der
    vereinbarte Failsafe-Wert (hier: 4200 W, bereits implementiert).
 
-## 2. Ist-Zustand im esphome-hems (Stand 2026-07-13)
+## 2. Ist-Zustand im esphome-hems (Stand 2026-07-19)
 
 Der Prioritätsverteiler in `netzdienliche-steuerung.yaml` berechnet bei
 aktivem CS-Limit und alle 30 Sekunden `P_Limit + 0,8 × PV-Überschuss`. Der
@@ -52,12 +52,26 @@ als Textsensor ausgegeben.
 
 Noch nicht vollständig umgesetzt sind:
 
-- Batterieentladung und Messwertalter/-qualität in der Budgetformel,
 - explizite Quantisierung auf zulässige ganzzahlige Ladestromstufen,
 - erzwungenes Neusenden nach 60 Sekunden unabhängig von der 100-W-Hysterese,
 - Closed-Loop-Prüfung anhand der gemessenen netzwirksamen SteuVE-Leistung,
-- Trennung von Allokationskern und YAML-/Geräteadaptern sowie automatisierte
-   Tests der Verteilregeln.
+- strukturierte Diagnose ungueltiger Betreiberparameter im Geraeteadapter.
+
+Die fuer den Erzeugungszuschlag verwendeten Leistungswerte tragen echte
+Quellzeitstempel: PowerFlow beziehungsweise beide MPPT-Kanaele fuer Solar sowie
+AC, Grid, EV und HP fuer die abgeleitete Hausleistung. Ein Wert ist nur bei
+gueltigem Zeitstempel, hoechstens 10 s Alter, endlichem Zahlenwert und
+plausiblem Wertebereich verwendbar. Ein alter oder ungueltiger Solar-/Hauswert
+setzt ausschliesslich den PV-Zuschlag auf 0 W; das gueltige VNB-Basislimit bleibt
+wirksam. Ein ungueltiges VNB-Limit erzeugt konservativ 0 W Gesamtbudget.
+
+`Fronius Battery Power` kombiniert die getrennten DC-Rohwerte mit dem
+dokumentierten Vorzeichen `Entladung - Ladung`; positive Werte sind Entladung.
+Nur wenn beide Rohwerte hoechstens 10 s alt, endlich und im Bereich 0 bis
+25 kW liegen, wird die positive Entladung zum Erzeugungsueberschuss addiert.
+Ein negativer Wert (Laden) und jeder ungueltige Batteriewert erhoehen das Budget
+nicht. Die bestehende 80-%-Sicherheitsmarge gilt fuer den gemeinsamen
+Erzeugungsueberschuss aus PV und Batterieentladung.
 
 Der bestehende Verteiler ist damit eine funktionsfähige erste Stufe, aber
 noch kein vollständig verifizierter Compliance-Regelkreis.
@@ -89,8 +103,10 @@ Der Betreiber konfiguriert **pro Gerät drei Werte** in der ESPHome-UI
 | **Sockel** (optional) | atomare technische/komfortbezogene Zuteilung; reicht das Budget nicht vollständig, erhält das Gerät 0 | 4200 W¹ | 0 W | 1380 W (6 A) |
 | **P_max** | Deckel, mehr wird nie zugeteilt | 9000 W | 11000 W | 11000 W |
 
-¹ Die WP ignoriert Limits < 4200 W ohnehin (Geräteverhalten, im Component als
-`min_limit_w` hinterlegt) — ihr Sockel entspricht also dem gesetzlichen Minimum.
+¹ Der K40RF-Hardwaretest vom 20.07.2026 bestaetigt die Grenze: 4.200 W wurden
+per LPC ACK angenommen; 4.000, 3.600, 3.200, 2.800, 2.400 und 2.000 W blieben
+jeweils ohne ACK. Der im Component als `min_limit_w` hinterlegte Sockel von
+4.200 W bleibt daher erforderlich.
 
 **Verteilalgorithmus (strikte Priorität mit Sockeln — empfohlen):**
 
@@ -163,24 +179,24 @@ Phase erfüllt sind.
 
 ### Phase 1: Testbarer Allokationskern
 
-- **BD-10:** Verteilalgorithmus aus der YAML-Lambda in eine kleine lokale
-   Komponente mit reinem Eingabe-/Ausgabemodell extrahieren. Gerätezugriffe
-   bleiben in separaten Adaptern; das Verhalten wird dabei nicht geändert.
-- **BD-11:** Tests für Priorität, Sockel, Deckel, getrennte Geräte,
-   Budgetmangel, ungültige Parameter und deterministische Gleichstände
-   ergänzen.
+- **BD-10:** Verteilalgorithmus spaeter aus der YAML-Lambda in einen reinen
+   Eingabe-/Ausgabekern extrahieren. Bis dahin bleibt die bewaehrte Verteilung
+   bewusst inline in ESPHome.
+- **BD-11:** Nach der Extraktion Host-Tests fuer Prioritaet, Sockel, Deckel,
+   getrennte Geraete, Budgetmangel, ungueltige Parameter und deterministische
+   Gleichstaende ergaenzen.
 
 Abnahme: Derselbe Eingabesatz erzeugt auf Host und ESP dieselbe Zuteilung;
 alle bisherigen Verteilfälle sind automatisiert reproduzierbar.
 
 ### Phase 2: Eingangsqualität und korrekte Zuteilung
 
-- **BD-20:** Für Limit, PV, Batterie und Geräteleistungen Wert, Zeitstempel,
-   Gültigkeit und Qualitätsstatus gemeinsam auswerten. Veraltete oder
-   nicht-finite Zusatzleistung darf das Budget nicht erhöhen.
-- **BD-21:** Positive Batterieentladung mit dokumentiertem Vorzeichen und
-   Sicherheitsmarge in die Saldierung aufnehmen; Laden zählt nicht als
-   Erzeugung.
+- **BD-20 (erledigt):** Fuer VNB-Limit, PV und Hausleistung Wert,
+   Quellzeitstempel, Gueltigkeit und Wertebereich auswerten. Veraltete oder
+   nicht-finite Zusatzleistung kann das Budget nicht erhoehen.
+- **BD-21 (erledigt):** Positive Batterieentladung mit dokumentiertem Vorzeichen,
+   Quellfrische, Plausibilitaetsgrenzen und 80-%-Sicherheitsmarge in die
+   Saldierung aufgenommen; Laden zaehlt nicht als Erzeugung.
 - **BD-22 (erledigt):** Technische Sockelleistung atomar behandeln: Reicht das
    Budget nicht für den Sockel, erhält das Gerät 0 statt eines nicht
    ausführbaren Zwischenwertes.
@@ -188,8 +204,8 @@ alle bisherigen Verteilfälle sind automatisiert reproduzierbar.
    Ganzampere-Stufen abrunden. Angezeigte, angeforderte und erwartete Leistung
    müssen dieselbe quantisierte Zuteilung verwenden.
 
-Abnahme: Stale-/NaN-Tests können das Budget nie erhöhen; kein Adapter hebt
-eine Zuteilung nachträglich über das vom Allokationskern vergebene Budget an.
+Abnahme: Stale-/NaN-Daten können das Budget nie erhöhen; kein Adapter hebt
+eine Zuteilung nachträglich über das von der Verteil-Lambda vergebene Budget an.
 
 ### Phase 3: Befehls- und Rückmeldezyklus
 

@@ -21,11 +21,10 @@ Begruendung und Abnahmekriterien stehen in den verlinkten Konzeptdokumenten.
 
 ## Naechste Aufgaben
 
-1. **SYS-10** Root-CI als Sicherheitsnetz fuer die weiteren Umbauten.
-2. **BD-10** Verteilalgorithmus verhaltensgleich in einen testbaren Kern
-   extrahieren.
-3. **BD-11** Bestehende und kritische Verteilfaelle als Host-Tests abdecken.
-4. **OHP-20** Bosch-Capture-Matrix am realen Geraet abarbeiten.
+1. **BD-23** EV und Wallbox auf reale Leistungsstufen quantisieren.
+2. **BD-24** Xemex-CSMB-Hardwareabnahme abschliessen.
+3. **OHP-20** Bosch-Capture-Matrix am realen Geraet abarbeiten.
+4. **OHP-21** Bosch-Einheiten, Zeiten und State-Transitions dokumentieren.
 
 ## Systemarchitektur
 
@@ -34,12 +33,22 @@ Konzept: [Zielarchitektur und Entwicklungsplan](docs/system-architecture.md)
 - [x] **SYS-00** Zielarchitektur und Entwicklungsplaene dokumentiert
   (2026-07-13).
 - [x] **SYS-01** Zentrale TODO-Liste angelegt (2026-07-13).
-- [ ] **SYS-10** Root-CI fuer ESPHome, Python, Host-Tests und Submodule
-  einrichten; der Host-Testjob ist vorhanden, ESPHome und Python fehlen noch.
+- [x] **SYS-10** Root-CI fuer ESPHome, Python, Host-Tests und Submodule
+  eingerichtet (2026-07-19). Der Workflow prueft Python-Syntax und
+  Abhaengigkeiten, kompiliert die ESPHome-Firmware mit CI-Secrets und fuehrt die
+  CMake/CTest-Host-Tests mit rekursivem Submodule-Checkout aus. actionlint,
+  `compileall`, Host-Tests und vollstaendiger Firmware-Compile sind lokal gruen.
 - [x] **SYS-11** Gemeinsames CMake/CTest-Host-Testziel fuer Regelkern und
   Fixtures bereitgestellt (2026-07-13).
 - [ ] **SYS-12** Fake-Steuerbox/-Wallbox in reproduzierbare Szenariotests
   integrieren.
+- [x] **SYS-13** Lokale OpenEEBUS-Toolchain vervollstaendigt und beide
+  PR-Worktrees validiert (2026-07-19): CMake, Ninja, clang-format 18/22, MSVC
+  Build Tools mit MFC/ATL, Windows SDK, vcpkg, Bonjour/mdnsresponder und GTest
+  installiert. PR #43 und #44 bestehen den clang-format-18-Diffcheck, lokale
+  MSVC-Builds sowie die vollstaendige Ubuntu-24.04-CMake/CTest-Suite. Beide
+  Branches wurden auf `upstream/main` rebasiert und per `--force-with-lease`
+  aktualisiert.
 - [ ] **SYS-20** Systemzustaende normal/limited/degraded/failsafe definieren.
 - [ ] **SYS-21** Strukturierte Betriebs- und Regeldiagnose bereitstellen.
 - [ ] **SYS-22** Betreiberkonfiguration gegen Geraetefaehigkeiten validieren.
@@ -56,11 +65,23 @@ Konzept: [§14a-Leistungsbudget-Verteilung](docs/power-distribution-concept.md)
 
 - [x] **BD-00** Prioritaetsverteiler fuer EG1, EV und EG2 implementiert.
 - [x] **BD-01** `min_limit_w` und Fremdgeraete-Guard implementiert.
-- [ ] **BD-10** Testbaren Allokationskern aus YAML extrahieren.
-- [ ] **BD-11** Allokationskern mit Host-Tests absichern.
-- [ ] **BD-20** Alter und Qualitaet aller Budgeteingänge auswerten.
-- [ ] **BD-21** Batterieentladung korrekt und konservativ saldieren.
-- [ ] **BD-22** Technische Mindestleistung atomar behandeln.
+- [ ] **BD-10** Testbaren Allokationskern aus YAML extrahieren; vorerst bewusst
+  zurueckgestellt, die Verteilung bleibt in der ESPHome-Lambda.
+- [ ] **BD-11** Allokationskern nach einer spaeteren Extraktion mit Host-Tests
+  absichern.
+- [x] **BD-20** Alter und Qualitaet der Budgeteingänge ausgewertet
+  (2026-07-19): Solar- und Hausleistung verwenden echte Quellzeitstempel von
+  HTTP/Modbus, maximal 10 s Alter sowie Finite-/Bereichspruefungen. Ungueltige
+  oder alte Zusatzdaten erhoehen das VNB-Budget nie; ein ungueltiges Basislimit
+  ergibt konservativ 0 W Gesamtbudget. Die Pruefung bleibt vorerst direkt in
+  der ESPHome-Lambda.
+- [x] **BD-21** Batterieentladung korrekt und konservativ saldiert
+  (2026-07-19): Positive `Battery Power` bedeutet Entladung und erhoeht zusammen
+  mit PV den Erzeugungsueberschuss; Laden sowie alte, fehlende, nicht-finite
+  oder unplausible Batteriewerte zaehlen als 0 W Zusatzleistung. Beide
+  Rohregister tragen echte 10-s-Quellzeitstempel und Wertebereichspruefungen.
+- [x] **BD-22** Technische Mindestleistung atomar in der Lambda behandelt:
+  Reicht das Budget nicht fuer den Sockel, erhaelt das Geraet 0 W.
 - [ ] **BD-23** EV und Wallbox auf reale Leistungsstufen quantisieren.
 - [ ] **BD-24** Stromverlaeufe der Wallbox auswerten und das CSMB-Regelkonzept
   bei Bedarf auf eine feine, schwingungsarme Steuerung ueberarbeiten. Als
@@ -70,6 +91,13 @@ Konzept: [§14a-Leistungsbudget-Verteilung](docs/power-distribution-concept.md)
   mehrfach variieren und den Zyklus aus Auswertung, Anpassung und Test bei Bedarf
   wiederholen. Messbefund, Regelgesetz und Hardware-Abnahme stehen in
   [Xemex CSMB EV-Regelung](docs/xemex-control.md).
+- [x] **BD-25** K40RF an der realen Waermepumpe mit §14a-Limits unter 4.200 W
+  getestet (2026-07-20). 4.200 W wurden per LPC ACK bestaetigt; 4.000, 3.600,
+  3.200, 2.800, 2.400 und 2.000 W blieben jeweils 15 s ohne ACK bei stabiler
+  Verbindung. Damit bleibt 4.200 W die technische Mindestleistung; das Szenario
+  `6.000 W Wallbox + 2.400 W Waermepumpe` ist mit K40RF nicht umsetzbar.
+  Captures: `private/captures/k40rf-low-limits-20260720.csv` und
+  `private/captures/k40rf-4200-ack-20260720.csv`.
 - [ ] **BD-30** Aktive Limits spaetestens alle 60 Sekunden neu senden.
 - [ ] **BD-31** Requested/acknowledged/measured je Verbraucher verfolgen.
 - [ ] **BD-32** Closed-Loop-Compliance-Waechter implementieren.
@@ -111,7 +139,7 @@ Konzept: [Bosch-Waermepumpe: OSSHPCF / SEMP](docs/oss-hpcf-bosch.md)
 flowchart TD
     SYS10[SYS-10 Root-CI] --> BD10[BD-10 Allokationskern]
     BD10 --> BD11[BD-11 Tests]
-    BD11 --> BD20[BD-20 bis BD-23 Eingabe und Zuteilung]
+  SYS10 --> BD20[BD-20 bis BD-23 Eingabe und Zuteilung]
     BD20 --> BD30[BD-30 bis BD-33 Closed Loop]
     BD30 --> BD40[BD-40 bis BD-42 Nachweis]
 

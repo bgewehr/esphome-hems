@@ -141,6 +141,7 @@ class EebusEgComponent : public Component {
   bool        mpc_connected()      const { return mpc_connected_; }
   float       current_power_w()    const { return current_power_w_; }
   float       active_limit_w()     const { return active_limit_w_; }
+  bool        is_limit_ack_pending() const { return pending_limit_w_ >= 0.0f; }
   std::string remote_ski()         const { return remote_ski_; }
   std::string remote_spine_addr()  const { return remote_spine_addr_; }
   std::string local_ski()          const { return local_ski_; }

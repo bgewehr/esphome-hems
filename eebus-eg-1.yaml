@@ -26,6 +26,11 @@ select:
     restore_value: true
     optimistic: true
 
+globals:
+  - id: eg1_low_limit_test_active
+    type: bool
+    initial_value: "false"
+
 # CS-Limits erreichen EG1 über die Budget-Verteilung (budget-distributor.yaml),
 # nicht mehr als Direktweiterleitung des vollen Limits.
 
@@ -95,6 +100,17 @@ binary_sensor:
       sorting_group_id: sg_eebus_eg1
       sorting_weight: 2.5
     lambda: "return id(hems_eg1).is_connected() && !id(hems_eg1).is_heartbeat_alarm();"
+
+  - platform: template
+    disabled_by_default: true
+    name: "${device_name} EG1 Testlimit bestätigt"
+    id: eg1_test_limit_ack
+    icon: "mdi:check-network"
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: sg_eebus_eg1
+      sorting_weight: 2.6
+    lambda: "return id(eg1_low_limit_test_active) && !id(hems_eg1).is_limit_ack_pending();"
 
 interval:
   - interval: 5s
@@ -175,6 +191,31 @@ text_sensor:
     update_interval: never
 
 number:
+  # --- Controlled K40RF probe below the production minimum ---
+  - platform: template
+    disabled_by_default: true
+    name: "${device_name} EG1 Test Leistungslimit"
+    id: eg1_test_limit_w
+    icon: "mdi:transmission-tower-export"
+    web_server:
+      sorting_group_id: sg_eebus_eg1
+      sorting_weight: 21
+    entity_category: diagnostic
+    unit_of_measurement: "W"
+    min_value: 0
+    max_value: 4200
+    step: 100
+    initial_value: 4200
+    restore_value: false
+    optimistic: true
+    on_value:
+      - lambda: |-
+          if (!id(eg1_low_limit_test_active)) {
+            ESP_LOGW("eebus", "EG1 Testlimit %.0f W ignoriert: Testmodus ist aus", x);
+            return;
+          }
+          id(hems_eg1).set_limit(x);
+
   # --- EG1 failsafe configuration (sg_eebus_eg1, weights 30-31) ---
   - platform: template
     disabled_by_default: true
@@ -300,3 +341,39 @@ button:
       sorting_weight: 20
     on_press:
       - lambda: "id(hems_eg1).start_heartbeat_test();"
+
+switch:
+  - platform: template
+    disabled_by_default: true
+    name: "${device_name} EG1 Untergrenzen-Testmodus"
+    id: eg1_low_limit_test_mode
+    icon: "mdi:test-tube"
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: sg_eebus_eg1
+      sorting_weight: 19
+    optimistic: true
+    restore_mode: ALWAYS_OFF
+    turn_on_action:
+      - lambda: |-
+          id(eg1_low_limit_test_active) = true;
+          id(hems_eg1).set_min_limit_w(0.0f);
+          ESP_LOGW("eebus", "EG1 Untergrenzen-Testmodus aktiv: Produktionsminimum 4200 W voruebergehend deaktiviert");
+    turn_off_action:
+      - lambda: |-
+          id(eg1_low_limit_test_active) = false;
+          id(hems_eg1).set_min_limit_w(4200.0f);
+          ESP_LOGW("eebus", "EG1 Untergrenzen-Testmodus beendet: Produktionsminimum 4200 W wieder aktiv");
+      - if:
+          condition:
+            lambda: "return id(grid_provider_switch).state || id(manual_enwg_test).state;"
+          then:
+            - lambda: "id(hems_eg1).set_limit(4200.0f);"
+          else:
+            - if:
+                condition:
+                  lambda: "return id(hems_cs).is_limit_active();"
+                then:
+                  - script.execute: distribute_budget
+                else:
+                  - lambda: "id(hems_eg1).clear_limit();"

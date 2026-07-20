@@ -29,6 +29,18 @@ globals:
   - id: pf_last_update_ms
     type: uint32_t
     initial_value: '0'
+  - id: ac_power_last_update_ms
+    type: uint32_t
+    initial_value: '0'
+  - id: grid_power_last_update_ms
+    type: uint32_t
+    initial_value: '0'
+  - id: mppt1_power_last_update_ms
+    type: uint32_t
+    initial_value: '0'
+  - id: mppt2_power_last_update_ms
+    type: uint32_t
+    initial_value: '0'
   - id: solar_power_last_update_ms
     type: uint32_t
     initial_value: '0'
@@ -39,6 +51,18 @@ globals:
     type: uint32_t
     initial_value: '0'
   - id: hp_power_last_update_ms
+    type: uint32_t
+    initial_value: '0'
+  - id: ohmpilot_power_last_update_ms
+    type: uint32_t
+    initial_value: '0'
+  - id: battery_charge_last_update_ms
+    type: uint32_t
+    initial_value: '0'
+  - id: battery_discharge_last_update_ms
+    type: uint32_t
+    initial_value: '0'
+  - id: battery_power_last_update_ms
     type: uint32_t
     initial_value: '0'
   - id: discharge_limit_last_update_ms
@@ -158,6 +182,11 @@ sensor:
           window_size: 3
           send_every: 1
           send_first_at: 1
+    on_value:
+      then:
+        - globals.set:
+            id: ac_power_last_update_ms
+            value: !lambda 'return millis();'
 
   - platform: modbustcp_controller
     modbustcp_controller_id: fronius_inverter
@@ -183,6 +212,11 @@ sensor:
     filters:
       - lambda: |-
           return x * pow(10, id(sf_solar_power));
+    on_value:
+      then:
+        - globals.set:
+            id: mppt1_power_last_update_ms
+            value: !lambda 'return millis();'
 
   - platform: modbustcp_controller
     modbustcp_controller_id: fronius_inverter
@@ -194,6 +228,11 @@ sensor:
     filters:
       - lambda: |-
           return x * pow(10, id(sf_solar_power));
+    on_value:
+      then:
+        - globals.set:
+            id: mppt2_power_last_update_ms
+            value: !lambda 'return millis();'
 
   - platform: template
     name: "${device_name} Fronius Solar Power"
@@ -207,23 +246,29 @@ sensor:
     state_class: measurement
     accuracy_decimals: 0
     lambda: |-
+      const uint32_t now = millis();
+      const uint32_t max_age_ms = 10000;
       // Primärquelle: PowerFlow-API (atomar, ohne Skalenfaktoren)
       float pv = id(fronius_pf_pv).state;
-      bool pf_fresh = (millis() - id(pf_last_update_ms)) <= 15000 && id(pf_last_update_ms) != 0;
-      if (pf_fresh && !std::isnan(pv) && pv >= 0.0f && pv <= 25000.0f) return pv;
+      bool pf_fresh = id(pf_last_update_ms) != 0 && now - id(pf_last_update_ms) <= max_age_ms;
+      if (pf_fresh && std::isfinite(pv) && pv >= 0.0f && pv <= 25000.0f) {
+        id(solar_power_last_update_ms) = id(pf_last_update_ms);
+        return pv;
+      }
       // Fallback: Modbus MPPT-Summe
+      if (id(mppt1_power_last_update_ms) == 0 || id(mppt2_power_last_update_ms) == 0 ||
+          now - id(mppt1_power_last_update_ms) > max_age_ms ||
+          now - id(mppt2_power_last_update_ms) > max_age_ms) return {};
       float m1 = id(fronius_mppt1_power).state;
       float m2 = id(fronius_mppt2_power).state;
-      if (std::isnan(m1) || std::isnan(m2)) return {};
+      if (!std::isfinite(m1) || !std::isfinite(m2)) return {};
       float p = m1 + m2;
       if (p < -100.0f || p > 25000.0f) return {};
+      const uint32_t oldest_age_ms = std::max(now - id(mppt1_power_last_update_ms),
+                                               now - id(mppt2_power_last_update_ms));
+      id(solar_power_last_update_ms) = now - oldest_age_ms;
       return p;
     update_interval: 2s
-    on_value:
-      then:
-        - globals.set:
-            id: solar_power_last_update_ms
-            value: !lambda 'return millis();'
 
   - platform: modbustcp_controller
     modbustcp_controller_id: fronius_inverter
@@ -265,6 +310,11 @@ sensor:
           window_size: 3
           send_every: 1
           send_first_at: 1
+    on_value:
+      then:
+        - globals.set:
+            id: grid_power_last_update_ms
+            value: !lambda 'return millis();'
 
   - platform: modbustcp_controller
     modbustcp_controller_id: fronius_meter_grid
@@ -653,6 +703,14 @@ sensor:
     accuracy_decimals: 0
     update_interval: 2s
     lambda: |-
+      const uint32_t now = millis();
+      const uint32_t max_age_ms = 10000;
+      if (id(ac_power_last_update_ms) == 0 || id(grid_power_last_update_ms) == 0 ||
+          id(ev_power_last_update_ms) == 0 || id(hp_power_last_update_ms) == 0 ||
+          now - id(ac_power_last_update_ms) > max_age_ms ||
+          now - id(grid_power_last_update_ms) > max_age_ms ||
+          now - id(ev_power_last_update_ms) > max_age_ms ||
+          now - id(hp_power_last_update_ms) > max_age_ms) return {};
       // Modbus: AC + Grid - EV - HP - Ohm
       // Alle Einzelsensoren haben bereits Median-Filter gegen SF-Ausreisser.
       // Der Median(5) auf dem Ergebnis glaettet Transitionen-Artefakte:
@@ -664,19 +722,20 @@ sensor:
       float ev = id(fronius_ev_power).state;
       float hp = id(fronius_hp_power).state;
       float ohm = id(fronius_ohmpilot_power).state;
-      if (std::isnan(ac) || std::isnan(grid) || std::isnan(ev) || std::isnan(hp)) return {};
-      if (std::isnan(ohm)) ohm = 0;
+        if (!std::isfinite(ac) || !std::isfinite(grid) || !std::isfinite(ev) || !std::isfinite(hp)) return {};
+        const bool ohm_fresh = id(ohmpilot_power_last_update_ms) != 0 &&
+                    now - id(ohmpilot_power_last_update_ms) <= 20000;
+        if (!ohm_fresh || !std::isfinite(ohm)) ohm = 0;
+        const uint32_t oldest_age_ms = std::max(
+          std::max(now - id(ac_power_last_update_ms), now - id(grid_power_last_update_ms)),
+          std::max(now - id(ev_power_last_update_ms), now - id(hp_power_last_update_ms)));
+        id(house_power_last_update_ms) = now - oldest_age_ms;
       return std::max(0.0f, ac + grid - ev - hp - ohm);
     filters:
       - median:
           window_size: 5
           send_every: 1
           send_first_at: 1
-    on_value:
-      then:
-        - globals.set:
-            id: house_power_last_update_ms
-            value: !lambda 'return millis();'
 
   # ── Template: Schaltbare Leistungssumme ─────────────────────────────────────
   # Summe der aktivierten Verbraucher (House, EV, HP)
@@ -807,6 +866,11 @@ sensor:
     filters:
       - lambda: |-
           return x * pow(10, id(sf_battery_power));
+    on_value:
+      then:
+        - globals.set:
+            id: battery_charge_last_update_ms
+            value: !lambda 'return millis();'
 
   - platform: modbustcp_controller
     modbustcp_controller_id: fronius_inverter
@@ -818,6 +882,11 @@ sensor:
     filters:
       - lambda: |-
           return x * pow(10, id(sf_battery_power));
+    on_value:
+      then:
+        - globals.set:
+            id: battery_discharge_last_update_ms
+            value: !lambda 'return millis();'
 
   - platform: template
     name: "${device_name} Fronius Battery Power"
@@ -831,7 +900,19 @@ sensor:
     state_class: measurement
     accuracy_decimals: 0
     lambda: |-
-      return id(fronius_battery_discharge_raw).state - id(fronius_battery_charge_raw).state;
+      const uint32_t now = millis();
+      const uint32_t max_age_ms = 10000;
+      if (id(battery_charge_last_update_ms) == 0 || id(battery_discharge_last_update_ms) == 0 ||
+          now - id(battery_charge_last_update_ms) > max_age_ms ||
+          now - id(battery_discharge_last_update_ms) > max_age_ms) return {};
+      float charge = id(fronius_battery_charge_raw).state;
+      float discharge = id(fronius_battery_discharge_raw).state;
+      if (!std::isfinite(charge) || !std::isfinite(discharge) ||
+          charge < 0.0f || charge > 25000.0f || discharge < 0.0f || discharge > 25000.0f) return {};
+      const uint32_t oldest_age_ms = std::max(now - id(battery_charge_last_update_ms),
+                                               now - id(battery_discharge_last_update_ms));
+      id(battery_power_last_update_ms) = now - oldest_age_ms;
+      return discharge - charge;
     update_interval: 2s
 
   - platform: modbustcp_controller
@@ -978,6 +1059,7 @@ interval:
                       float power = data["PowerReal_PAC_Sum"] | 0.0f;
                       float temp = data["Temperature_Channel_1"] | NAN;
                       id(fronius_ohmpilot_power).publish_state(power);
+                      id(ohmpilot_power_last_update_ms) = millis();
                       if (!std::isnan(temp)) {
                         id(fronius_ohmpilot_temp).publish_state(temp);
                       }

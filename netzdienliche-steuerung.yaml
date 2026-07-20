@@ -87,13 +87,28 @@ script:
       - lambda: |-
           if (!id(hems_cs).is_limit_active()) return;
 
-          const float limit = id(hems_cs).current_limit_w();
+          const uint32_t now = millis();
+          const uint32_t max_age_ms = 10000;
+          float limit = id(hems_cs).current_limit_w();
           float pv = id(fronius_solar_power).state;
           float house = id(fronius_house_power).state;
-          if (!std::isfinite(pv) || pv < 0.0f) pv = 0.0f;
-          if (!std::isfinite(house) || house < 0.0f) house = pv;
-          const float pv_surplus = std::max(0.0f, pv - house);
-          float budget = limit + 0.8f * pv_surplus;
+          float battery = id(fronius_battery_power).state;
+          auto power_input_valid = [now, max_age_ms](float value, uint32_t updated_ms,
+                                                      float min_value, float max_value) {
+            return updated_ms != 0 && now - updated_ms <= max_age_ms &&
+                   std::isfinite(value) && value >= min_value && value <= max_value;
+          };
+          const bool limit_valid = std::isfinite(limit) && limit >= 0.0f && limit <= 100000.0f;
+          const bool surplus_valid =
+              power_input_valid(pv, id(solar_power_last_update_ms), 0.0f, 25000.0f) &&
+              power_input_valid(house, id(house_power_last_update_ms), 0.0f, 100000.0f);
+            const bool battery_valid =
+              power_input_valid(battery, id(battery_power_last_update_ms), -25000.0f, 25000.0f);
+          if (!limit_valid) limit = 0.0f;
+            const float battery_discharge = battery_valid ? std::max(0.0f, battery) : 0.0f;
+            const float generation_surplus = limit_valid && surplus_valid
+              ? std::max(0.0f, pv + battery_discharge - house) : 0.0f;
+            float budget = limit_valid ? limit + 0.8f * generation_surplus : 0.0f;
 
           // Drei steuerbare Verbraucher: WP (EG1), EV (Xemex CSMB), WB (EG2).
           // kind 0 = EEBus-EG-Instanz, kind 1 = EV-Ladepfad (CT-Addons)
@@ -170,8 +185,15 @@ script:
             snprintf(buf, sizeof(buf), "%s: %.0f W", d.tag, d.share);
             status += status.empty() ? buf : std::string(" | ") + buf;
           }
-          char head[64];
-          snprintf(head, sizeof(head), "Limit %.0f + PV-Überschuss %.0f -> ", limit, 0.8f * pv_surplus);
+          char head[96];
+          if (!limit_valid) {
+            snprintf(head, sizeof(head), "Limit ungueltig -> ");
+          } else if (surplus_valid) {
+            snprintf(head, sizeof(head), "Limit %.0f + Erzeugungsueberschuss %.0f%s -> ",
+                     limit, 0.8f * generation_surplus, battery_valid ? "" : " (Batterie alt)");
+          } else {
+            snprintf(head, sizeof(head), "Limit %.0f + Erzeugungszuschlag 0 (Daten alt) -> ", limit);
+          }
           id(budget_distribution_status).publish_state(std::string(head) + status);
           ESP_LOGW("budget", "Verteilung: %s%s (Rest %.0f W)", head, status.c_str(), rest);
 
