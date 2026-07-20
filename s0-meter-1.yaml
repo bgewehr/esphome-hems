@@ -57,6 +57,7 @@ sensor:
     state_class: measurement
     accuracy_decimals: 2
     internal_filter: 10ms
+    internal_filter_mode: PULSE
     timeout: 10s
     pin:
       number: GPIO5
@@ -65,7 +66,25 @@ sensor:
         pullup: true
       inverted: true              # S0 active-low
     filters:
-      - lambda: return x * id(water_liter_per_pulse);  # pulses → L/min
+      - lambda: |-
+          // The meter alternates between two unequal pulse intervals. Measure
+          // one complete two-interval cycle instead of either partial cycle.
+          static float elapsed_minutes = 0.0f;
+          static uint8_t interval_count = 0;
+          if (x <= 0.0f) {
+            elapsed_minutes = 0.0f;
+            interval_count = 0;
+            return 0.0f;
+          }
+          elapsed_minutes += 1.0f / x;
+          if (++interval_count < 2) {
+            return {};
+          }
+          const float flow_l_min =
+              2.0f * id(water_liter_per_pulse) / elapsed_minutes;
+          elapsed_minutes = 0.0f;
+          interval_count = 0;
+          return flow_l_min;
     total:
       id: water_pulse_total
       internal: true
