@@ -17,6 +17,7 @@ __pycache__/
 
 # Editor/workspace files
 *.code-workspace
+/.vscode/settings.json
 
 tools/.fake_steuerbox_cert.pem
 tools/.fake_steuerbox_key.pem
