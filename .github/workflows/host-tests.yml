@@ -27,6 +27,9 @@ jobs:
       - name: Check Python syntax
         run: python -m compileall -q components tools
 
+      - name: Test 1-Wire registration
+        run: python tools/diagnostics/test_discover_one_wire.py
+
   esphome:
     runs-on: ubuntu-latest
     steps:

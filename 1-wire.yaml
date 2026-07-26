@@ -1,0 +1,74 @@
+# DS2484 1-Wire temperature bus with externally powered sensors.
+#
+# GPIO1/2 were validated as a second ESP-IDF I2C controller on 2026-07-25.
+
+web_server:
+  sorting_groups:
+    - id: sg_one_wire
+      name: "1-Wire"
+      sorting_weight: 9
+
+i2c:
+  - id: temperature_bridge_i2c
+    sda: GPIO1
+    scl: GPIO2
+    scan: true
+    frequency: 100kHz
+
+one_wire:
+  - platform: ds2484
+    id: temperature_bus
+    i2c_id: temperature_bridge_i2c
+    address: 0x18
+    active_pullup: true
+    strong_pullup: false
+
+esphome:
+  on_boot:
+    - priority: -100
+      then:
+        - delay: 15s
+        - script.execute: one_wire_scan
+
+script:
+  - id: one_wire_scan
+    mode: restart
+    then:
+      - lambda: |-
+          id(temperature_bus).search();
+          const auto &devices = id(temperature_bus).get_devices();
+          id(one_wire_status).publish_state(std::to_string(devices.size()) + " Sensoren erkannt");
+          ESP_LOGW("one_wire.discovery", "Found %u device(s)", static_cast<unsigned>(devices.size()));
+          for (uint64_t address : devices) {
+            if ((address & 0xFF) == 0x28) {
+              ESP_LOGW("one_wire.discovery", "0x%016llX (DS18B20)", address);
+            } else {
+              ESP_LOGW("one_wire.discovery", "0x%016llX (family 0x%02X)", address,
+                       static_cast<unsigned>(address & 0xFF));
+            }
+          }
+
+button:
+  - platform: template
+    id: one_wire_scan_button
+    disabled_by_default: true
+    name: "${device_name} 1-Wire Scan"
+    icon: "mdi:magnify-scan"
+    web_server:
+      sorting_group_id: sg_one_wire
+      sorting_weight: 8
+    on_press:
+      - script.execute: one_wire_scan
+
+text_sensor:
+  - platform: template
+    id: one_wire_status
+    disabled_by_default: true
+    name: "${device_name} 1-Wire Status"
+    icon: "mdi:thermometer-lines"
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: sg_one_wire
+      sorting_weight: 9
+
+sensor: !include 1-wire-sensors.yaml

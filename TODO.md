@@ -1,6 +1,6 @@
 # Entwicklungs-TODO
 
-Stand: 2026-07-13
+Stand: 2026-07-25
 
 Diese Datei ist die zentrale Status- und Reihenfolgenliste. Fachliche
 Begruendung und Abnahmekriterien stehen in den verlinkten Konzeptdokumenten.
@@ -132,6 +132,27 @@ Konzept: [Bosch-Waermepumpe: OSSHPCF / SEMP](docs/oss-hpcf-bosch.md)
 - [ ] **OHP-42** Auswahl, Ablehnung, Timeout und Neustart simuliert testen.
 - [ ] **OHP-50** OSSHPCF mit §14a-Budget und Datenqualitaet verbinden.
 - [ ] **OHP-51** Kontrollierte Bosch-Hardwareabnahme dokumentieren.
+
+## 1-Wire-Temperaturmessung
+
+Konzept: [1-Wire-Temperatursensoren](docs/1-wire.md)
+
+- [x] **OW-00** GPIO1/2 als zweiten I2C-Bus und den DS2484 mit ESPHome unter
+  ESP-IDF kompiliert (2026-07-25). Die Konfiguration liegt in `1-wire.yaml`
+  und ist nach der Hardware-Installation im produktiven Paket aktiviert.
+- [x] **OW-10** DS18B20-Sensoren ohne manuelle Adressregistrierung erkennen
+  und als stabile Temperatur-Entities bereitstellen (2026-07-25). Der Task
+  `Register 1-Wire sensors OTA` liest den nativen DS2484-Scan, fragt je neuer
+  64-Bit-ROM-ID einmalig nach einem sprechenden Namen und fuehrt anschliessend
+  Clean-Build und OTA aus. Die ROM-ID-/Namenszuordnung bleibt persistent;
+  Index-Slots werden wegen moeglicher Fehlzuordnung bewusst nicht verwendet.
+  Native ESPHome-Entities sind compile-time-statisch, deshalb ist der vom Task
+  automatisierte Build bei neuen oder dauerhaft entfernten Sensoren technisch
+  erforderlich. Parser, Registry und YAML-Generierung sind mit fokussierten
+  Python-Tests abgedeckt; der Firmware-Build mit aktiviertem DS2484-Paket und
+  sieben fest adressierten Sensoren war erfolgreich.
+- [ ] **OW-20** DS2484, Schutzbeschaltung und maximale Feldverkabelung gemaess
+  Konzept aufbauen und die Hardware-Abnahme durchfuehren.
 
 ## Abhaengigkeiten
 

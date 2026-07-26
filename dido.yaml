@@ -7,13 +7,13 @@ web_server:
       name: "DI/DO"
       sorting_weight: 5
 
-# I²C bus for TCA9554 relay expander
+# I²C bus for the onboard TCA9554 relay expander
 i2c:
-  id: i2c_bus
-  sda: GPIO42
-  scl: GPIO41
-  scan: true
-  frequency: 400kHz
+  - id: i2c_bus
+    sda: GPIO42
+    scl: GPIO41
+    scan: true
+    frequency: 400kHz
 
 # TCA9554 I/O expander (0x20) — drives 8 relays
 pca9554:

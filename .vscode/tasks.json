@@ -27,6 +27,29 @@
 			"problemMatcher": []
 		},
 		{
+			"label": "Discover and name 1-Wire sensors",
+			"type": "process",
+			"command": "python",
+			"args": [
+				"tools/diagnostics/discover_one_wire.py",
+				"--host",
+				"192.168.178.24"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Register 1-Wire sensors OTA",
+			"dependsOrder": "sequence",
+			"dependsOn": [
+				"Discover and name 1-Wire sensors",
+				"Clean ESPHome build",
+				"Validate ESPHome firmware",
+				"Upload ESPHome firmware OTA"
+			],
+			"problemMatcher": []
+		},
+		{
 			"label": "Capture ESPHome restart logs",
 			"type": "process",
 			"command": "python",

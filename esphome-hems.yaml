@@ -6,34 +6,34 @@ substitutions:
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
-  comment: "EnWG §14a HEMS with EEBus, Modbus TCP/RTU, MQTT, and S0 meter support"
+  comment: "EnWG §14a HEMS with EEBus, Modbus TCP/RTU, MQTT, 1-Wire and S0 meter support"
   name_add_mac_suffix: false
   build_path: "c:/temp/esphome-hems"
   project:
     name: "ESPHome.HEMS"
     version: "2"
   on_boot:
-    priority: -100
-    then:
-      - text_sensor.template.publish:
-          id: build_time_sensor
-          state: !lambda 'return std::string(__DATE__) + "  " + std::string(__TIME__);'
-      # Boot-Log-Level als Session-Obergrenze einfrieren; Session-Select ggf.
-      # darauf zurueckholen. Erhoehen geht nur per Reboot (Ziel: keine
-      # vergessene Debug-Last auf einem stabilen Geraet).
-      - lambda: |-
-          auto to_num = [](const std::string& o) {
-            if (o == "ERROR") return 1;
-            if (o == "WARN")  return 2;
-            if (o == "INFO")  return 3;
-            return 4;  // DEBUG
-          };
-          int ceiling = to_num(id(boot_log_level_select).current_option());
-          id(boot_log_level_max) = ceiling;
-          if (to_num(id(log_level_select).current_option()) > ceiling) {
-            const char* names[5] = {"", "ERROR", "WARN", "INFO", "DEBUG"};
-            id(log_level_select).make_call().set_option(names[ceiling]).perform();
-          }
+    - priority: -100
+      then:
+        - text_sensor.template.publish:
+            id: build_time_sensor
+            state: !lambda 'return std::string(__DATE__) + "  " + std::string(__TIME__);'
+        # Boot-Log-Level als Session-Obergrenze einfrieren; Session-Select ggf.
+        # darauf zurueckholen. Erhoehen geht nur per Reboot (Ziel: keine
+        # vergessene Debug-Last auf einem stabilen Geraet).
+        - lambda: |-
+            auto to_num = [](const std::string& o) {
+              if (o == "ERROR") return 1;
+              if (o == "WARN")  return 2;
+              if (o == "INFO")  return 3;
+              return 4;  // DEBUG
+            };
+            int ceiling = to_num(id(boot_log_level_select).current_option());
+            id(boot_log_level_max) = ceiling;
+            if (to_num(id(log_level_select).current_option()) > ceiling) {
+              const char* names[5] = {"", "ERROR", "WARN", "INFO", "DEBUG"};
+              id(log_level_select).make_call().set_option(names[ceiling]).perform();
+            }
 
 esp32:
   board: esp32s3box
@@ -136,7 +136,6 @@ select:
     # Aendern -> Restart-Button -> neue Session-Obergrenze.
 
   - platform: template
-    disabled_by_default: true
     name: "${device_name} Log Filter"
     id: log_filter_select
     icon: "mdi:filter"
@@ -150,6 +149,7 @@ select:
       - "Modbus RTU"
       - "MQTT"
       - "Netzwerk"
+      - "1-Wire"
     initial_option: "Alle"
     optimistic: true
     restore_value: true
@@ -177,6 +177,8 @@ select:
             suppress("enwg");
             suppress("mqtt");
             suppress("ethernet"); suppress("api"); suppress("api.connection"); suppress("web_server");
+            suppress("i2c"); suppress("i2c.idf"); suppress("ds2484.onewire");
+            suppress("one_wire"); suppress("dallas.temp.sensor"); suppress("one_wire.discovery");
 
             if (x == "Alle") {
               id(app_logger).set_log_level(gl);
@@ -191,6 +193,8 @@ select:
               enable("sensor"); enable("template.sensor");
               enable("modbus_server"); enable("modbus-server-xemex"); enable("enwg"); enable("mqtt");
               enable("ethernet"); enable("api"); enable("api.connection"); enable("web_server");
+              enable("i2c"); enable("i2c.idf"); enable("ds2484.onewire");
+              enable("one_wire"); enable("dallas.temp.sensor"); enable("one_wire.discovery");
             } else {
               id(app_logger).set_log_level(ESPHOME_LOG_LEVEL_ERROR);
               // EEBus filter shows INFO minimum so key connection events are always visible.
@@ -214,6 +218,9 @@ select:
                 enable("mqtt");
               } else if (x == "Netzwerk") {
                 enable("ethernet"); enable("api"); enable("api.connection"); enable("web_server");
+              } else if (x == "1-Wire") {
+                enable("i2c"); enable("i2c.idf"); enable("ds2484.onewire");
+                enable("one_wire"); enable("dallas.temp.sensor"); enable("one_wire.discovery");
               }
             }
             // Always keep crash backtraces visible regardless of the active filter.
@@ -248,13 +255,13 @@ web_server:
   sorting_groups:
     - id: sg_system
       name: "System"
-      sorting_weight: 9
+      sorting_weight: 10
 
 mqtt:
   broker: !secret mqtt_broker
   port: 1883
   discovery: true
-  topic_prefix: esphome/modbus-server-xemex
+  topic_prefix: esphome/hems
 
 time:
   # SNTP syncs quickly after network connect, before the first EEBus SHIP handshake completes.
@@ -323,6 +330,7 @@ button:
 
 packages:
   dido: !include dido.yaml
+  one_wire: !include 1-wire.yaml
   xemex_csmb: !include xemex-csmb.yaml
   fronius: !include fronius-gen24.yaml
   eebus_cs: !include eebus-cs.yaml
