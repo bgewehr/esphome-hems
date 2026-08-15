@@ -110,14 +110,6 @@ static void spine_event_handler(const EventPayload* payload, void* ctx) {
   if (!payload || !self) return;
   const char* ski = payload->ski ? payload->ski : "?";
 
-  /* Ownership gate: the event bus is process-global — only process events
-   * attributable to THIS instance's own device (pointer-based, unambiguous
-   * even when the same physical device is connected to several instances). */
-  {
-    DeviceLocalObject* own_dl = self->service() ? EEBUS_SERVICE_GET_LOCAL_DEVICE(self->service()) : nullptr;
-    if (!own_dl || !DeviceLocalOwnsEvent(own_dl, payload)) return;
-  }
-
   /* Policy filter: only the paired device's events (or pairing candidates
    * while the pairing window is open). */
   {
@@ -1176,7 +1168,11 @@ bool EebusEgComponent::start_eebus_service_(
   DEVICE_LOCAL_ADD_ENTITY(device_local, local_entity_);
 
   /* Subscribe so remote SPINE announcements appear in log under tag "eebus" */
-  EventSubscribe(kEventHandlerLevelApplication, spine_event_handler, this);
+  EVENTS_SUBSCRIBE(
+      DEVICE_LOCAL_GET_EVENTS_MANAGER(device_local),
+      kEventHandlerLevelApplication,
+      spine_event_handler,
+      this);
 
   /* Service start is deferred to refresh_heartbeat() (called on the first
    * on_time_sync event from SNTP or HA).  This guarantees the remote device cannot

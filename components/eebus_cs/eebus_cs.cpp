@@ -35,12 +35,6 @@ static void lpc_spine_event_handler(const EventPayload* payload, void* ctx) {
   auto* self = static_cast<esphome::eebus_cs::EebusCsComponent*>(ctx);
   if (!payload) return;
   const char* ski = payload->ski ? payload->ski : "?";
-  /* Ownership gate: only events attributable to THIS instance's own device
-   * (the event bus is process-global across CS and EG instances). */
-  {
-    DeviceLocalObject* own_dl = self->service() ? EEBUS_SERVICE_GET_LOCAL_DEVICE(self->service()) : nullptr;
-    if (!own_dl || !DeviceLocalOwnsEvent(own_dl, payload)) return;
-  }
   if (payload->event_type != kEventTypeUseCaseChange) return;
   const UseCaseFilterType* f = payload->use_case_filter;
   if (!f) return;
@@ -632,7 +626,11 @@ bool EebusCsComponent::start_eebus_service_(
 
   DEVICE_LOCAL_ADD_ENTITY(device_local, local_entity_);
 
-  EventSubscribe(kEventHandlerLevelApplication, lpc_spine_event_handler, this);
+  EVENTS_SUBSCRIBE(
+      DEVICE_LOCAL_GET_EVENTS_MANAGER(device_local),
+      kEventHandlerLevelApplication,
+      lpc_spine_event_handler,
+      this);
 
   last_heartbeat_ms_ = millis();
   return true;

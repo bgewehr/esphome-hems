@@ -113,7 +113,7 @@ def _generate_unity_build(component_dir, repo_root):
     }
     EXCLUDE_PATTERNS = (
         "eebus_timer_linux", "eebus_timer_windows", "eebus_timer_apple",
-        "http_server", "openssl_util", "applink", "_bonjour", "eebus_cli",
+        "http_server", "openssl_util", "applink", "_avahi", "_bonjour", "eebus_cli",
     )
 
     def should_exclude(fname):
