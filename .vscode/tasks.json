@@ -3,11 +3,15 @@
 	"tasks": [
 		{
 			"label": "Validate ESPHome firmware",
-			"type": "shell",
-			"command": "esphome",
+			"type": "process",
+			"command": "${env:SystemRoot}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
 			"args": [
-				"compile",
-				"esphome-hems.yaml"
+				"-NoProfile",
+				"-NonInteractive",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-File",
+				"${workspaceFolder}\\compile.ps1"
 			],
 			"isBackground": false,
 			"problemMatcher": [],
@@ -16,10 +20,15 @@
 		{
 			"label": "Upload ESPHome firmware OTA",
 			"type": "process",
-			"command": "esphome",
+			"command": "${env:SystemRoot}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
 			"args": [
-				"upload",
-				"esphome-hems.yaml",
+				"-NoProfile",
+				"-NonInteractive",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-File",
+				"${workspaceFolder}\\compile.ps1",
+				"--upload-only",
 				"--device",
 				"192.168.178.24"
 			],
@@ -29,8 +38,10 @@
 		{
 			"label": "Discover and name 1-Wire sensors",
 			"type": "process",
-			"command": "python",
+			"command": "${env:SystemRoot}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
 			"args": [
+				"-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+				"-File", "${workspaceFolder}\\tools\\run_tool.ps1", "python",
 				"tools/diagnostics/discover_one_wire.py",
 				"--host",
 				"192.168.178.24"
@@ -52,8 +63,10 @@
 		{
 			"label": "Capture ESPHome restart logs",
 			"type": "process",
-			"command": "python",
+			"command": "${env:SystemRoot}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
 			"args": [
+				"-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+				"-File", "${workspaceFolder}\\tools\\run_tool.ps1", "python",
 				"tools/diagnostics/capture_esphome_restart.py",
 				"--host",
 				"192.168.178.24",
@@ -66,8 +79,10 @@
 		{
 			"label": "Capture OSSHPCF for 24 hours",
 			"type": "process",
-			"command": "python",
+			"command": "${env:SystemRoot}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
 			"args": [
+				"-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+				"-File", "${workspaceFolder}\\tools\\run_tool.ps1", "python",
 				"tools/diagnostics/capture_oshpcf.py",
 				"--host",
 				"192.168.178.24",
@@ -80,8 +95,10 @@
 		{
 			"label": "Test OSSHPCF capture",
 			"type": "process",
-			"command": "python",
+			"command": "${env:SystemRoot}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
 			"args": [
+				"-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+				"-File", "${workspaceFolder}\\tools\\run_tool.ps1", "python",
 				"tools/diagnostics/capture_oshpcf.py",
 				"--host",
 				"192.168.178.24",
@@ -94,8 +111,10 @@
 		{
 			"label": "Check live device status",
 			"type": "process",
-			"command": "python",
+			"command": "${env:SystemRoot}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
 			"args": [
+				"-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+				"-File", "${workspaceFolder}\\tools\\run_tool.ps1", "python",
 				"tools/diagnostics/check_device_status.py",
 				"--host",
 				"192.168.178.24"
@@ -105,11 +124,16 @@
 		},
 		{
 			"label": "Clean ESPHome build",
-			"type": "shell",
-			"command": "esphome",
+			"type": "process",
+			"command": "${env:SystemRoot}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
 			"args": [
-				"clean",
-				"esphome-hems.yaml"
+				"-NoProfile",
+				"-NonInteractive",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-File",
+				"${workspaceFolder}\\compile.ps1",
+				"--clean-only"
 			],
 			"isBackground": false,
 			"problemMatcher": [],
@@ -117,9 +141,11 @@
 		},
 		{
 			"label": "Check current diff",
-			"type": "shell",
-			"command": "git",
+			"type": "process",
+			"command": "${env:SystemRoot}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
 			"args": [
+				"-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+				"-File", "${workspaceFolder}\\tools\\run_tool.ps1", "git",
 				"diff",
 				"--check"
 			],
@@ -129,8 +155,14 @@
 		{
 			"label": "Run host tests in Docker",
 			"type": "process",
-			"command": "docker",
+			"command": "${env:SystemRoot}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
 			"args": [
+				"-NoProfile",
+				"-NonInteractive",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-File",
+				"${workspaceFolder}\\tools\\run_docker.ps1",
 				"run",
 				"--rm",
 				"-v",
@@ -147,10 +179,49 @@
 			"group": "test"
 		},
 		{
+			"label": "Validate OpenEEBus in Docker",
+			"type": "process",
+			"command": "${env:SystemRoot}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+			"args": [
+				"-NoProfile",
+				"-NonInteractive",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-File",
+				"${workspaceFolder}\\tools\\run_docker.ps1",
+				"run",
+				"--rm",
+				"-e",
+				"DEBIAN_FRONTEND=noninteractive",
+				"-v",
+				"${workspaceFolder}:/workspace",
+				"-w",
+				"/workspace/openeebus",
+				"gcc:14-trixie",
+				"bash",
+				"-lc",
+				"apt-get update -qq && apt-get install -y -qq --no-install-recommends cmake pkg-config libcjson-dev libwebsockets-dev libavahi-compat-libdnssd-dev git ca-certificates >/dev/null && cmake -S tests -B /tmp/openeebus-tests -DCMAKE_BUILD_TYPE=Debug >/tmp/openeebus-configure.log && (cmake --build /tmp/openeebus-tests --parallel 3 >/tmp/openeebus-build.log 2>&1 || { tail -n 100 /tmp/openeebus-build.log; exit 1; }) && (LD_LIBRARY_PATH=/usr/local/lib64:/usr/local/lib ctest --test-dir /tmp/openeebus-tests --output-on-failure >/tmp/openeebus-test.log 2>&1 || { cat /tmp/openeebus-test.log; exit 1; }) && tail -n 8 /tmp/openeebus-test.log"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test",
+			"presentation": {
+				"panel": "dedicated",
+				"clear": true,
+				"reveal": "always"
+			}
+		},
+		{
 			"label": "Validate GitHub workflows",
 			"type": "process",
-			"command": "docker",
+			"command": "${env:SystemRoot}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
 			"args": [
+				"-NoProfile",
+				"-NonInteractive",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-File",
+				"${workspaceFolder}\\tools\\run_docker.ps1",
 				"run",
 				"--rm",
 				"-v",
@@ -158,6 +229,21 @@
 				"-w",
 				"/repo",
 				"rhysd/actionlint:latest"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Validate local environment",
+			"type": "process",
+			"command": "${env:SystemRoot}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+			"args": [
+				"-NoProfile",
+				"-NonInteractive",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-File",
+				"${workspaceFolder}\\tools\\validate_environment.ps1"
 			],
 			"isBackground": false,
 			"problemMatcher": []

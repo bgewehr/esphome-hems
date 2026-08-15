@@ -98,9 +98,29 @@ eebus_eg2_remote_ski: ""           # EG2 device — wallbox (set during pairing)
 
 # Explicit target:
 .\compile.ps1 --upload --device 192.168.x.x
+
+# Clean build + upload:
+.\compile.ps1 --clean --upload --device 192.168.x.x
 ```
 
-> Do **not** use `esphome run` directly — the script ensures both build cache paths are in sync.
+The script resolves ESPHome from `PATH` or its standard Windows install locations
+and prints explicit start, completion, duration, and exit status for every stage.
+Do **not** use `esphome run` directly; compile and upload stay separate so OTA
+always uses the artifact that was just validated.
+
+### Local validation tasks
+
+Run these tasks from **Terminal → Run Task** in VS Code:
+
+- `Validate local environment` checks Git, Docker client/daemon, Python, and ESPHome.
+- `Validate ESPHome firmware` compiles without uploading.
+- `Run host tests in Docker` runs the root CMake/CTest suite.
+- `Validate OpenEEBus in Docker` builds and tests OpenEEBus with GCC 14 on Debian Trixie.
+- `Upload ESPHome firmware OTA` uploads the existing validated artifact without rebuilding it.
+
+The tasks use clean, noninteractive PowerShell processes and checked-in tool
+resolvers, so they do not depend on profile initialization or a particular
+integrated-terminal session. Long-running tasks end with an explicit exit status.
 
 ---
 

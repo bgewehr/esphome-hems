@@ -21,11 +21,10 @@ Begruendung und Abnahmekriterien stehen in den verlinkten Konzeptdokumenten.
 
 ## Naechste Aufgaben
 
-1. **SYS-14** Lokale Entwicklungs- und Validierungsumgebung stabilisieren.
-2. **BD-23** EV und Wallbox auf reale Leistungsstufen quantisieren.
-3. **BD-24** Xemex-CSMB-Hardwareabnahme abschliessen.
-4. **OHP-20** Bosch-Capture-Matrix am realen Geraet abarbeiten.
-5. **OHP-21** Bosch-Einheiten, Zeiten und State-Transitions dokumentieren.
+1. **BD-23** EV und Wallbox auf reale Leistungsstufen quantisieren.
+2. **BD-24** Xemex-CSMB-Hardwareabnahme abschliessen.
+3. **OHP-20** Bosch-Capture-Matrix am realen Geraet abarbeiten.
+4. **OHP-21** Bosch-Einheiten, Zeiten und State-Transitions dokumentieren.
 
 ## Systemarchitektur
 
@@ -50,12 +49,13 @@ Konzept: [Zielarchitektur und Entwicklungsplan](docs/system-architecture.md)
   MSVC-Builds sowie die vollstaendige Ubuntu-24.04-CMake/CTest-Suite. Beide
   Branches wurden auf `upstream/main` rebasiert und per `--force-with-lease`
   aktualisiert.
-- [ ] **SYS-14** Lokale Entwicklungs- und Validierungsumgebung stabilisieren:
-  Docker-CLI in allen VS-Code-Terminals und Tasks verlaesslich ueber `PATH`
-  aufloesen, abweichende Shell-/Umgebungsinitialisierung beseitigen und fuer
-  lange Build-/Testlaeufe einen eindeutigen Abschluss mit Exit-Code und
-  vollstaendigem Ergebnis sicherstellen. Anschliessend ESPHome-, Host-Test- und
-  OpenEEBUS-Validierung jeweils aus einer frischen Sitzung reproduzieren.
+- [x] **SYS-14** Lokale Entwicklungs- und Validierungsumgebung stabilisiert
+  (2026-08-15): VS-Code-Tasks starten profilfreie PowerShell-Prozesse und
+  loesen Git, Docker, Python und ESPHome ueber `PATH` oder bekannte
+  Installationsorte auf. Wrapper protokollieren Start, Laufzeit und Exit-Code;
+  OpenEEBus-Ausgaben bleiben durch kompakte Erfolgslogs auswertbar. Frische
+  Task-Sitzungen bestanden Umgebungspruefung, ESPHome-Compile, Host-CTest
+  (1/1) und OpenEEBus-CTest (674/674).
 - [ ] **SYS-20** Systemzustaende normal/limited/degraded/failsafe definieren.
 - [ ] **SYS-21** Strukturierte Betriebs- und Regeldiagnose bereitstellen.
 - [ ] **SYS-22** Betreiberkonfiguration gegen Geraetefaehigkeiten validieren.
