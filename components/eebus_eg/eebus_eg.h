@@ -270,7 +270,7 @@ extern "C" {
 
 static void MpcL_Destruct(MaMpcListenerObject*) {}
 
-static void MpcL_OnRemoteEntityConnect(MaMpcListenerObject* o, const EntityAddressType* addr) {
+static void MpcL_OnRemoteMuAdded(MaMpcListenerObject* o, const EntityAddressType* addr) {
   auto* self = reinterpret_cast<EebusEgComponent::MpcListener*>(o)->self;
   if (self->mpc_connected()) return;
   // Guard: reject MU entity connects from devices other than our paired LPC device.
@@ -288,7 +288,7 @@ static void MpcL_OnRemoteEntityConnect(MaMpcListenerObject* o, const EntityAddre
            self->instance_name(), dev);
   self->on_mpc_state_(true);
 }
-static void MpcL_OnRemoteEntityDisconnect(MaMpcListenerObject* o, const EntityAddressType* addr) {
+static void MpcL_OnRemoteMuRemoved(MaMpcListenerObject* o, const EntityAddressType* addr) {
   auto* self = reinterpret_cast<EebusEgComponent::MpcListener*>(o)->self;
   if (!self->mpc_connected()) return;
   // Same guard as connect: ignore foreign devices' entity removals
@@ -326,10 +326,10 @@ static void MpcL_OnMeasurementReceive(
 }
 
 static const MaMpcListenerInterface kMpcListenerMethods = {
-  .destruct                  = MpcL_Destruct,
-  .on_remote_entity_connect  = MpcL_OnRemoteEntityConnect,
-  .on_remote_entity_disconnect = MpcL_OnRemoteEntityDisconnect,
-  .on_measurement_receive    = MpcL_OnMeasurementReceive,
+  .destruct               = MpcL_Destruct,
+  .on_remote_mu_added     = MpcL_OnRemoteMuAdded,
+  .on_remote_mu_removed   = MpcL_OnRemoteMuRemoved,
+  .on_measurement_receive = MpcL_OnMeasurementReceive,
 };
 
 /* ---- EgLp listener vtable ---- */
@@ -347,13 +347,13 @@ static bool EgL_FromPairedDevice(EebusEgComponent* self, const EntityAddressType
   return !expected.empty() && dev[0] != '\0' && expected == dev;
 }
 
-static void EgL_OnRemoteEntityConnect(EgLpListenerObject* o, const EntityAddressType* addr) {
+static void EgL_OnRemoteCsAdded(EgLpListenerObject* o, const EntityAddressType* addr) {
   auto* self = reinterpret_cast<EebusEgComponent::EgListener*>(o)->self;
   ESP_LOGI("eebus", "%s SPINE remote EG/LPC entity connected: ski=%s",
            self->instance_name(), (addr && addr->device) ? addr->device : "?");
   self->on_entity_connect(addr);
 }
-static void EgL_OnRemoteEntityDisconnect(EgLpListenerObject* o, const EntityAddressType* addr) {
+static void EgL_OnRemoteCsRemoved(EgLpListenerObject* o, const EntityAddressType* addr) {
   auto* self = reinterpret_cast<EebusEgComponent::EgListener*>(o)->self;
   /* Events are process-global: another instance's device disconnecting (e.g.
    * EG2's wallbox) must not clear this instance's connection state. Real
@@ -386,12 +386,13 @@ static void EgL_OnHeartbeatReceive(EgLpListenerObject* o, const EntityAddressTyp
 
 static const EgLpListenerInterface kEgListenerMethods = {
   .destruct                        = EgL_Destruct,
-  .on_remote_entity_connect        = EgL_OnRemoteEntityConnect,
-  .on_remote_entity_disconnect     = EgL_OnRemoteEntityDisconnect,
+  .on_remote_cs_added              = EgL_OnRemoteCsAdded,
+  .on_remote_cs_removed            = EgL_OnRemoteCsRemoved,
   .on_power_limit_receive          = EgL_OnPowerLimitReceive,
   .on_failsafe_power_limit_receive = EgL_OnFailsafePowerLimitReceive,
   .on_failsafe_duration_receive    = EgL_OnFailsafeDurationReceive,
   .on_heartbeat_receive            = EgL_OnHeartbeatReceive,
+  .on_power_nominal_max_receive    = NULL,
 };
 
 }  // extern "C"

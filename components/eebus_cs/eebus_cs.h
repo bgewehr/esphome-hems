@@ -270,6 +270,8 @@ static void LpcListenerOnHeartbeatReceive(
 
 static const CsLpListenerInterface kLpcListenerMethods = {
   .destruct                        = LpcListenerDestruct,
+  .on_remote_eg_added              = NULL,
+  .on_remote_eg_removed            = NULL,
   .on_power_limit_receive          = LpcListenerOnPowerLimitReceive,
   .on_failsafe_power_limit_receive = LpcListenerOnFailsafePowerLimitReceive,
   .on_failsafe_duration_receive    = LpcListenerOnFailsafeDurationReceive,

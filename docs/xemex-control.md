@@ -1,6 +1,6 @@
 # Xemex CSMB EV-Regelung
 
-Stand: 2026-07-17
+Stand: 2026-10-07
 
 ## Ziel
 
@@ -124,6 +124,9 @@ Benutzersollwert.
 
 ## Hardware-Abnahme
 
+Die folgenden Captures betreffen die Firmware vom Juli. Die Absicherung vom
+Oktober ist noch nicht auf das Geraet hochgeladen oder hardwareseitig abgenommen.
+
 Hardware-Ergebnisse des vorigen Kalibrierstands:
 
 - `11,5 kW -> 6 kW`: keine Ladepause; mit 2,81 A Vorsteuerung stationaer etwa
@@ -147,3 +150,78 @@ Akzeptanzkriterien:
 - Zielband 5,5 bis 6,5 kW spaetestens nach 60 s erreicht
 - mindestens 90 % der letzten 120 s im Zielband
 - kein periodischer Wechsel zwischen Ladepause und mehr als 8 kW
+
+## Absicherung nach TeeNet-Vergleich (2026-10-06)
+
+Referenz: [TeeNet 738e753, Version 1.7](https://github.com/stetastic/TeeNet/tree/738e753e6eaf7f5b8b52e274c2960ebd2ad2dcab).
+Die bestehende Kalibrierung, drei unabhaengige Strommessungen, 8-A-Grenze,
+Vorsteuerung und Kp bleiben unveraendert. Es gibt keine Phasenumschaltung,
+keinen zusaetzlichen Relaispfad und keine automatische Offsetkalibrierung.
+
+- `components/modbus_server/xemex_control.h` berechnet alle Stellwerte.
+	`xemex_update` ist der einzige Schreiber der sechs CSMB-Stromregister.
+	Benutzergrenze, EEBus-Anteil sowie DI1/Simulation werden dort gemeinsam
+	ausgewertet. DI1 und Simulation erzwingen den gleichen Stopp wie 0 W.
+- Leistung und alle drei akzeptierten Strommessungen duerfen maximal 5 s alt
+	sein. Ein 1-s-Takt prueft auch ohne neue Messwerte; die Reaktionszeit ist
+	damit maximal etwa 6 s bei laufendem ESPHome-Loop. Boot, fehlende Messungen
+	und ungueltige Vorgaben melden 80 A auf allen CSMB-Phasen. Das ist eine
+	konservative synthetische Last, kein erlaubter Ladestrom. Bei frischen
+	Daten bleibt der gemessene Stopppfad `I_ist + 47,4 A` erhalten.
+- Die bisherigen CT-Number-Entities behalten Namen und IDs zur Diagnose.
+	Direkte Schreibversuche werden auf den berechneten Wert zurueckgefuehrt;
+	sie koennen den Watchdog oder ein Limit nicht umgehen. Stellgroesse fuer
+	den Benutzer bleibt `EV Leistungsbegrenzung`. Modbus-Schreibbefehle an die
+	emulierte CSMB-Konfiguration werden abgewiesen.
+- Benutzerlimits bleiben auch waehrend eines EEBus-Limits persistent;
+	ausschliesslich interne Budgetzuweisungen setzen das Override-Flag.
+- Ein Ladeabbruch wird nur nach vorher mindestens 8 s mit mindestens 6,5 A
+	und anschliessend 20 s unter 1 A erkannt. Danach bleiben 30 s Stopp gesetzt.
+	Fuenf bestaetigte Abbrueche innerhalb 5 min verriegeln die Freigabe; die
+	Sperre wird mit ESPHome-Preferences persistent gespeichert. Ein nie
+	ladendes Fahrzeug zaehlt nicht als Abbruch. Nach 180 s ohne bestaetigten
+	Ladestart erscheint eine Diagnose; es wird keine neue Ladesession erzeugt.
+- `EV Sperre zuruecksetzen` verlangt Benutzerlimit 0 W, frische Messwerte und
+	weniger als 1 A auf jeder Phase. Entsperren startet keine Ladung. Ein
+	angeforderter Stopp ohne gemessenen Stillstand wird nach 90 s angezeigt.
+- Diagnose trennt effektiven Sollwert, Messwertalter, letzte CSMB-Abfrage,
+	ausgegebene Stromantwort samt Alter, CRC-Fehler und Abbruchzaehler. Eine
+	ausgegebene UART-Antwort ist kein ACK und kein physischer Abschaltnachweis.
+
+Ein Busausfall oder ein stillstehender Controller kann nicht durch eine
+synthetische Last sicher abgeschaltet werden. Die physische Wirkung von 80 A,
+Messwertausfall/Wiederkehr, DI1/Simulation, ueberlappenden EEBus-Limits und
+Wiederanlaeufen muss vor produktiver Freigabe am realen Geraet geprueft werden.
+Das bekannte Session-/Fahrzeugproblem nach Ladepause gilt nicht als geloest.
+
+Abnahmestand 2026-10-07: OpenEEBus-Upstream wurde zunaechst lokal vorgezogen.
+Inzwischen ist das Fahrzeug angeschlossen; vor OTA wurden 10,43 kW und
+15,2 bis 15,6 A pro Phase bei 11.500 W Sollwert gemessen. Der Betreiber hat
+Tests, Commit, Push und OTA freigegeben. Die Ergebnisse der Hardwaretests
+muessen separat dokumentiert werden; die Softwaretests ersetzen sie nicht.
+
+Die lokale Abschlusspruefung hat eine Beobachtungsluecke im Abbruchwaechter
+behoben: Liegen mehr als 5 s zwischen Regleraufrufen, beginnen Lade- und
+Stillstandsbeobachtung neu. Eine unbeobachtete Zeitspanne bestaetigt weder
+Ladung noch Ladeabbruch. Vorhandene Abbruchhistorie, Wiederanlaufwartezeit und
+Sperre bleiben erhalten. Regressionstests verwenden fuer kontinuierliche
+Beobachtungen Einsekundenmessungen und pruefen lange Luecken separat.
+
+### Lesender Grenzwertabgleich
+
+`tools/diagnostics/check_wallbox_limits.ps1 -WallboxHost <IP>` liest einmalig
+`http://<IP>:12800/user/status`. Ausgewertet werden nur `maxLimit.current` und
+`connectors[id=1].max.current`; `chargingRate` ist keine Regelquelle. Es gibt
+keinen Scan, keine Schreibbefehle und keine automatische Konfigurationsaenderung.
+Die Vergleichsannahmen 50 A Netzgrenze und 16 A Ladestrom lassen sich ueber
+`-ExpectedGridLimitA` und `-ExpectedChargeLimitA` angeben. Die empirische
+Reglerschwelle 47,4 A ist davon zu unterscheiden; Abweichungen erfordern
+Bewertung und gegebenenfalls neue Kalibrierung, keine blinde Konstantenersetzung.
+
+### Lokale Pruefung
+
+Die CMake/CTest-Suite enthaelt `xemex_control`: Kalibrierung, Grenzwertprioritaet,
+Boot und Messwertalter, Abbruchschutz, Timer-Ueberlauf und sichere Entsperrung.
+`tests/wallbox_limits_test.ps1` prueft den HTTP-JSON-Parser offline mit acht
+Fixtures. Der ESPHome-Task `Validate ESPHome firmware` kompiliert die Anbindung,
+laedt aber nichts hoch. Die Hardware-Abnahme BD-24 bleibt offen.

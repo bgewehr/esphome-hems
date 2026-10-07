@@ -195,12 +195,33 @@
 				"DEBIAN_FRONTEND=noninteractive",
 				"-v",
 				"${workspaceFolder}:/workspace",
-				"-w",
-				"/workspace/openeebus",
+				"-v",
+				"${workspaceFolder}/build/openeebus-unit:/results",
 				"gcc:14-trixie",
 				"bash",
-				"-lc",
-				"apt-get update -qq && apt-get install -y -qq --no-install-recommends cmake pkg-config libcjson-dev libwebsockets-dev libavahi-compat-libdnssd-dev git ca-certificates >/dev/null && cmake -S tests -B /tmp/openeebus-tests -DCMAKE_BUILD_TYPE=Debug >/tmp/openeebus-configure.log && (cmake --build /tmp/openeebus-tests --parallel 3 >/tmp/openeebus-build.log 2>&1 || { tail -n 100 /tmp/openeebus-build.log; exit 1; }) && (LD_LIBRARY_PATH=/usr/local/lib64:/usr/local/lib ctest --test-dir /tmp/openeebus-tests --output-on-failure >/tmp/openeebus-test.log 2>&1 || { cat /tmp/openeebus-test.log; exit 1; }) && tail -n 8 /tmp/openeebus-test.log"
+				"/workspace/tools/test_openeebus.sh",
+				"unit"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test",
+			"presentation": {
+				"panel": "dedicated",
+				"clear": true,
+				"reveal": "always"
+			}
+		},
+		{
+			"label": "Validate OpenEEBus integration in Docker",
+			"type": "process",
+			"command": "${env:SystemRoot}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+			"args": [
+				"-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+				"-File", "${workspaceFolder}\\tools\\run_docker.ps1",
+				"run", "--rm",
+				"-v", "${workspaceFolder}:/workspace:ro",
+				"-v", "${workspaceFolder}/build/openeebus-integration:/results",
+				"gcc:14-trixie", "bash", "/workspace/tools/test_openeebus.sh"
 			],
 			"isBackground": false,
 			"problemMatcher": [],

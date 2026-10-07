@@ -128,15 +128,7 @@ binary_sensor:
         - text_sensor.template.publish:
             id: last_enwg_event
             state: !lambda 'return std::string("Aktiviert (DI1): ") + id(ha_time).now().strftime("%d.%m.%Y %H:%M:%S");'
-        - number.set:
-            id: ct1addon
-            value: 45.0
-        - number.set:
-            id: ct2addon
-            value: 45.0
-        - number.set:
-            id: ct3addon
-            value: 45.0
+        - script.execute: xemex_update
         - light.turn_on:
             id: status_led
             effect: "Paragraph14a Warning Flash"
@@ -150,15 +142,7 @@ binary_sensor:
         - text_sensor.template.publish:
             id: last_enwg_event
             state: !lambda 'return std::string("Beendet (DI1): ") + id(ha_time).now().strftime("%d.%m.%Y %H:%M:%S");'
-        - number.set:
-            id: ct1addon
-            value: !lambda "return id(ladebegrenzung_addon);"
-        - number.set:
-            id: ct2addon
-            value: !lambda "return id(ladebegrenzung_addon);"
-        - number.set:
-            id: ct3addon
-            value: !lambda "return id(ladebegrenzung_addon);"
+        - script.execute: xemex_update
         - lambda: |-
             id(hems_eg1).clear_limit();
         - light.turn_off:
@@ -353,21 +337,14 @@ switch:
     optimistic: true
     turn_on_action:
       - lambda: |-
+          id(manual_enwg_test).publish_state(true);
           ESP_LOGW("enwg", "Simulation: Netzbetreiber aktiviert Leistungsbegrenzung 4200 W");
           float _ev = id(power_limit_events).state;
           id(power_limit_events).publish_state(std::isnan(_ev) ? 1.0f : _ev + 1.0f);
       - text_sensor.template.publish:
           id: last_enwg_event
           state: !lambda 'return std::string("Aktiviert (Sim): ") + id(ha_time).now().strftime("%d.%m.%Y %H:%M:%S");'
-      - number.set:
-          id: ct1addon
-          value: 45.0
-      - number.set:
-          id: ct2addon
-          value: 45.0
-      - number.set:
-          id: ct3addon
-          value: 45.0
+      - script.execute: xemex_update
       - light.turn_on:
           id: status_led
           effect: "Paragraph14a Warning Flash"
@@ -376,19 +353,12 @@ switch:
           id(hems_eg1).set_limit(4200.0f);
     turn_off_action:
       - lambda: |-
+          id(manual_enwg_test).publish_state(false);
           ESP_LOGW("enwg", "Simulation: Netzbetreiber deaktiviert Leistungsbegrenzung");
       - text_sensor.template.publish:
           id: last_enwg_event
           state: !lambda 'return std::string("Beendet (Sim): ") + id(ha_time).now().strftime("%d.%m.%Y %H:%M:%S");'
-      - number.set:
-          id: ct1addon
-          value: !lambda "return id(ladebegrenzung_addon);"
-      - number.set:
-          id: ct2addon
-          value: !lambda "return id(ladebegrenzung_addon);"
-      - number.set:
-          id: ct3addon
-          value: !lambda "return id(ladebegrenzung_addon);"
+      - script.execute: xemex_update
       - light.turn_off:
           id: status_led
       - switch.turn_off: relay_1

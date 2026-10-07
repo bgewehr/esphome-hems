@@ -1,6 +1,6 @@
 # Entwicklungs-TODO
 
-Stand: 2026-08-15
+Stand: 2026-10-07
 
 Diese Datei ist die zentrale Status- und Reihenfolgenliste. Fachliche
 Begruendung und Abnahmekriterien stehen in den verlinkten Konzeptdokumenten.
@@ -21,10 +21,17 @@ Begruendung und Abnahmekriterien stehen in den verlinkten Konzeptdokumenten.
 
 ## Naechste Aufgaben
 
-1. **BD-23** EV und Wallbox auf reale Leistungsstufen quantisieren.
-2. **BD-24** Xemex-CSMB-Hardwareabnahme abschliessen.
-3. **OHP-20** Bosch-Capture-Matrix am realen Geraet abarbeiten.
-4. **OHP-21** Bosch-Einheiten, Zeiten und State-Transitions dokumentieren.
+1. **SYS-15** OpenEEBus mit Upstream aktualisieren und unsere Funktionalitaet
+  samt lokalen Anpassungen erhalten. Auf Betreiberwunsch am 2026-10-07
+  vorgezogen; Commit, Push, OTA und Tests inzwischen freigegeben.
+2. **BD-24** Xemex-Optimierung und CSMB-Hardwareabnahme abschliessen.
+  Fahrzeug am 2026-10-07 angeschlossen, Ausgangswert 10,43 kW bei
+  11.500 W Sollwert; OTA und Tests vom Betreiber freigegeben.
+3. **SYS-16** Geeignete OpenEEBus-PRs aus den Erkenntnissen erstellen,
+  gemaess Maintainer-Regeln und Formatierungsvorgaben.
+4. **BD-23** EV und Wallbox auf reale Leistungsstufen quantisieren.
+5. **OHP-20** Bosch-Capture-Matrix am realen Geraet abarbeiten.
+6. **OHP-21** Bosch-Einheiten, Zeiten und State-Transitions dokumentieren.
 
 ## Systemarchitektur
 
@@ -56,6 +63,28 @@ Konzept: [Zielarchitektur und Entwicklungsplan](docs/system-architecture.md)
   OpenEEBus-Ausgaben bleiben durch kompakte Erfolgslogs auswertbar. Frische
   Task-Sitzungen bestanden Umgebungspruefung, ESPHome-Compile, Host-CTest
   (1/1) und OpenEEBus-CTest (674/674).
+- [ ] **SYS-15** OpenEEBus auf den aktuellen Upstream-Stand bringen, lokale
+  Anpassungen abgleichen und unsere HEMS-Funktionalitaet erhalten. OpenEEBus-
+  und HEMS-Tests, ESPHome-Build sowie CS/EG-, LPC-, OSSHPCF- und
+  Reconnect-Regressionen pruefen; geprueften Submodul-Commit und Rollback-Stand
+  dokumentieren (aufgenommen 2026-10-06).
+  Lokale Integration am 2026-10-07: Upstream `c31acf5` eingearbeitet,
+  Merge-Konflikte aufgeloest; 833/833 OpenEEBus- und 2/2 HEMS-Host-Tests,
+  acht Offline-Wallbox-Fixtures sowie ESPHome-Clean-Build bestanden.
+  32/32 Software-Integrationstests bestanden, einschliesslich 20 SIMOPEN-
+  Durchlaeufen, drei Drei-Geraete-Stresslaeufen und drei Shutdown-Pruefungen.
+  Merge `89ee840` committed und im Hauptrepository gepinnt; Hardwareabnahme
+  noch offen. Details und Rollback: Systemarchitektur, Integrationsstand.
+- [ ] **SYS-16** Aus den Erkenntnissen geeignete OpenEEBus-Upstream-PRs
+  ableiten und erstellen, sofern ein allgemein nutzbarer, belegter Beitrag
+  verbleibt. Aktuelle CONTRIBUTING-/Maintainer-Regeln, PR-Vorlagen,
+  Formatierung und CI beachten; bestehende Beitraege auf Doppelung pruefen.
+  Reproduktion, Regressionstests und klare Testnachweise beilegen. PR-Links
+  oder begruendete Nicht-Eignung dokumentieren (aufgenommen 2026-10-07).
+  Belegter Kandidat: EV-/HEMS-Demos kollidieren beim mDNS-Namen
+  `OpenEEBUS-123456789`; eigener EV-Dienstname behebt den Drei-Geraete-Test.
+  Weitere Kandidaten: Pairing-Abbruch ohne vorzeitige Verbindungsfreigabe
+  und Heartbeat-Sendemarge mit Regressionstests. Noch keine PRs erstellt.
 - [ ] **SYS-20** Systemzustaende normal/limited/degraded/failsafe definieren.
 - [ ] **SYS-21** Strukturierte Betriebs- und Regeldiagnose bereitstellen.
 - [ ] **SYS-22** Betreiberkonfiguration gegen Geraetefaehigkeiten validieren.

@@ -544,7 +544,8 @@ void EebusEgComponent::loop() {
     ScaledValue fs_limit;
     fs_limit.value = (int64_t)failsafe_limit_w_;
     fs_limit.scale = 0;
-    EebusError err_limit = EgLpcSetFailsafeConsumptionActivePowerLimit(eg_lpc_, &remote_entity_addr_, &fs_limit);
+    EebusError err_limit = EgLpcSetFailsafeConsumptionActivePowerLimit(
+      eg_lpc_, &remote_entity_addr_, &fs_limit, NULL, NULL);
 
     /* EebusDurationCompare() is field-by-field (not normalized) —
      * {.seconds=7200} compares as hours=0 < hours=2 and fails the 2h..24h range check.
@@ -554,7 +555,8 @@ void EebusEgComponent::loop() {
     fs_duration.hours   = (int32_t)(failsafe_duration_s_ / 3600u);
     fs_duration.minutes = (int32_t)((failsafe_duration_s_ % 3600u) / 60u);
     fs_duration.seconds = (int32_t)(failsafe_duration_s_ % 60u);
-    EebusError err_dur = EgLpcSetFailsafeDurationMinimum(eg_lpc_, &remote_entity_addr_, &fs_duration);
+    EebusError err_dur = EgLpcSetFailsafeDurationMinimum(
+      eg_lpc_, &remote_entity_addr_, &fs_duration, NULL, NULL);
 
     if (err_limit == kEebusErrorOk && err_dur == kEebusErrorOk) {
       ESP_LOGI(TAG, "%s failsafe configured: %.0f W / %u s", instance_name_.c_str(), failsafe_limit_w_, failsafe_duration_s_);
@@ -656,7 +658,8 @@ void EebusEgComponent::set_limit(float watts) {
     ESP_LOGI(TAG, "Setting %s power limit: %.0f W", instance_name_.c_str(), watts);
   }
 
-  EebusError err = EgLpcSetActiveConsumptionPowerLimit(eg_lpc_, &remote_entity_addr_, &limit);
+  EebusError err = EgLpcSetActiveConsumptionPowerLimit(
+      eg_lpc_, &remote_entity_addr_, &limit, NULL, NULL);
   if (err != kEebusErrorOk) {
     ESP_LOGE(TAG, "SetActiveConsumptionPowerLimit failed: %d", (int)err);
     pending_limit_ms_ = millis();  // push back retry so error path doesn't flood
@@ -748,8 +751,9 @@ void EebusEgComponent::subscribe_semp_() {
     EebusError subscribe_err = kEebusErrorOk;
     if (!HasSubscription(&client))
       subscribe_err = Subscribe(&client);
-    EebusError read_err = RequestData(
-        &client, kFunctionTypeSmartEnergyManagementPsData, nullptr, nullptr);
+    EebusError read_err = FEATURE_LOCAL_READ_FROM_REMOTE(
+      client.local_feature, client.remote_feature,
+      kFunctionTypeSmartEnergyManagementPsData, nullptr, nullptr, nullptr, nullptr);
     ESP_LOGW(TAG, "%s OSSHPCF: remote SEMP entity %zu subscribe_err=%d read_err=%d",
              instance_name_.c_str(), i, (int) subscribe_err, (int) read_err);
     return;

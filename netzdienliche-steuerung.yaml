@@ -36,7 +36,6 @@ eebus_cs:
         id: status_led
         effect: "Paragraph14a Warning Flash"
     - switch.turn_on: relay_1
-    - lambda: "id(ev_budget_override_active) = true;"
     - script.execute: distribute_budget
   on_limit_cleared:
     - text_sensor.template.publish:
@@ -172,8 +171,10 @@ script:
             if (d.kind == 1) {
               if (fabsf(d.share - *last) > 100.0f ||
                   fabsf(id(ev_limit_w).state - d.share) > 100.0f || *last < 0.0f) {
-                id(ev_limit_w).make_call().set_value(d.share).perform();
                 *last = d.share;
+                id(ev_budget_override_active) = true;
+                id(ev_limit_w).make_call().set_value(d.share).perform();
+                id(ev_budget_override_active) = false;
               }
             } else {
               float send_w = d.share > 0.0f ? d.share : 1.0f;

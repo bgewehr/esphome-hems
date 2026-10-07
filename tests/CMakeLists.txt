@@ -22,3 +22,13 @@ else()
 endif()
 
 add_test(NAME semp_decoder COMMAND semp_decoder_test)
+
+add_executable(xemex_control_test xemex_control_test.cpp)
+target_compile_features(xemex_control_test PRIVATE cxx_std_17)
+target_include_directories(xemex_control_test PRIVATE ..)
+if(MSVC)
+  target_compile_options(xemex_control_test PRIVATE /W4)
+else()
+  target_compile_options(xemex_control_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+endif()
+add_test(NAME xemex_control COMMAND xemex_control_test)

@@ -61,10 +61,75 @@ verwendet. Fachliche Details stehen im
 - **SYS-12:** Fake-Steuerbox und Fake-Wallbox als reproduzierbare
   Szenariotests fuer Limit, Disconnect, Reconnect und fehlerhafte Antworten
   in die Qualitaetssicherung aufnehmen.
+- **SYS-15:** OpenEEBus auf den aktuellen Upstream-Stand bringen und die
+  bestehende HEMS-Funktionalitaet erhalten. Lokale Anpassungen vorab erfassen,
+  bereits upstream enthaltene Aenderungen abgleichen und verbleibende
+  Anpassungen gezielt portieren. Abnahme: OpenEEBus- und HEMS-Host-Tests,
+  ESPHome-Build sowie Regressionen fuer CS/EG, LPC, OSSHPCF und Reconnect;
+  hardwareabhaengige Nachweise separat dokumentieren. Den geprueften
+  Submodul-Commit pinnen und den bisherigen Stand fuer Rollback festhalten.
+- **SYS-16:** Erkenntnisse aus der HEMS-/OpenEEBus-Integration auf geeignete,
+  allgemein nutzbare Upstream-Beitraege pruefen und bei belastbaren Kandidaten
+  gezielte PRs erstellen. Vorher aktuellen Upstream, offene Issues/PRs,
+  CONTRIBUTING, PR-Vorlagen, CI und konkrete Maintainer-Rueckmeldungen pruefen.
+  Neue Features vorab gemaess CONTRIBUTING abstimmen; keine reinen
+  Kosmetik- oder installationsspezifischen Patches einreichen. Kleine,
+  eigenstaendige Aenderungen mit Reproduktion und Regressionstest, verlangter
+  clang-format-Version und Repository-Formatierung liefern. PR-Beschreibung
+  mit Problem, Loesung, Testnachweisen und verbleibenden Einschraenkungen nach
+  Maintainer-Vorgaben verfassen; als Draft beginnen, wenn noch Nachweise fehlen.
+  Abnahme: geeignete PRs samt Links dokumentiert oder begruendet festgehalten,
+  warum sich aktuell kein Beitrag anbietet.
 
 Abnahme: Ein frischer Checkout inklusive Submodule kann alle nicht-hardware-
 gebundenen Pruefungen mit einem dokumentierten Befehl lokal und in CI
 ausfuehren.
+
+### OpenEEBus-Integrationsstand 2026-10-07
+
+- Eingearbeiteter Upstream: `c31acf5ef36bf966d11600f74f62fbdafb3a7470`.
+  Ausgangsstand des lokalen Submoduls:
+  `1c7dd53d5f21122a3e39d21e54ce644fbd07f50d`; bisheriger Gitlink im
+  Hauptrepository: `41b6b7e567d5ba5f314188a8ab6767b3f533fd2a`.
+- Merge-Commit: `89ee840` auf dem Fork-Branch `hems`, im Hauptrepository
+  als Submodul gepinnt. Commit, Push, OTA und Tests wurden am 2026-10-07
+  vom Betreiber freigegeben. Ausgangsrevisionen fuer Rollback erhalten;
+  kein automatischer Reset im Arbeitsbaum mit uncommitteten Aenderungen.
+- Upstreams geraetebezogener Event-Manager ersetzt die lokale Eventbus-
+  Filterung; CS/EG-Mehrinstanzen bleiben isoliert. DeviceDiagnosis-Szenario 3,
+  Pairing-Fenster und SHIP-ID-Weitergabe sind weiterhin vorhanden.
+- Bewusst lokal erhalten: ESP32-mDNS nur als Advertisement mit eigenen
+  Diensteintraegen im gemeinsamen Daemon, SPINE-Thread mit 12 KB Stack und
+  Heartbeat alle 45 Sekunden bei angekuendigtem Timeout von 60 Sekunden.
+- Pairing-Abbruch: Verbindung bis zum regulaeren Close-Ereignis im Container
+  halten, keine Retries und keine nachtraegliche Handshake-Bestaetigung;
+  erst nach Stop und Disconnect-Meldung freigeben. Zwei neue Unit-Tests
+  pruefen den Verbindungszustand, zwei weitere die Heartbeat-Sendemarge.
+- EV-Demo: eigener mDNS-Dienstname verhindert die reproduzierte Kollision
+  mit dem HEMS-Demo. Das betrifft die Software-Testdemos, nicht unsere
+  bereits getrennt benannten ESP32-Instanzen.
+- Lokal bestanden: 833/833 OpenEEBus-CTest, 2/2 HEMS-Host-CTest
+  (OSSHPCF-SEMP-Decoder und Xemex), acht Offline-Wallbox-Fixtures,
+  ESPHome-Clean-Build plus abschliessender Build (19,2 % RAM, 16,1 % Flash).
+  Nach Upstream-Updates mit neuen C-Quellen den Task `Clean ESPHome build`
+  vor `Validate ESPHome firmware` ausfuehren, damit CMake neue Wrapper erfasst.
+- Wiederholbare Software-Integration: Task
+  `Validate OpenEEBus integration in Docker`; Skript
+  `tools/test_openeebus.sh` baut temporaere Demo-Kopien im isolierten
+  Docker-Netz. Avahi und `libnss-mdns` sind erforderlich. Berichte unter
+  `build/openeebus-integration/`, Unit-Testberichte unter
+  `build/openeebus-unit/`. Kein Host-Netz und keine realen Geraetezugriffe.
+  Ergebnis: 32/32 bestanden, inklusive LPC/LPP, MPC/MGCP, EV-Disconnect bei
+  weiterlaufender HP-Regelung, drei Drei-Geraete-Stressdurchlaeufen,
+  drei Shutdown-Pruefungen und 20 SIMOPEN-Durchlaeufen.
+- Eigene C/C++-Aenderungen mit clang-format 18 formatiert; eigener Diff gegen
+  Upstream whitespace-sauber. Bereits upstream enthaltene Markdown-
+  Zeilenumbrueche und Leerzeilen bleiben unveraendert.
+- OTA freigegeben; reale CLS-/Bosch-Kompatibilitaet, ESP32-Pairing/Abbruch/
+  Reconnect und Xemex-Laden separat abnehmen. Der lokale Compile ersetzt
+  diese Nachweise nicht; vor OTA isoliert neu bauen und Build-Identitaet
+  pruefen, da ESPHome bei unveraenderter Konfiguration Build-Zeitstempel
+  wiederverwenden kann.
 
 ### Phase 2: Betriebsmodell und Diagnose
 

@@ -75,11 +75,14 @@ void ModbusServer::process_frame_() {
       (uint16_t) rx_buf_[rx_pos_ - 1] << 8 | rx_buf_[rx_pos_ - 2];
   uint16_t crc_calc = crc16_(rx_buf_, rx_pos_ - 2);
   if (crc_recv != crc_calc) {
+    ++crc_errors_;
     ESP_LOGW(TAG, "CRC mismatch: calc=0x%04X recv=0x%04X", crc_calc, crc_recv);
     return;
   }
 
   uint8_t fc = rx_buf_[1];
+  last_request_ms_ = millis();
+  ++request_count_;
 
   switch (fc) {
     case 0x03: {  // Read Holding Registers
@@ -108,6 +111,8 @@ void ModbusServer::process_frame_() {
         resp[4 + i * 2] = (uint8_t)(val & 0xFF);
       }
       send_response_(resp, sizeof(resp));
+      if (holding_response_callback_)
+        holding_response_callback_(start, count, resp + 3);
       break;
     }
     case 0x04: {  // Read Input Registers
@@ -139,6 +144,7 @@ void ModbusServer::process_frame_() {
       break;
     }
     case 0x06: {  // Write Single Holding Register
+      if (read_only_) { send_exception_(fc, 0x01); return; }
       if (rx_pos_ != 8) { send_exception_(fc, 0x03); return; }
       uint16_t addr = (uint16_t) rx_buf_[2] << 8 | rx_buf_[3];
       uint16_t val  = (uint16_t) rx_buf_[4] << 8 | rx_buf_[5];
@@ -154,6 +160,7 @@ void ModbusServer::process_frame_() {
       break;
     }
     case 0x10: {  // Write Multiple Holding Registers
+      if (read_only_) { send_exception_(fc, 0x01); return; }
       if (rx_pos_ < 9) { send_exception_(fc, 0x03); return; }
       uint16_t start     = (uint16_t) rx_buf_[2] << 8 | rx_buf_[3];
       uint16_t reg_count = (uint16_t) rx_buf_[4] << 8 | rx_buf_[5];
