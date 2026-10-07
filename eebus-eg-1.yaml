@@ -190,6 +190,23 @@ text_sensor:
     entity_category: diagnostic
     update_interval: never
 
+  - platform: template
+    name: "${device_name} EG1 OSSHPCF Read Status"
+    id: eg1_osshpcf_read_status
+    icon: "mdi:message-reply-text"
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: sg_eebus_eg1
+      sorting_weight: 9
+    update_interval: 1s
+    lambda: |-
+      const std::string status = id(hems_eg1).semp_read_status();
+      if (id(eg1_osshpcf_read_status).has_state() &&
+          id(eg1_osshpcf_read_status).state == status) {
+        return {};
+      }
+      return status;
+
 number:
   # --- Controlled K40RF probe below the production minimum ---
   - platform: template
@@ -308,6 +325,16 @@ number:
     optimistic: true
 
 button:
+  - platform: template
+    name: "${device_name} EG1 OSSHPCF Daten lesen"
+    icon: "mdi:database-arrow-down"
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: sg_eebus_eg1
+      sorting_weight: 18
+    on_press:
+      - lambda: "id(hems_eg1).request_semp_read();"
+
   # --- EG1 Pairing (sg_eebus_eg1, weights 10-11) ---
   - platform: template
     disabled_by_default: true

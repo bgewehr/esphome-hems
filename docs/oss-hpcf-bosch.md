@@ -20,6 +20,58 @@ den aktuellen `SmartEnergyManagementPsData`-Zustand und dekodiert eingehende
 SEMP-Daten begrenzt und null-sicher. Es werden keine OSSHPCF-Steuerbefehle
 gesendet.
 
+### Manueller Read mit Antwortnachweis
+
+Seit 2026-10-07 kann `EG1 OSSHPCF Daten lesen` den aktuellen SEMP-Zustand
+ohne Neustart erneut anfordern. `EG1 OSSHPCF Read Status` unterscheidet:
+
+- noch nicht angefordert, vorgemerkt und Warten auf Antwort,
+- korrelierte Antwort mit oder ohne Alternativen,
+- Timeout, lokalen Read-Fehler und getrennte Verbindung.
+
+Der initiale Read nach der Use-Case-Anmeldung verwendet denselben Callback.
+OpenEEBus ordnet die Antwort ueber den Message-Counter zu und meldet den
+Timeout ueber seinen bestehenden Pending-Reply-Takt. `read_err=0` bedeutet
+weiterhin nur, dass der lokale Request erfolgreich war. Erst
+`OSSHPCF read reply: msg_ref=...` belegt die zugehoerige Antwort. Die
+dekodierten Daten erscheinen wie bisher unter `OSSHPCF data:` auf WARN.
+Benachrichtigungen ohne passende Read-Referenz ersetzen diesen Nachweis nicht.
+
+Waehrend eines vorgemerkten oder laufenden Reads wird kein zweiter manueller
+Read gestartet. Disconnect und geloeschtes Pairing setzen die Diagnose
+zurueck. Es gibt kein periodisches Polling, keine automatische Read-Wiederholung
+und keine Sequenzauswahl oder Aenderung von Heizungs-/LPC-Sollwerten.
+Eine Antwort mit Alternativen ist noch keine Freigabe zur aktiven Steuerung.
+
+Fuer eine Heizbetriebsaufnahme zuerst den vorhandenen Task
+`Capture OSSHPCF for 24 hours` starten und bei tatsaechlichem Heizbetrieb den
+Read-Button ausloesen. Die lokale Aufzeichnung liegt unter `private/captures/`;
+der Rechner muss waehrenddessen laufen. Leere Antworten, Timeouts und
+Verdichterleistung getrennt auswerten.
+
+Live-Pruefung am 2026-10-07 mit OTA-Build `Oct 7 2026 12:08:48`:
+
+- Initialer Read um 12:12:55, korrelierte Antwort etwa 0,55 s spaeter
+  (`msg_ref=22`, Funktion 104); Status `Antwort ohne Alternativen`.
+- Zwei manuelle Reads lieferten jeweils eine eigene korrelierte Antwort
+  (`msg_ref=35` und `36`), ohne Neustart oder Heizungssteuerung.
+- Drei gleichzeitig ausgeloeste Buttons erzeugten einen Read (`msg_ref=38`)
+  und zwei Meldungen `OSSHPCF read already pending`.
+- Alle Antworten enthielten `remote=true`, `single_slot_only=true`,
+  `sequences_max=1`, `reselection=false` sowie null Alternativen, Sequenzen,
+  Slots und Werte; Decoder `truncated=false`.
+- Firmware-Build erfolgreich. Timeout-Diagnose ist an den vorhandenen
+  OpenEEBus-Callback angebunden, wurde aber nicht durch einen absichtlich
+  gestoerten Live-Bus getestet. Ein Heizbetriebsnachweis steht noch aus.
+
+Privates Testprotokoll: `private/captures/semp-read-diagnostic-20261007.log`.
+
+Die Statusanzeige prueft den lokalen Zustand weiterhin jede Sekunde, publiziert
+aber nur initial und bei Aenderungen. Dadurch entfallen wiederholte identische
+Textsensor-Logs und UI-Updates; echte SEMP-Telegramme bleiben unveraendert sichtbar.
+Diese Entduplizierung wurde am 2026-10-07 erfolgreich kompiliert, aber wegen der
+laufenden 24-Stunden-Aufzeichnung noch nicht per OTA eingespielt.
+
 ### Verifizierter Kommunikationsstand vom 2026-07-13
 
 Ein kontrollierter HEMS-Neustart mit bereits laufendem EEBus-Log hat den

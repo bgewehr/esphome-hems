@@ -577,8 +577,7 @@ void EebusEgComponent::loop() {
   }
 
   /* Subscribe to SEMP data once the OSSHPCF use case has been announced */
-  if (semp_subscribe_pending_ && connected_ && local_semp_feature_) {
-    semp_subscribe_pending_ = false;
+  if (connected_ && local_semp_feature_ && semp_subscribe_pending_.exchange(false)) {
     subscribe_semp_();
   }
 
@@ -719,11 +718,48 @@ void EebusEgComponent::publish_supported_use_cases_() {
     supported_use_cases_text_sensor_->publish_state(supported_use_cases());
 }
 
+void EebusEgComponent::request_semp_read() {
+  if (!connected_) {
+    semp_read_status_ = SempReadStatus::DISCONNECTED;
+    ESP_LOGW(TAG, "%s OSSHPCF read rejected: disconnected", instance_name());
+    return;
+  }
+  const auto status = semp_read_status_.load();
+  if (status == SempReadStatus::QUEUED || status == SempReadStatus::PENDING) {
+    ESP_LOGW(TAG, "%s OSSHPCF read already pending", instance_name());
+    return;
+  }
+  semp_read_status_ = SempReadStatus::QUEUED;
+  semp_subscribe_pending_ = true;
+}
+
+const char* EebusEgComponent::semp_read_status() const {
+  switch (semp_read_status_.load()) {
+    case SempReadStatus::IDLE: return "Noch nicht angefordert";
+    case SempReadStatus::QUEUED: return "Read vorgemerkt";
+    case SempReadStatus::PENDING: return "Warte auf Antwort";
+    case SempReadStatus::RECEIVED: return "Antwort mit Alternativen";
+    case SempReadStatus::EMPTY: return "Antwort ohne Alternativen";
+    case SempReadStatus::TIMEOUT: return "Timeout: keine Read-Antwort";
+    case SempReadStatus::FAILED: return "Read fehlgeschlagen (siehe Log)";
+    case SempReadStatus::DISCONNECTED: return "Nicht verbunden";
+  }
+  return "Unbekannt";
+}
+
 void EebusEgComponent::subscribe_semp_() {
-  if (!local_semp_feature_ || !service_ || remote_ski_.empty()) return;
+  if (semp_read_status_ == SempReadStatus::PENDING) return;
+  semp_read_status_ = SempReadStatus::FAILED;
+  if (!local_semp_feature_ || !service_ || remote_ski_.empty()) {
+    ESP_LOGW(TAG, "%s OSSHPCF read unavailable: client not ready", instance_name());
+    return;
+  }
 
   DeviceLocalObject* local_dev = EEBUS_SERVICE_GET_LOCAL_DEVICE(service_);
-  if (!local_dev) return;
+  if (!local_dev) {
+    ESP_LOGW(TAG, "%s OSSHPCF read unavailable: local device missing", instance_name());
+    return;
+  }
 
   DeviceRemoteObject* remote_dev = DEVICE_LOCAL_GET_REMOTE_DEVICE_WITH_SKI(local_dev, remote_ski_.c_str());
   if (!remote_dev) {
@@ -751,9 +787,32 @@ void EebusEgComponent::subscribe_semp_() {
     EebusError subscribe_err = kEebusErrorOk;
     if (!HasSubscription(&client))
       subscribe_err = Subscribe(&client);
+    semp_read_status_ = SempReadStatus::PENDING;
     EebusError read_err = FEATURE_LOCAL_READ_FROM_REMOTE(
       client.local_feature, client.remote_feature,
-      kFunctionTypeSmartEnergyManagementPsData, nullptr, nullptr, nullptr, nullptr);
+      kFunctionTypeSmartEnergyManagementPsData, nullptr, nullptr,
+      [](const ReplyMessage* reply, const FeatureAddressType*, EebusError err, void* context) {
+        auto* self = static_cast<EebusEgComponent*>(context);
+        if (err != kEebusErrorOk || reply == nullptr || reply->function_data == nullptr ||
+            reply->function_type != kFunctionTypeSmartEnergyManagementPsData) {
+          auto expected = SempReadStatus::PENDING;
+          self->semp_read_status_.compare_exchange_strong(expected,
+              err == kEebusErrorTime ? SempReadStatus::TIMEOUT : SempReadStatus::FAILED);
+          ESP_LOGW(TAG, "%s OSSHPCF read %s: err=%d msg_ref=%llu", self->instance_name(),
+                   err == kEebusErrorTime ? "timeout" : "failed", (int) err,
+                   reply ? (unsigned long long) reply->msg_cnt_ref : 0ULL);
+          return;
+        }
+        const auto* data = static_cast<const SmartEnergyManagementPsDataType*>(reply->function_data);
+        auto expected = SempReadStatus::PENDING;
+        self->semp_read_status_.compare_exchange_strong(expected,
+            data->alternatives_size == 0 ? SempReadStatus::EMPTY : SempReadStatus::RECEIVED);
+        ESP_LOGW(TAG, "%s OSSHPCF read reply: msg_ref=%llu fn=%d alternatives=%u",
+                 self->instance_name(), (unsigned long long) reply->msg_cnt_ref,
+                 (int) reply->function_type, (unsigned) data->alternatives_size);
+      }, this);
+    if (read_err != kEebusErrorOk)
+      semp_read_status_ = SempReadStatus::FAILED;
     ESP_LOGW(TAG, "%s OSSHPCF: remote SEMP entity %zu subscribe_err=%d read_err=%d",
              instance_name_.c_str(), i, (int) subscribe_err, (int) read_err);
     return;
@@ -819,6 +878,7 @@ void EebusEgComponent::on_entity_disconnect(const EntityAddressType* /*addr*/) {
   publish_supported_use_cases_();
   remote_spine_addr_       = {};
   semp_subscribe_pending_  = false;
+  semp_read_status_        = SempReadStatus::DISCONNECTED;
   pairing_state_      = remote_ski_.empty() ? "Inaktiv" : "Getrennt — suche Gerät...";
   /* Re-announce mDNS so the remote device reconnects immediately (eebus-go: checkAutoReannounce on disconnect) */
   set_mdns_register(false);
@@ -1271,6 +1331,7 @@ void EebusEgComponent::forget_pairing() {
   remote_uc_seen_      = {};
   remote_spine_addr_   = {};
   semp_subscribe_pending_ = false;
+  semp_read_status_    = SempReadStatus::DISCONNECTED;
   failsafe_set_        = false;
   heartbeat_alarm_     = false;
   pairing_state_       = "Inaktiv";

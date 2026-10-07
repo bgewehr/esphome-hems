@@ -22,6 +22,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <string>
 #include <vector>
 
@@ -105,6 +106,8 @@ class EebusEgComponent : public Component {
    * -------------------------------------------------------------------- */
   void set_limit(float watts);
   void clear_limit() { set_limit(0.0f); }
+  void request_semp_read();
+  const char* semp_read_status() const;
 
   /* Minimum active limit in W. Limits below this are raised to it — needed for
    * devices that silently ignore lower values (WP: 4200 W). Set to 0 for devices
@@ -193,6 +196,9 @@ class EebusEgComponent : public Component {
                              const uint8_t* key,  size_t kl);
   void subscribe_semp_();
 
+  enum class SempReadStatus { IDLE, QUEUED, PENDING, RECEIVED, EMPTY, TIMEOUT, FAILED, DISCONNECTED };
+  std::atomic<SempReadStatus> semp_read_status_{SempReadStatus::IDLE};
+
   /* Config */
   uint16_t    ship_port_          {4713};
   std::string instance_name_      {"EG"};
@@ -227,7 +233,7 @@ class EebusEgComponent : public Component {
 
   EntityAddressType remote_entity_addr_{};
   bool              have_remote_entity_{false};
-  bool              semp_subscribe_pending_{false};
+  std::atomic<bool>  semp_subscribe_pending_{false};
 
   /* openeebus objects */
   EebusServiceObject*  service_            {nullptr};

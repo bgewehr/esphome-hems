@@ -84,10 +84,15 @@ Konzept: [Zielarchitektur und Entwicklungsplan](docs/system-architecture.md)
   Formatierung und CI beachten; bestehende Beitraege auf Doppelung pruefen.
   Reproduktion, Regressionstests und klare Testnachweise beilegen. PR-Links
   oder begruendete Nicht-Eignung dokumentieren (aufgenommen 2026-10-07).
-  Belegter Kandidat: EV-/HEMS-Demos kollidieren beim mDNS-Namen
-  `OpenEEBUS-123456789`; eigener EV-Dienstname behebt den Drei-Geraete-Test.
-  Weitere Kandidaten: Pairing-Abbruch ohne vorzeitige Verbindungsfreigabe
-  und Heartbeat-Sendemarge mit Regressionstests. Noch keine PRs erstellt.
+  Am 2026-10-07 zwei isolierte Draft-PRs gegen `NIBEGroup/openeebus:main`
+  (`c31acf5`) erstellt: [#71 ESP-IDF-cJSON-Headerfix](https://github.com/NIBEGroup/openeebus/pull/71)
+  und [#72 eindeutiger EV-Demo-mDNS-Name](https://github.com/NIBEGroup/openeebus/pull/72).
+  Beide bestehen den originalen `format_diff.sh`-Check mit clang-format 18.1.3.
+  #71: Linux-/ESP_PLATFORM-Syntaxchecks; #72: vollstaendiger Linux-Debug-Build.
+  Vorherige Fork-Integrationstests sind in den PRs getrennt als solche benannt.
+  Pairing-Abbruch ist bereits Gegenstand von [#56](https://github.com/NIBEGroup/openeebus/pull/56),
+  daher kein doppelter PR. Heartbeat-Sendemarge bleibt ein offener Kandidat;
+  bestehende Heartbeat-Beitraege und Maintainer-Rueckmeldungen vorher abgleichen.
 - [ ] **SYS-20** Systemzustaende normal/limited/degraded/failsafe definieren.
 - [ ] **SYS-21** Strukturierte Betriebs- und Regeldiagnose bereitstellen.
 - [ ] **SYS-22** Betreiberkonfiguration gegen Geraetefaehigkeiten validieren.
