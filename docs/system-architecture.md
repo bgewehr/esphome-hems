@@ -91,8 +91,8 @@ ausfuehren.
   Ausgangsstand des lokalen Submoduls:
   `1c7dd53d5f21122a3e39d21e54ce644fbd07f50d`; bisheriger Gitlink im
   Hauptrepository: `41b6b7e567d5ba5f314188a8ab6767b3f533fd2a`.
-- Merge-Commit: `89ee840` auf dem Fork-Branch `hems`, im Hauptrepository
-  als Submodul gepinnt. Commit, Push, OTA und Tests wurden am 2026-10-07
+- Merge-Commit: `89ee840` auf dem Fork-Branch `hems`; mit ESP-IDF-Headerfix
+  `f714766` im Hauptrepository gepinnt. Commit, Push, OTA und Tests wurden am 2026-10-07
   vom Betreiber freigegeben. Ausgangsrevisionen fuer Rollback erhalten;
   kein automatischer Reset im Arbeitsbaum mit uncommitteten Aenderungen.
 - Upstreams geraetebezogener Event-Manager ersetzt die lokale Eventbus-
@@ -125,6 +125,10 @@ ausfuehren.
 - Eigene C/C++-Aenderungen mit clang-format 18 formatiert; eigener Diff gegen
   Upstream whitespace-sauber. Bereits upstream enthaltene Markdown-
   Zeilenumbrueche und Leerzeilen bleiben unveraendert.
+- Linux-CI deckte die falsche cJSON-Headerauswahl ohne `__freertos__` auf:
+  `ESP_PLATFORM` waehlt jetzt in den drei JSON-Dateien ebenfalls `cJSON.h`.
+  Der Task `Validate ESP-IDF JSON headers in Docker` prueft diese Auswahl
+  auf einem case-sensitiven Dateisystem, ohne die Speicherverwaltung umzuschalten.
 - OTA freigegeben; reale CLS-/Bosch-Kompatibilitaet, ESP32-Pairing/Abbruch/
   Reconnect und Xemex-Laden separat abnehmen. Der lokale Compile ersetzt
   diese Nachweise nicht; vor OTA isoliert neu bauen und Build-Identitaet

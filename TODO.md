@@ -73,7 +73,7 @@ Konzept: [Zielarchitektur und Entwicklungsplan](docs/system-architecture.md)
   acht Offline-Wallbox-Fixtures sowie ESPHome-Clean-Build bestanden.
   32/32 Software-Integrationstests bestanden, einschliesslich 20 SIMOPEN-
   Durchlaeufen, drei Drei-Geraete-Stresslaeufen und drei Shutdown-Pruefungen.
-  Merge `89ee840` committed und im Hauptrepository gepinnt; Hardwareabnahme
+  Merge `89ee840` plus ESP-IDF-Headerfix `f714766` im Hauptrepository gepinnt; Hardwareabnahme
   noch offen. Details und Rollback: Systemarchitektur, Integrationsstand.
 - [ ] **SYS-16** Aus den Erkenntnissen geeignete OpenEEBus-Upstream-PRs
   ableiten und erstellen, sofern ein allgemein nutzbarer, belegter Beitrag
