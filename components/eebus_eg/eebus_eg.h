@@ -392,7 +392,7 @@ static const EgLpListenerInterface kEgListenerMethods = {
   .on_failsafe_power_limit_receive = EgL_OnFailsafePowerLimitReceive,
   .on_failsafe_duration_receive    = EgL_OnFailsafeDurationReceive,
   .on_heartbeat_receive            = EgL_OnHeartbeatReceive,
-  .on_power_nominal_max_receive    = NULL,
+  .on_power_nominal_max_receive    = [](EgLpListenerObject*, const EntityAddressType*, const ScaledValue*) {},
 };
 
 }  // extern "C"
