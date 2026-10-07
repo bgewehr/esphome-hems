@@ -73,8 +73,11 @@ Konzept: [Zielarchitektur und Entwicklungsplan](docs/system-architecture.md)
   acht Offline-Wallbox-Fixtures sowie ESPHome-Clean-Build bestanden.
   32/32 Software-Integrationstests bestanden, einschliesslich 20 SIMOPEN-
   Durchlaeufen, drei Drei-Geraete-Stresslaeufen und drei Shutdown-Pruefungen.
-  Merge `89ee840` plus ESP-IDF-Headerfix `f714766` im Hauptrepository gepinnt; Hardwareabnahme
-  noch offen. Details und Rollback: Systemarchitektur, Integrationsstand.
+  Merge `89ee840` plus ESP-IDF-Headerfix `f714766` im Hauptrepository gepinnt.
+  Integrationsfix `d643778` behebt fehlende Listener-Callbacks nach Bosch-Discovery;
+  GitHub-CI gruen, OTA-Build `Oct 7 2026 10:56:20` live mit Bosch verbunden.
+  Vollstaendige Hardwareabnahme noch offen. Details und Rollback:
+  Systemarchitektur, Integrationsstand.
 - [ ] **SYS-16** Aus den Erkenntnissen geeignete OpenEEBus-Upstream-PRs
   ableiten und erstellen, sofern ein allgemein nutzbarer, belegter Beitrag
   verbleibt. Aktuelle CONTRIBUTING-/Maintainer-Regeln, PR-Vorlagen,
@@ -127,6 +130,9 @@ Konzept: [§14a-Leistungsbudget-Verteilung](docs/power-distribution-concept.md)
   mehrfach variieren und den Zyklus aus Auswertung, Anpassung und Test bei Bedarf
   wiederholen. Messbefund, Regelgesetz und Hardware-Abnahme stehen in
   [Xemex CSMB EV-Regelung](docs/xemex-control.md).
+  Messung 2026-10-07 nach OTA: keine Ladepause bei 11,5 -> 6 kW, aber
+  Zielband erst nach etwa 88 s und nur 76 % der letzten 120 s im Zielband.
+  Einschwing- und Zielbandkriterien nicht bestanden; Kalibrierung unveraendert.
 - [x] **BD-25** K40RF an der realen Waermepumpe mit §14a-Limits unter 4.200 W
   getestet (2026-07-20). 4.200 W wurden per LPC ACK bestaetigt; 4.000, 3.600,
   3.200, 2.800, 2.400 und 2.000 W blieben jeweils 15 s ohne ACK bei stabiler

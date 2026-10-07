@@ -118,14 +118,42 @@ Benutzersollwert.
 	Mindestladestufe
 - Sollwerte unter 8 A werden sicher auf AUS abgebildet; damit fuehrt das
 	§14a-Maximum von 4.200 W deterministisch zum Ladestopp
-- Firmware-Clean-Build und OTA erfolgreich; live verifizierte Build-Zeit:
-	`Jul 17 2026 22:38:03`
+- Firmware-Clean-Build und OTA erfolgreich; aktuelle live verifizierte Build-Zeit:
+	`Oct 7 2026 10:56:20` (Integrationsfix `d643778`)
 - OpenEEBUS-Submodul: Branch `hems`
 
 ## Hardware-Abnahme
 
-Die folgenden Captures betreffen die Firmware vom Juli. Die Absicherung vom
-Oktober ist noch nicht auf das Geraet hochgeladen oder hardwareseitig abgenommen.
+Die Oktober-Firmware ist seit 2026-10-07, 10:57 auf dem Geraet. Die vollstaendige
+Hardwareabnahme bleibt offen; Softwaretests und erfolgreicher OTA-Start sind
+kein Ersatz fuer die nachstehenden Kriterien.
+
+### Messung vom 2026-10-07
+
+Capture `private/captures/ev-6000-20261007.csv`, Firmware `Oct 7 2026 10:56:20`:
+
+- 180 s bei 11.500 W Vorgabe, danach 180 s bei 6.000 W; 360 Samples,
+  keine Lesefehler und keine Ladepause.
+- Nach dem Sprung 6.010 bis 10.506 W; 27 Sekundenwerte ueber 8 kW.
+- Erstes zusammenhaengendes Zielbandfenster ab etwa 88 s statt geforderter 60 s.
+- 76,0 % der letzten 120 s im Zielband 5,5 bis 6,5 kW statt geforderter 90 %.
+- Bestehender Analyzer meldet daher FAIL fuer Einschwingzeit und Zielbandanteil.
+  Die Kalibrierung wurde nicht veraendert; kein Abnahme-PASS fuer die Regelung.
+
+Stopp-/Wiederanlaufversuch mit derselben Firmware:
+
+- `private/captures/ev-stop-20261007.csv`: 4.200 W Vorgabe wird wie vorgesehen
+	als Stopp behandelt. Nach etwa 12 s nur noch 7,3 W, danach bis zum Ende
+	der 100-s-Messung etwa 6 bis 7 W; 100 Samples ohne Lesefehler.
+- `private/captures/ev-restart-20261007.csv`: Rueckkehr zu 11.500 W Vorgabe;
+	nach etwa 20 s ueber 5 kW, nach etwa 28 s wieder 10,47 kW. Alle 190 Samples
+	ohne Lesefehler; letzte 120 s bei 10.458 bis 10.505 W (Mittel 10.484 W).
+	Abschliessende Vorgabe bleibt 11.500 W.
+- Der absichtliche Stopp erzeugte keinen Ladeabbruchzaehler-Eintrag.
+	Ein erfolgreicher Zyklus belegt nicht die Behebung aller frueheren
+	Session-/Fahrzeug-Nichtstarts. Weitere Fehler- und Grenzfalltests bleiben offen.
+
+### Frueherer Kalibrierstand
 
 Hardware-Ergebnisse des vorigen Kalibrierstands:
 
@@ -197,8 +225,8 @@ Das bekannte Session-/Fahrzeugproblem nach Ladepause gilt nicht als geloest.
 Abnahmestand 2026-10-07: OpenEEBus-Upstream wurde zunaechst lokal vorgezogen.
 Inzwischen ist das Fahrzeug angeschlossen; vor OTA wurden 10,43 kW und
 15,2 bis 15,6 A pro Phase bei 11.500 W Sollwert gemessen. Der Betreiber hat
-Tests, Commit, Push und OTA freigegeben. Die Ergebnisse der Hardwaretests
-muessen separat dokumentiert werden; die Softwaretests ersetzen sie nicht.
+Tests, Commit, Push und OTA freigegeben. Der oben dokumentierte 6-kW-Test
+erfuellt die Abnahme noch nicht; die Softwaretests ersetzen sie nicht.
 
 Die lokale Abschlusspruefung hat eine Beobachtungsluecke im Abbruchwaechter
 behoben: Liegen mehr als 5 s zwischen Regleraufrufen, beginnen Lade- und

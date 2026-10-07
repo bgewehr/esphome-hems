@@ -129,11 +129,18 @@ ausfuehren.
   `ESP_PLATFORM` waehlt jetzt in den drei JSON-Dateien ebenfalls `cJSON.h`.
   Der Task `Validate ESP-IDF JSON headers in Docker` prueft diese Auswahl
   auf einem case-sensitiven Dateisystem, ohne die Speicherverwaltung umzuschalten.
-- OTA freigegeben; reale CLS-/Bosch-Kompatibilitaet, ESP32-Pairing/Abbruch/
-  Reconnect und Xemex-Laden separat abnehmen. Der lokale Compile ersetzt
-  diese Nachweise nicht; vor OTA isoliert neu bauen und Build-Identitaet
-  pruefen, da ESPHome bei unveraenderter Konfiguration Build-Zeitstempel
-  wiederverwenden kann.
+- Erster Live-Lauf zeigte nach Bosch-SPINE-Discovery einen PC-0-Absturz
+  (`InstrFetchProhibited`). Upstream ruft vorhandene CS-/EG-Listener ohne
+  NULL-Pruefung auf. Integrationsfix `d643778` ersetzt drei ungenutzte
+  NULL-Callbacks durch typisierte No-op-Funktionen; ESPHome-Build bestanden.
+- OTA am 2026-10-07 um 10:57 erfolgreich. Live-Build `Oct 7 2026 10:56:20`
+  auch um 11:08 bestaetigt; Bosch verbunden mit `CS/LPC | MU/MPC`, seit OTA
+  kein weiterer Neustart beobachtet. GitHub-CI fuer `d643778` erfolgreich
+  (Run `37597225852`); wiederholte Software-Integration ebenfalls 32/32.
+  Reale CLS-Limits, ESP32-Pairing/Abbruch/Reconnect und vollstaendige
+  Xemex-Hardwareabnahme bleiben separat zu pruefen. Ein erfolgreicher
+  Startlauf ersetzt keinen Langzeitnachweis. Vor OTA isoliert neu bauen
+  und die tatsaechliche Build-Time-Entity pruefen.
 
 ### Phase 2: Betriebsmodell und Diagnose
 
