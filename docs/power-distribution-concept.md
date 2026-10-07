@@ -78,6 +78,198 @@ noch kein vollständig verifizierter Compliance-Regelkreis.
 
 ## 3. Budget-Modell
 
+### PV- und Batteriepriorisierung
+
+Stand 2026-10-07: `battery-priority.yaml` integriert den host-getesteten
+Regelkern aus `components/power_distribution/solar_policy.h`. Die vier neuen
+Schalter sind persistent und standardmaessig aus. Der Regelkern ist jetzt
+mit Storage-Schreibpfad, Xemex-Freigabe und Budgetverteilung verbunden.
+Die erste Dry-Run-Firmware wurde am 2026-10-07 um 15:23 Uhr OTA ausgerollt
+(Build Time `Oct 7 2026 15:20:40`). Der aktive Korrekturbuild wurde um
+16:17 Uhr OTA installiert, Build Time `Oct 7 2026 16:17:01` live bestaetigt.
+Die Hardware-Abnahme ist noch nicht vollstaendig. Die Home-Assistant-Karte `Batterie (Reserva)` unter
+`http://mediasafe2:8123/energie-management/uebersicht` wurde angepasst und
+nach Neuladen geprueft: `Charge Battery first` steht direkt ueber
+`Charge EV from Battery`, die beiden Solar-Schalter direkt darunter.
+Verwendet werden die nativen ESPHome-Entities desselben Geraets, nicht die
+zusaetzlich vorhandenen MQTT-Entities. Schaltzustaende wurden dabei nicht geaendert.
+
+Berechnung und vorlaeufige Annahmen:
+
+- `Charge EV with solar limit` wirkt nur zusammen mit eingeschaltetem
+   `Charge EV with solar support only`: Nach PV-Freigabe wird die angeforderte
+   Leistung auf das gemeinsame stabile Xemex-Minimum 5544 W (8 A bei der
+   verwendeten 693-W/A-Umrechnung) begrenzt. Nutzerwunsch und §14a-Limit werden
+   niemals angehoben; unterhalb des Minimums bleibt die bestehende Ladepause.
+   Ausgeschaltet bleibt die normale Leistung aus Nutzerwunsch/§14a verfuegbar,
+   nicht zwingend die Nennleistung der Wallbox. PV-Pause, Storage-Schutz und
+   Ladeabbruch-Verriegelung bleiben vorrangig. Bei qualifizierter
+   Low-Solar-Netzfreigabe entfaellt das Solar-Minimum auf Betreiberwunsch:
+   Es gilt die normale Leistung aus Nutzerwunsch/§14a und Schutzfunktionen.
+   Der eingeschaltete Low-Solar-Schalter allein reicht dafuer nicht aus.
+   Im PV-Support-Modus gilt das Solar-Limit wieder, auch bei ergaenzendem
+   Netzbezug. Umschalten dieses reinen
+   Leistungslimits setzt die PV-Freigabezeiten nicht zurueck.
+   Einheitliche 500-W-Rest-PV-Schwelle und Netzfreigabe ohne Solar-Limit:
+   OTA am 2026-10-07 um 16:57 Uhr, Live-Build `Oct 7 2026 16:56:18`.
+   Alle drei Host-Tests und Firmware-Build erfolgreich. Schalter und
+   Nutzerlimit 11500 W erhalten; Solar-only war beim Update aus.
+   Der zeitgesteuerte Low-Solar-Uebergang wurde im Host-Test geprueft,
+   mit diesen Live-Einstellungen jedoch nicht ausgeloest.
+   Der Schalter ist persistent, standardmaessig aus und steht in HA direkt
+   unter Solar-only. OTA am 2026-10-07 um 16:30 Uhr, Live-Build 16:29:35;
+   Host-Tests bestanden, HA-Konfiguration zurueckgelesen. Aktuelle Schalter
+   und Nutzerlimit 5600 W unveraendert; physische Minimum-Regelguete nicht neu
+   vermessen. Ein hoeherer PV-Eigenverbrauch ueber die gesamte Ladung ist
+   wetter- und ladezeitabhaengig, nicht durch das Leistungslimit garantiert.
+- PV-Erzeugung bleibt als separat validierte Eingangsgroesse erhalten.
+   Fuer die Leistungsbilanz gilt vorlaeufig `PV_AC = 0,95 * PV_DC`.
+   Nicht-EV-Last ist Haus + Waermepumpe + Ohmpilot; EV-Verbrauch wird nicht
+   abgezogen und kann deshalb eine bestehende Freigabe nicht selbst aufheben.
+- Tatsaechliche Batterieladung wird mit `Ladung_DC / 0,95` als AC-Aequivalent
+   reserviert. Das ist eine konservative Rechenannahme, kein gemessener
+   Wirkungsgrad und kein validiertes Hybridwechselrichter-Modell.
+- Bei Batterieprioritaet ist das Ziel der positive PV-Rest, begrenzt durch
+   eine bekannte Ladeaufnahme. Der reale Adapter kennt bisher nur den frischen
+   Status FULL als Aufnahmegrenze 0 W. Sonst bleibt die Aufnahme unbekannt;
+   vorsorglich wird der gesamte PV-Rest reserviert. `WChaMax` ist nur die
+   Bezugsleistung fuer Prozentwerte, **keine dynamische BMS-Ladegrenze**.
+- EV-Unterstuetzung ist der PV-Rest nach priorisierter Ladung. Ohne Prioritaet
+   darf natuerliche Batterieladung fuer den EV-Start verdraengt werden;
+   sie bleibt trotzdem in der diagnostizierten Budgetreservierung enthalten.
+   Diese Reservierung ist `max(Istladung, Ladeziel)`, nicht deren Summe.
+- Einheitliche Schwelle auf Betreiberwunsch: Beide Modi bewerten die
+   verfuegbare EV-PV-Unterstuetzung, nicht die gesamte PV-Erzeugung.
+   PV-Freigabe: ueber 500 W fuer 60 s; Pause: unter 500 W fuer 120 s.
+   Low Solar: unter 500 W fuer 10 min; Rueckkehr: ueber 500 W fuer 5 min.
+   Genau 500 W erhaelt bestehende Freigaben und setzt laufende
+   Qualifikationszeiten zurueck. Hauslast und Batterieprioritaet koennen
+   damit auch bei hoher Erzeugung die Low-Solar-Netzfreigabe ausloesen.
+   Das gilt auch an dunklen Tagen, nicht nur nachts.
+   Low Solar hebt allein eine PV-Pause auf, keinen
+   manuellen Stopp. Netzbezug ist erlaubt, nicht als einzige Energiequelle
+   vorgeschrieben; bestehende Batterie-Entladeberechtigungen bleiben relevant.
+- Quellen muessen endlich, plausibel und maximal 10 s alt sein. Zeitstempel
+   werden nicht durch zyklisches Wiederholen eines Wertes erneuert.
+   Fehlende oder null-PV-Felder der Solar API gelten nicht als 0 W; dann kann
+   nur ein frischer MPPT-Fallback eine gueltige Erzeugung liefern. Ungueltige
+   Ohmpilot-Felder setzen dessen Quellzeitstempel zurueck. Der aktuelle
+   Ohmpilot-Poll wurde von 10 s auf 5 s verkuerzt; das Frischefenster bleibt
+   bei 10 s. Bei ungueltigen Daten bleibt Solar-only gesperrt.
+- Ungueltige Daten, Moduswechsel und Ausfuehrungsluecken ueber 10 s setzen
+   die Freigabequalifikation zurueck. Ohne Solar-only entsteht kein neuer Stopp.
+   Der Sollwertsensor `Battery Priority Charge Target` zeigt DC-Watt,
+   EV-Unterstuetzung und Budgetreservierung zeigen AC-Aequivalente.
+   `Battery Priority OutWRte` zeigt die negative Prozentanforderung fuer ein
+   positives Ladeziel mit frischen Metadaten, sonst unbekannt. Ohne gueltiges
+   Ladeziel kehrt der Schreiber zur bestehenden Entladepolitik zurueck.
+   Bei Kommunikationsfehlern wird nicht blind weitergeschrieben: der Schreiber
+   verriegelt, versucht Modus 0 und benoetigt nach Pruefung einen Neustart.
+   Zuvor bestaetigte Stellwerte laufen nach 15 s Schreibinaktivitaet aus.
+   Ist EV-Batterieversorgung nicht erlaubt, sperrt die EV-Freigabe bei
+   Schreiberfehler oder mehr als 10 s alter/fehlender Storage-Ruecklesung.
+   Diese Sperre veraendert den Nutzer-Sollwert nicht. Sie ist kein garantierter
+   physischer Ladestopp vor WR-Rueckfall: Die Wallbox reagiert zeitverzoegert.
+
+Lesender Geraetecheck am 2026-10-07: Model 124 bei Adresse 40343, Laenge 24;
+`WChaMax = 18176 W`, dessen SF 0, `InOutWRte_SF = -2`, SOC 72 %, `ChaSt = 4`
+(CHARGING), `StorCtl_Mod = 0`, `OutWRte = 0 %`, `InWRte = 100 %`.
+`InOutWRte_RvrtTms = 0`; dies beweist weder Unterstuetzung noch Verhalten eines
+gesetzten Timeouts. `ChaGriSet = 1` erlaubt Netzladung auf Modbus-Seite;
+die zusaetzliche Fronius-Webeinstellung wurde anschliessend unter
+`/app/soc-settings` im Customer-Zugang lesend bestaetigt: "Battery charging
+from other sources" ist eingeschaltet, ausgewaehlt ist "from other generators
+in the home network and from public grid". Fuer diese Ansicht ist kein
+Technician-Zugang erforderlich. Beide Netzladefreigaben sind damit aktiv;
+eine negative `OutWRte` ist dadurch nicht automatisch auf PV-Ladung begrenzt.
+Die Ansicht zeigt manuellen SoC-Modus, Minimum 5 %, Maximum 95 %, Reserve 20 %
+und Warnschwelle 7 %. Ob die obere Grenze als `ChaSt = FULL` gemeldet wird,
+ist noch zu pruefen; eine reine 100-%-SoC-Erkennung waere unzureichend.
+WinTms und RmpTms lieferten 65535 (nicht implementiert).
+Es wurden keine Register oder Webeinstellungen geaendert.
+
+Wartungsstand nach OTA: Der bestehende Einstellwert `Battery Max Discharge
+Power` wurde auf Betreiberwunsch von 18200 W auf die erneut gelesenen
+18176 W gesetzt und live zurueckgelesen. Dieselbe Entity verwendet jetzt
+1-W-Schritte; es gibt keinen zweiten Einstellwert. Die Bosch-Aufzeichnung
+wurde durch den Neustart unterbrochen und hat sich danach wieder verbunden.
+
+Die Firmware bietet eine manuelle Storage-Schreibpause von maximal 180 s.
+Bei Ablauf, Resume oder Neustart werden Modus 0 und OutWRte 0 eingereiht.
+`Automatic` bestaetigt nur den lokalen Zustand, nicht die Modbus-Quittierung;
+die Pause ist kein Nachweis fuer einen autonomen WR-Rueckfall.
+`tools/diagnostics/test_fronius_storage_revert.py` prueft beaufsichtigt
+15 s Rueckfallzeit mit OutWRte 0 %, ohne negative Ladeanforderung, und
+stellt geaenderte Testregister anschliessend mit Ruecklesung wieder her.
+Bei Kommunikationsausfall kann die Wiederherstellung nicht garantiert werden.
+Der Test prueft Schreibinaktivitaet bei weiterhin laufenden Modbus-Lesezugriffen,
+nicht einen vollstaendigen Kommunikationsausfall.
+Der Versuch am 2026-10-07 wurde bereits vor Pause und Test-Schreibbefehlen
+abgebrochen: Die bestehende Regelung hatte inzwischen `StorCtl_Mod = 2`
+mit `OutWRte = 0 %` gesetzt. Dieser aktive Entladeschutz wurde nicht
+uebergangen. `RvrtTms` blieb 0, der Schreiber `Automatic`;
+das Rueckfallverhalten war damit zunaechst unbewiesen.
+
+Nach erneuter Freigabe wurde der beaufsichtigte Test fuer die vorhandene
+Entladesperre und CHARGING/HOLDING bei SOC 20..90 % angepasst. Am 2026-10-07
+15:27:07 wurde `RvrtTms = 15` geschrieben und bestaetigt. Bei 14,57 s lag
+Modus 2 noch an, bei 16,64 s meldete der WR eigenstaendig Modus 0.
+HEMS blieb waehrenddessen pausiert. Danach wurden Modus 2, OutWRte 0 %,
+InWRte 100 % und RvrtTms 0 zurueckgelesen; um 15:27:28 war HEMS wieder
+`Automatic`. Ergebnis: **Rueckfall bei Schreibinaktivitaet nachgewiesen**.
+Privates Messprotokoll: `private/captures/fronius-revert-20261007-152655.jsonl`.
+Das ist kein physischer Netzwerkausfall- oder ESP-Neustart-Test.
+
+Aktiver Schreibpfad: Rueckfallzeit lesen, gegebenenfalls 15 s schreiben und
+zuruecklesen; OutWRte quittieren lassen, dann Modus setzen und Modus/Rate/
+Rueckfallzeit zusammen zuruecklesen. Fehler oder ausbleibende Quittierung
+verriegeln den Schreiber. Solar-Pause liegt vor dem Xemex-Schutzautomaten;
+Nutzerwunsch, DI1, Simulation und Schutzsperren bleiben massgeblich.
+Bei §14a wird Ladung einmal vor der PV-Gutschrift reserviert; nicht durch
+Erzeugung gedeckte Ladung reduziert zusaetzlich das verfuegbare Netzbudget.
+
+Live-Fehler und Korrekturen am 2026-10-07:
+
+- Build 16:00:25 verriegelte den Schreiber wegen abgelaufener Transaktion.
+   Danach versorgte die Batterie trotz ausgeschalteter EV-Berechtigung das
+   Auto mit etwa 5,6 kW. Beaufsichtigter Schutzstopp: Nutzerlimit 6000 -> 0 W,
+   Stillstand und erneute Batterieladung bestaetigt.
+- Die explizite Timeout-Lesung ab 40358 kollidierte mit dem Sensor-Poll im
+   deduplizierenden Controller; die Rueckruffunktion kann dabei verloren gehen.
+   Die Pruefung liest jetzt zwei Register ab 40357 mit eigenem Auftragsschluessel.
+- Build 16:10:22 schrieb negative OutWRte und RvrtTms 15 korrekt, pausierte EV
+   aber zeitweise wegen fehlender aktueller Bestaetigung: Schon kleine sinkende
+   PV-Ziele brachen laufende Transaktionen ab. Build 16:17:01 bestaetigt einen
+   begonnenen Ladeauftrag auch bei solchen Zielaenderungen; Abschalten, veraltete
+   Daten und ungueltige Ziele brechen ihn weiterhin ab. Naechster Zyklus uebernimmt
+   das neue Ziel. Host-Regressionstests und Firmware-Build bestanden.
+- Die vorherigen 6000 W wurden nach negativem OutWRte/Modus-2/15-s-Readback
+   wiederhergestellt. `Automatic` allein reicht als Nachweis nicht.
+- Beaufsichtigte Live-Schalttests 16:19..16:20 bestanden: Batterieprioritaet,
+   Prioritaet aus und wieder an, Solar-Pause bis Stillstand (16,50 s) und
+   Wiederanlauf nach Abschalten von Solar-only (29,87 s). Nutzerlimit blieb
+   6000 W, Ladeabbruchzaehler 0. Batterie entlud in den erfassten Samples nicht.
+   Ende: Prioritaet an, Solar-only aus, Low-Solar-Ausnahme aus, EV laedt.
+   Protokoll: `private/captures/solar-policy-20261007-161906.jsonl`.
+   Der Test bestaetigt weder stationaere 6-kW-Regelguete noch die zeitgesteuerte
+   Low-Solar-Ausnahme, BMS-Ladebegrenzung oder physischen Kommunikationsverlust.
+
+Verbleibende Hardware-Abnahme:
+
+1. Rueckfall bei Schreibinaktivitaet ist nachgewiesen; zusaetzliche Abnahme
+   bei physischem Kommunikationsverlust und ESP-Neustart bleibt offen.
+2. Wirkung der bestaetigten Netzladeberechtigungen, BMS-/Temperatur-/SOC-Grenzen und begrenzte
+    Ladeaufnahme verifizieren; keine Freigabe allein aus `WChaMax` ableiten.
+3. AC/DC-Modell, Messlatenz und Sicherheitsreserve unter Last pruefen.
+4. Einziger Storage-Schreibpfad: neuen Sollwert vor Aktivierung setzen,
+    Ruecklesung und negative Sollwerte absichern; bei Nacht oder Abschalten
+    bestehende Entladeberechtigungen wiederherstellen, nicht pauschal sperren.
+5. PV-Pause vor dem Xemex-Schutzautomaten anwenden, Nutzerlimit unveraendert
+    lassen; Wiederanlauf darf Schutzsperren, Fahrzeugfreigabe oder §14a nicht umgehen.
+6. Batterie-Ladereservierung im aktiven Budget genau einmal beruecksichtigen
+    und ungenutztes EV-Budget neu verteilen; Aufhebung eines CS-Limits darf
+    keine PV-Pause aufheben. Abschliessend Hardware-Abnahme aller Kombinationen.
+
 Bei aktivem Limit berechnet das HEMS zyklisch (alle 10 s und bei jeder
 Limit-/PV-Änderung):
 

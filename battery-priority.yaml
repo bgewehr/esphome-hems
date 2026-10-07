@@ -1,0 +1,255 @@
+esphome:
+  includes:
+    - components/power_distribution/solar_policy.h
+
+globals:
+  - id: storage_verified_ms
+    type: uint32_t
+    initial_value: "0"
+  - id: solar_policy_updated_ms
+    type: uint32_t
+    initial_value: "0"
+  - id: solar_ev_permitted
+    type: bool
+    initial_value: "false"
+  - id: solar_low_grid_permitted
+    type: bool
+    initial_value: "false"
+  - id: solar_policy_options
+    type: uint8_t
+    initial_value: "0"
+  - id: storage_model_updated_ms
+    type: uint32_t
+    initial_value: "0"
+  - id: storage_reference_updated_ms
+    type: uint32_t
+    initial_value: "0"
+  - id: storage_reference_sf_updated_ms
+    type: uint32_t
+    initial_value: "0"
+  - id: storage_status_updated_ms
+    type: uint32_t
+    initial_value: "0"
+  - id: storage_rate_sf_updated_ms
+    type: uint32_t
+    initial_value: "0"
+
+switch:
+  - platform: template
+    name: "${device_name} Charge Battery first"
+    id: charge_battery_first
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+    icon: "mdi:battery-arrow-up"
+    web_server:
+      sorting_group_id: sg_fronius
+      sorting_weight: 16.5
+  - platform: template
+    name: "${device_name} Charge EV with solar support only"
+    id: charge_ev_solar_support_only
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+    icon: "mdi:solar-power"
+    web_server:
+      sorting_group_id: sg_fronius
+      sorting_weight: 17.1
+  - platform: template
+    name: "${device_name} Charge EV with solar limit"
+    id: charge_ev_solar_limit
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+    icon: "mdi:ev-station"
+    web_server:
+      sorting_group_id: sg_fronius
+      sorting_weight: 17.15
+  - platform: template
+    name: "${device_name} Charge EV from net at low solar"
+    id: charge_ev_grid_low_solar
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+    icon: "mdi:transmission-tower"
+    web_server:
+      sorting_group_id: sg_fronius
+      sorting_weight: 17.2
+
+sensor:
+  - platform: modbustcp_controller
+    modbustcp_controller_id: fronius_inverter
+    id: storage_model_id
+    internal: true
+    register_type: holding
+    address: 40343
+    value_type: U_WORD
+    on_value:
+      - lambda: 'id(storage_model_updated_ms) = millis();'
+  - platform: modbustcp_controller
+    modbustcp_controller_id: fronius_inverter
+    id: storage_reference_raw
+    internal: true
+    register_type: holding
+    address: 40345
+    value_type: U_WORD
+    on_value:
+      - lambda: 'id(storage_reference_updated_ms) = millis();'
+  - platform: modbustcp_controller
+    modbustcp_controller_id: fronius_inverter
+    id: storage_reference_sf
+    internal: true
+    register_type: holding
+    address: 40361
+    value_type: S_WORD
+    on_value:
+      - lambda: 'id(storage_reference_sf_updated_ms) = millis();'
+  - platform: modbustcp_controller
+    modbustcp_controller_id: fronius_inverter
+    name: "${device_name} Storage Charge Status Raw"
+    id: storage_charge_status
+    entity_category: diagnostic
+    register_type: holding
+    address: 40354
+    value_type: U_WORD
+    accuracy_decimals: 0
+    on_value:
+      - lambda: 'id(storage_status_updated_ms) = millis();'
+  - platform: modbustcp_controller
+    modbustcp_controller_id: fronius_inverter
+    name: "${device_name} Storage Revert Time"
+    entity_category: diagnostic
+    register_type: holding
+    address: 40358
+    value_type: U_WORD
+    unit_of_measurement: "s"
+    accuracy_decimals: 0
+    filters:
+      - lambda: 'return x == 65535.0f ? NAN : x;'
+  - platform: modbustcp_controller
+    modbustcp_controller_id: fronius_inverter
+    name: "${device_name} Storage Grid Charge Permission Raw"
+    entity_category: diagnostic
+    register_type: holding
+    address: 40360
+    value_type: U_WORD
+    accuracy_decimals: 0
+  - platform: modbustcp_controller
+    modbustcp_controller_id: fronius_inverter
+    id: storage_rate_sf
+    internal: true
+    register_type: holding
+    address: 40368
+    value_type: S_WORD
+    on_value:
+      - lambda: 'id(storage_rate_sf_updated_ms) = millis();'
+
+  - platform: template
+    name: "${device_name} Battery Priority Charge Target"
+    id: solar_battery_target
+    entity_category: diagnostic
+    unit_of_measurement: "W"
+    device_class: power
+    accuracy_decimals: 0
+    update_interval: never
+  - platform: template
+    name: "${device_name} Battery Priority OutWRte"
+    id: solar_outwrte_target
+    entity_category: diagnostic
+    unit_of_measurement: "%"
+    accuracy_decimals: 1
+    update_interval: never
+  - platform: template
+    name: "${device_name} EV Solar Support"
+    id: solar_ev_support
+    entity_category: diagnostic
+    unit_of_measurement: "W"
+    device_class: power
+    accuracy_decimals: 0
+    update_interval: never
+  - platform: template
+    name: "${device_name} Battery Budget Reservation"
+    id: solar_budget_reservation
+    entity_category: diagnostic
+    unit_of_measurement: "W"
+    device_class: power
+    accuracy_decimals: 0
+    update_interval: never
+
+text_sensor:
+  - platform: template
+    name: "${device_name} Solar Policy Status"
+    id: solar_policy_status
+    entity_category: diagnostic
+    icon: "mdi:solar-power"
+    update_interval: never
+    web_server:
+      sorting_group_id: sg_fronius
+      sorting_weight: 16.4
+
+interval:
+  - interval: 2s
+    then:
+      - lambda: |-
+          using namespace esphome::power_distribution;
+          static SolarPolicy policy;
+          const uint32_t now = millis();
+          const auto fresh = [now](uint32_t updated) {
+            return updated != 0 && now - updated <= 10000;
+          };
+          const auto oldest = [now](uint32_t first, uint32_t second) {
+            return now - first >= now - second ? first : second;
+          };
+          constexpr float efficiency = 0.95f;
+          SolarInputs inputs;
+          inputs.pv_generation = {id(fronius_solar_power).state, id(solar_power_last_update_ms)};
+          inputs.pv_ac = {inputs.pv_generation.watts * efficiency, inputs.pv_generation.updated_ms};
+          const float house = id(fronius_house_power).state;
+          const float hp = id(fronius_hp_power).state;
+          const float ohmpilot = id(fronius_ohmpilot_power).state;
+          if (fresh(id(house_power_last_update_ms)) && fresh(id(hp_power_last_update_ms)) &&
+              fresh(id(ohmpilot_power_last_update_ms)) && std::isfinite(house) && house >= 0 &&
+              std::isfinite(hp) && hp >= 0 && std::isfinite(ohmpilot) && ohmpilot >= 0) {
+            const uint32_t updated = oldest(id(house_power_last_update_ms),
+                oldest(id(hp_power_last_update_ms), id(ohmpilot_power_last_update_ms)));
+            inputs.non_ev_load_ac = {house + hp + ohmpilot, updated};
+          }
+          const float battery = id(fronius_battery_power).state;
+          if (std::isfinite(battery) && std::abs(battery) <= 25000.0f)
+            inputs.battery_charge_ac = {std::max(0.0f, -battery) / efficiency,
+                                        id(battery_power_last_update_ms)};
+          const bool model_valid = fresh(id(storage_model_updated_ms)) && id(storage_model_id).state == 124;
+          const bool status_valid = model_valid && fresh(id(storage_status_updated_ms)) &&
+              id(storage_charge_status).state >= 1 && id(storage_charge_status).state <= 7;
+          const bool full = status_valid && id(storage_charge_status).state == 5;
+          if (full) inputs.charge_capacity_ac = {0.0f, id(storage_status_updated_ms)};
+          const SolarOptions options{id(charge_battery_first).state,
+                                     id(charge_ev_solar_support_only).state,
+                                     id(charge_ev_grid_low_solar).state};
+          const SolarDecision decision = policy.step(inputs, options, now);
+            id(solar_ev_permitted) = decision.ev_permitted;
+            id(solar_low_grid_permitted) = decision.reason == SolarReason::LOW_SOLAR;
+            id(solar_policy_updated_ms) = now;
+            id(solar_policy_options) = (options.battery_first ? 1 : 0) |
+              (options.solar_only ? 2 : 0) | (options.low_solar_grid ? 4 : 0);
+          const float reference_sf = id(storage_reference_sf).state;
+          const float rate_sf = id(storage_rate_sf).state;
+          const float raw_reference = id(storage_reference_raw).state;
+          const bool reference_valid = model_valid && fresh(id(storage_reference_updated_ms)) &&
+              fresh(id(storage_reference_sf_updated_ms)) && fresh(id(storage_rate_sf_updated_ms)) &&
+              std::isfinite(reference_sf) && reference_sf >= -4 && reference_sf <= 4 &&
+              std::isfinite(rate_sf) && rate_sf >= -4 && rate_sf <= 4 &&
+              std::isfinite(raw_reference) && raw_reference > 0 && raw_reference < 65535;
+          const float target_dc = decision.battery_target_ac_w * efficiency;
+          const float outwrte = decision.valid && options.battery_first && target_dc > 0 &&
+              status_valid && id(storage_charge_status).state != 1 &&
+              id(storage_charge_status).state != 7 && reference_valid
+              ? solar_outwrte(target_dc, raw_reference * powf(10.0f, reference_sf)) : NAN;
+          id(solar_battery_target).publish_state(decision.valid ? target_dc : NAN);
+          id(solar_outwrte_target).publish_state(outwrte);
+          id(solar_ev_support).publish_state(decision.valid ? decision.ev_support_ac_w : NAN);
+          id(solar_budget_reservation).publish_state(decision.budget_charge_reservation_ac_w);
+          std::string status = "Active: ";
+          status += solar_reason_text(decision.reason);
+          if (options.battery_first) status += full ? "; battery full" : "; charge capacity unverified";
+          if (options.battery_first && !std::isfinite(outwrte)) status += "; normal discharge policy";
+          if (id(solar_policy_status).state != status) {
+            id(solar_policy_status).publish_state(status);
+            ESP_LOGW("solar_policy", "%s", status.c_str());
+          }

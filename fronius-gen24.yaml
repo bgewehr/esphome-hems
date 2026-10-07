@@ -25,6 +25,18 @@ web_server:
       sorting_weight: 1
 
 globals:
+  - id: fronius_storage_fault
+    type: bool
+    initial_value: 'false'
+  - id: fronius_storage_test_active
+    type: bool
+    initial_value: 'false'
+  - id: fronius_storage_test_started_ms
+    type: uint32_t
+    initial_value: '0'
+  - id: fronius_storage_reset_pending
+    type: bool
+    initial_value: 'true'
   # Zeitstempel des letzten erfolgreichen PowerFlow-API-Polls (Frische-Check)
   - id: pf_last_update_ms
     type: uint32_t
@@ -957,46 +969,140 @@ interval:
   - interval: 5s
     then:
       - lambda: |-
+          auto *controller = id(fronius_inverter);
+          if (id(fronius_storage_test_active)) {
+            if (millis() - id(fronius_storage_test_started_ms) < 180000) return;
+            id(fronius_storage_test_active) = false;
+            id(fronius_storage_reset_pending) = true;
+            ESP_LOGW("fronius", "Storage-Schreibpause abgelaufen; Testvorgabe wird neutralisiert");
+          }
+          if (id(fronius_storage_reset_pending)) {
+            controller->queue_command(modbustcp_controller::ModbusCommandItem::create_write_multiple_command(
+                controller, 40348, 1, std::vector<uint16_t>{0}));
+            controller->queue_command(modbustcp_controller::ModbusCommandItem::create_write_multiple_command(
+                controller, 40355, 1, std::vector<uint16_t>{0}));
+            id(fronius_storage_reset_pending) = false;
+            return;
+          }
+          static uint32_t transaction = 0;
+          static uint32_t transaction_started = 0;
+          static bool transaction_busy = false;
+          if (id(fronius_storage_fault)) return;
+          if (transaction_busy) {
+            if (millis() - transaction_started < 10000) return;
+            ++transaction;
+            transaction_busy = false;
+            id(fronius_storage_fault) = true;
+            controller->queue_command(modbustcp_controller::ModbusCommandItem::create_write_multiple_command(
+                controller, 40348, 1, std::vector<uint16_t>{0}));
+            ESP_LOGE("fronius", "Storage transaction expired; writer latched off");
+            return;
+          }
+          const uint32_t token = ++transaction;
+          transaction_started = millis();
+          transaction_busy = false;
           float pct = id(fronius_discharge_limit).state;
           const bool fresh = id(discharge_limit_last_update_ms) != 0 &&
                              millis() - id(discharge_limit_last_update_ms) <= 10000;
           static bool stale_logged = false;
           if (!fresh || !std::isfinite(pct)) {
             if (!stale_logged) {
-              ESP_LOGW("fronius", "Entladegrenze wird nicht geschrieben: Leistungsdaten sind veraltet");
+              ESP_LOGW("fronius", "Leistungsdaten veraltet; keine Ladeanforderung");
               stale_logged = true;
             }
-            return;
+            pct = 0.0f;
           }
-          if (stale_logged) {
+          if (stale_logged && fresh && std::isfinite(id(fronius_discharge_limit).state)) {
             ESP_LOGI("fronius", "Leistungsdaten wieder aktuell, Entladesteuerung wird fortgesetzt");
             stale_logged = false;
           }
 
-          // OutWRte: Registerwert = pct / 10^SF (SF ist typisch -2 bei Fronius)
-          int16_t outwrte_val = (int16_t)(pct / pow(10, id(sf_outwrte)));
-
-          modbustcp_controller::ModbusTCPController *controller = id(fronius_inverter);
-
-          if (pct < 100.0f) {
-            // Entladebegrenzung aktiv: StorCtl_Mod Bit 1 setzen (= 2)
-            std::vector<uint16_t> stor_cmd = {2};
-            auto cmd1 = modbustcp_controller::ModbusCommandItem::create_write_multiple_command(
-              controller, 40348, 1, stor_cmd);
-            controller->queue_command(cmd1);
-
-            // OutWRte schreiben (Register 40355)
-            std::vector<uint16_t> out_cmd = {(uint16_t)outwrte_val};
-            auto cmd2 = modbustcp_controller::ModbusCommandItem::create_write_multiple_command(
-              controller, 40355, 1, out_cmd);
-            controller->queue_command(cmd2);
-          } else {
-            // Keine Begrenzung: StorCtl_Mod = 0
-            std::vector<uint16_t> stor_cmd = {0};
-            auto cmd = modbustcp_controller::ModbusCommandItem::create_write_multiple_command(
-              controller, 40348, 1, stor_cmd);
-            controller->queue_command(cmd);
+          const float priority = id(solar_outwrte_target).state;
+          if (id(charge_battery_first).state && (id(solar_policy_options) & 1) &&
+              id(solar_policy_updated_ms) != 0 && millis() - id(solar_policy_updated_ms) <= 10000 &&
+              std::isfinite(priority) && priority < 0.0f) pct = priority;
+          const float scale = id(storage_rate_sf).state;
+          const float raw = pct / powf(10.0f, scale);
+          if (!std::isfinite(raw) || raw < -32767 || raw > 32767 ||
+              id(storage_rate_sf_updated_ms) == 0 || millis() - id(storage_rate_sf_updated_ms) > 10000) {
+            controller->queue_command(modbustcp_controller::ModbusCommandItem::create_write_multiple_command(
+                controller, 40348, 1, std::vector<uint16_t>{0}));
+            return;
           }
+          const uint16_t encoded = static_cast<uint16_t>(static_cast<int16_t>(raw));
+          const uint16_t mode = pct < 100.0f ? 2 : 0;
+          const auto valid = [token, pct]() {
+            if (token != transaction || id(fronius_storage_fault)) return false;
+            const bool current = millis() - transaction_started < 10000 &&
+                !id(fronius_storage_test_active) && !id(fronius_storage_reset_pending) &&
+                esphome::power_distribution::storage_target_valid(
+                    pct, id(charge_battery_first).state, id(solar_policy_updated_ms),
+                    millis(), id(solar_outwrte_target).state);
+            if (!current) transaction_busy = false;
+            return current;
+          };
+          transaction_busy = true;
+          const auto apply_rate = [controller, valid, encoded, mode]() {
+            if (!valid()) return;
+            auto rate_cmd = modbustcp_controller::ModbusCommandItem::create_write_multiple_command(
+                controller, 40355, 1, std::vector<uint16_t>{encoded});
+            rate_cmd.on_data_func = [controller, valid, encoded, mode](auto, auto, const auto &) {
+              if (!valid()) return;
+              auto mode_cmd = modbustcp_controller::ModbusCommandItem::create_write_multiple_command(
+                  controller, 40348, 1, std::vector<uint16_t>{mode});
+              mode_cmd.on_data_func = [controller, valid, encoded, mode](auto, auto, const auto &) {
+                if (!valid()) return;
+                auto verify = modbustcp_controller::ModbusCommandItem::create_read_command(
+                    controller, modbustcp_controller::ModbusRegisterType::HOLDING, 40348, 11,
+                    [controller, valid, encoded, mode](auto, auto, const std::vector<uint8_t> &data) {
+                      if (!valid()) return;
+                      transaction_busy = false;
+                      const auto word = [&data](size_t offset) {
+                        return (uint16_t(data[offset]) << 8) | data[offset + 1];
+                      };
+                      if (data.size() != 22 || word(0) != mode || word(14) != encoded || word(20) != 15) {
+                        id(fronius_storage_fault) = true;
+                        controller->queue_command(modbustcp_controller::ModbusCommandItem::create_write_multiple_command(
+                            controller, 40348, 1, std::vector<uint16_t>{0}));
+                        ESP_LOGE("fronius", "Storage readback mismatch; writer latched off");
+                      } else {
+                        id(storage_verified_ms) = millis();
+                      }
+                    });
+                controller->queue_command(verify);
+              };
+              controller->queue_command(mode_cmd);
+            };
+            controller->queue_command(rate_cmd);
+          };
+          auto check_timeout = modbustcp_controller::ModbusCommandItem::create_read_command(
+              controller, modbustcp_controller::ModbusRegisterType::HOLDING, 40357, 2,
+              [controller, valid, apply_rate](auto, auto, const std::vector<uint8_t> &data) {
+                if (!valid()) return;
+                if (data.size() == 4 && data[2] == 0 && data[3] == 15) {
+                  apply_rate();
+                  return;
+                }
+                auto timeout_cmd = modbustcp_controller::ModbusCommandItem::create_write_multiple_command(
+                    controller, 40358, 1, std::vector<uint16_t>{15});
+                timeout_cmd.on_data_func = [controller, valid, apply_rate](auto, auto, const auto &) {
+                  if (!valid()) return;
+                  auto verify_timeout = modbustcp_controller::ModbusCommandItem::create_read_command(
+                      controller, modbustcp_controller::ModbusRegisterType::HOLDING, 40357, 2,
+                      [valid, apply_rate](auto, auto, const std::vector<uint8_t> &reply) {
+                        if (!valid()) return;
+                        if (reply.size() == 4 && reply[2] == 0 && reply[3] == 15) apply_rate();
+                        else {
+                          transaction_busy = false;
+                          id(fronius_storage_fault) = true;
+                          ESP_LOGE("fronius", "Storage timeout not confirmed; writer latched off");
+                        }
+                      });
+                  controller->queue_command(verify_timeout);
+                };
+                controller->queue_command(timeout_cmd);
+              });
+          controller->queue_command(check_timeout);
 
   # ── PowerFlow: HTTP-Poll der Fronius Solar API (atomarer Snapshot) ──────────
   - interval: 5s
@@ -1011,15 +1117,23 @@ interval:
                   if (response->status_code == 200) {
                     json::parse_json(body, [](JsonObject root) -> bool {
                       JsonObject site = root["Body"]["Data"]["Site"];
-                      float pv   = site["P_PV"]   | 0.0f;   // null bei Nacht -> 0
-                      id(fronius_pf_pv).publish_state(pv < 0 ? 0 : pv);
+                      if (!site["P_PV"].is<float>()) {
+                        id(pf_last_update_ms) = 0;
+                        return false;
+                      }
+                      const float pv = site["P_PV"].as<float>();
+                      if (!std::isfinite(pv) || pv < 0 || pv > 25000) {
+                        id(pf_last_update_ms) = 0;
+                        return false;
+                      }
+                      id(fronius_pf_pv).publish_state(pv);
                       id(pf_last_update_ms) = millis();
                       return true;
                     });
                   }
 
   # ── Ohmpilot: HTTP-Poll der Fronius Solar API ────────────────────────────────
-  - interval: 10s
+  - interval: 5s
     then:
       - http_request.get:
           url: "http://${fronius_ip}/solar_api/v1/GetOhmPilotRealtimeData.cgi"
@@ -1031,7 +1145,15 @@ interval:
                   if (response->status_code == 200) {
                     json::parse_json(body, [](JsonObject root) -> bool {
                       JsonObject data = root["Body"]["Data"]["0"];
-                      float power = data["PowerReal_PAC_Sum"] | 0.0f;
+                      if (!data["PowerReal_PAC_Sum"].is<float>()) {
+                        id(ohmpilot_power_last_update_ms) = 0;
+                        return false;
+                      }
+                      const float power = data["PowerReal_PAC_Sum"].as<float>();
+                      if (!std::isfinite(power) || power < 0 || power > 25000) {
+                        id(ohmpilot_power_last_update_ms) = 0;
+                        return false;
+                      }
                       float temp = data["Temperature_Channel_1"] | NAN;
                       id(fronius_ohmpilot_power).publish_state(power);
                       id(ohmpilot_power_last_update_ms) = millis();
@@ -1055,10 +1177,45 @@ number:
     unit_of_measurement: "W"
     min_value: 1000
     max_value: 50000
-    step: 100
+    step: 1
     initial_value: 18176
     restore_value: true
     optimistic: true
+
+button:
+  - platform: template
+    name: "${device_name} Storage Test Pause 180s"
+    id: fronius_storage_test_pause
+    entity_category: config
+    icon: "mdi:pause"
+    on_press:
+      - lambda: |-
+          if (id(fronius_storage_test_active) || id(fronius_storage_reset_pending)) return;
+          id(fronius_storage_test_started_ms) = millis();
+          id(fronius_storage_test_active) = true;
+          ESP_LOGW("fronius", "Storage-Schreibpause fuer maximal 180s gestartet");
+  - platform: template
+    name: "${device_name} Storage Test Resume"
+    id: fronius_storage_test_resume
+    entity_category: config
+    icon: "mdi:play"
+    on_press:
+      - lambda: |-
+          if (!id(fronius_storage_test_active)) return;
+          id(fronius_storage_test_active) = false;
+          id(fronius_storage_reset_pending) = true;
+
+text_sensor:
+  - platform: template
+    name: "${device_name} Storage Writer Status"
+    id: fronius_storage_writer_status
+    entity_category: diagnostic
+    update_interval: 1s
+    lambda: |-
+      if (id(fronius_storage_fault)) return std::string("Fault: writer stopped; restart after inspection");
+      if (id(fronius_storage_test_active)) return std::string("Test pause (max 180s)");
+      if (id(fronius_storage_reset_pending)) return std::string("Reset pending");
+      return std::string("Automatic");
 
 # ── Battery discharge control switches ────────────────────────────────────────
 switch:

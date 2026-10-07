@@ -153,6 +153,67 @@ Konzept: [§14a-Leistungsbudget-Verteilung](docs/power-distribution-concept.md)
 - [ ] **BD-41** Fake- und Hardware-Szenariotests durchfuehren.
 - [ ] **BD-42** Reproduzierbares Compliance-Abnahmeprotokoll erstellen.
 
+## PV- und Batteriepriorisierung
+
+Stand 2026-10-07: Regelkern mit Host-Tests aktiv integriert,
+Korrektur-OTA um 16:17 Uhr ausgerollt (Live-Build 16:17:01).
+Storage-Callback-Kollision und Transaktionsabbrueche bei kleinen PV-Aenderungen
+korrigiert; fehlende aktuelle Storage-Bestaetigung sperrt EV bei verbotener
+Batterieversorgung, ohne den Nutzerwunsch zu veraendern.
+Bestehende Battery Max Discharge Power auf WR-Wert 18176 W gesetzt.
+Rueckfalltest anschliessend bestanden: WR-Modus 0 nach 16,64 s bei RvrtTms 15 s;
+Ausgangszustand wiederhergestellt. Aktive Integration implementiert, Abnahme laeuft.
+Live 16:19..16:20: Prioritaet an/aus/an, Solar-Pause und Wiederanlauf bestanden;
+Nutzerlimit 6000 W unveraendert, keine Batterieentladung in den Samples,
+0 Ladeabbrueche. BMS-Ladegrenzen, Low-Solar-Zeitablauf und physische Fehlerfaelle offen.
+Grenzen und Freigabekriterien: [Priorisierung](docs/power-distribution-concept.md#pv-und-batteriepriorisierung).
+BAT-00 bis BAT-02 bleiben bis zur vollstaendigen Hardware-Abnahme offen.
+
+- [ ] **BAT-00** Schalter `Charge Battery first` in Home Assistant in der
+  Karte `Batterie (Reserva)` direkt ueber `Charge EV from Battery` ergaenzen
+  (Wunsch, praezisiert am 2026-10-07). Bevorzugte Umsetzung: negative
+  `OutWRte` zur Zwangsladung mit dem nach Haus/WP verbleibenden PV-Ueberschuss.
+  Der Schalter allein pausiert keine gewuenschte EV-Ladung; deren fehlender
+  PV-Anteil darf aus dem Netz kommen. Haus und WP behalten ihre PV-Versorgung.
+  Bei voller/ladebegrenzter Batterie bleibt nicht aufnehmbarer Ueberschuss
+  fuer das EV verfuegbar. Inaktiv: bisherige Batterieregelung wiederherstellen.
+  Fronius dokumentiert negative `OutWRte` mit `StorCtl_Mod = 2` als
+  Mindestladung (nicht negatives `InWRte`); Bezugsleistung `WChaMax` und
+  Skalierung auslesen. In den bestehenden Storage-Schreibpfad integrieren,
+  keine konkurrierenden Regler. Unbeabsichtigte Batterie-Netzladung verhindern;
+  BMS-/Ladegrenzen, Messwertalter, Rueckfall bei Kommunikationsausfall und
+  Zusammenspiel mit `Charge EV from Battery` absichern.
+- [ ] **BAT-01** Schalter `Charge EV with solar support only` ergaenzen.
+  Aktiv: EV-Ladung nur bei ausreichender verfuegbarer PV-Unterstuetzung
+  freigeben, sonst pausieren. Gemeint ist der PV-Rest nach Haus/WP und
+  priorisierter Batterieladung, nicht die gesamte PV-Erzeugung und nicht nur
+  die gemessene Netzeinspeisung: Bereits vom EV genutzte PV-Leistung muss
+  weiterhin als Unterstuetzung zaehlen. Beispielschwelle >500 W, genaue
+  Ein-/Ausschaltschwellen und Haltezeiten gegen Takten festlegen.
+  Keine reine PV-Ueberschussladung: Die uebrige EV-Leistung darf aus dem Netz
+  kommen, auch wenn die PV-Unterstuetzung unter der EV-Mindestleistung liegt.
+  Batterieprioritaet kann den PV-Rest auf null reduzieren und dadurch die
+  EV-Ladung pausieren; bei voller Batterie und ausreichendem Rest startet sie
+  wieder. Inaktiv: keine PV-bedingte Ladepause.
+- [ ] **BAT-02** Schalter `Charge EV from net at low solar` als Ausnahme
+  zur PV-Freigabe ergaenzen: Bei niedriger PV-Erzeugung, insbesondere nachts,
+  darf eine gewuenschte EV-Ladung trotz fehlender PV-Unterstuetzung fortlaufen.
+  Niedrige Erzeugung getrennt von fehlendem Ueberschuss durch priorisierte
+  Batterieladung erkennen, damit die Ausnahme BAT-01 tagsueber nicht aushebelt.
+  Eine zuvor wegen fehlender PV-Unterstuetzung pausierte, weiterhin gewuenschte
+  Ladung automatisch wieder freigeben, sobald die Low-Solar-Bedingung stabil
+  erfuellt ist (bestaetigt am 2026-10-07). Manuelle Stopps und Schutzsperren
+  bleiben bestehen. Schwelle/Hysterese sowie Verhalten bei Wolken vor Umsetzung
+  festlegen. Ohne BAT-01 keine zusaetzliche
+  Freigabewirkung; niemals Schutzfunktionen, Nutzerlimit oder §14a umgehen.
+
+- [ ] **BAT-03** `Charge EV with solar limit`: Zusammen mit Solar-only auf
+  stabiles Wallbox-Minimum begrenzen, sonst normale Nutzer-/§14a-Leistung.
+  Implementiert, Host-Tests bestanden, OTA 16:30 (Live-Build 16:29:35),
+  HA-Schalter direkt unter Solar-only eingefuegt, standardmaessig aus.
+  Minimum 5544 W aus gemeinsamem Xemex-Grenzwert, kein Anheben kleinerer Limits.
+  Physische Regelguete am Minimum bleibt Teil der Xemex-Hardwareabnahme.
+
 ## Bosch OSSHPCF
 
 Konzept: [Bosch-Waermepumpe: OSSHPCF / SEMP](docs/oss-hpcf-bosch.md)

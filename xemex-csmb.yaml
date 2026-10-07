@@ -370,11 +370,28 @@ script:
           const float requested = esphome::modbus_server::xemex_limit(
               id(ev_user_limit_w), id(ev_limit_w).state, id(hems_cs).is_limit_active(),
               id(budget_last_ev), id(grid_provider_switch).state || id(manual_enwg_test).state);
+            const uint8_t options = (id(charge_battery_first).state ? 1 : 0) |
+              (id(charge_ev_solar_support_only).state ? 2 : 0) |
+              (id(charge_ev_grid_low_solar).state ? 4 : 0);
+            const float solar_requested = esphome::power_distribution::solar_ev_limit(
+              requested, id(charge_ev_solar_support_only).state,
+              id(solar_ev_permitted) && options == id(solar_policy_options),
+              id(solar_policy_updated_ms), now);
           id(xemex_guard).latched = id(xemex_latched);
-          const float watts = id(xemex_guard).step(requested, id(xemex_reading), now);
+            const float solar_limited = esphome::power_distribution::solar_charge_limit(
+              solar_requested, id(charge_ev_solar_support_only).state,
+              id(charge_ev_solar_limit).state, esphome::modbus_server::XEMEX_MIN_CHARGE_POWER,
+              id(solar_low_grid_permitted));
+          const float protected_request = esphome::power_distribution::storage_ev_limit(
+              solar_limited, id(sw_include_ev).state, id(fronius_storage_fault),
+              id(storage_verified_ms), now);
+          const float watts = id(xemex_guard).step(protected_request, id(xemex_reading), now);
           id(xemex_latched) = id(xemex_guard).latched;
           id(xemex_effective_w).publish_state(std::isfinite(watts) ? watts : 0.0f);
           std::string status = id(xemex_guard).status;
+          if (watts > 0.0f && solar_limited < solar_requested) status += " (Solar limit)";
+          if (protected_request == 0.0f && solar_requested > 0.0f) status += " (Storage protection unavailable)";
+          if (solar_requested == 0.0f && requested > 0.0f) status += " (PV pause)";
           if (id(grid_provider_switch).state) status += " (DI1)";
           if (id(manual_enwg_test).state) status += " (Simulation)";
           if (id(xemex_status).state != status) id(xemex_status).publish_state(status);

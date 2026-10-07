@@ -10,13 +10,14 @@ namespace modbus_server {
 
 constexpr uint32_t XEMEX_METER_TTL_MS = 5000;
 constexpr float XEMEX_FAILSAFE_CURRENT = 80.0f;
+constexpr float XEMEX_MIN_CHARGE_POWER = 8.0f * 693.0f;
 
 inline bool xemex_fresh(uint32_t now, uint32_t updated) {
   return updated != 0 && now - updated <= XEMEX_METER_TTL_MS;
 }
 
 inline float xemex_addon(float watts) {
-  if (!std::isfinite(watts) || watts < 8.0f * 693.0f)
+  if (!std::isfinite(watts) || watts < XEMEX_MIN_CHARGE_POWER)
     return 47.4f;
   if (watts >= 11400.0f)
     return 1.0f;
@@ -95,7 +96,7 @@ class XemexChargeGuard {
       status = "Gesperrt: wiederholte Ladeabbrueche";
       return 0;
     }
-    if (requested < 5544.0f) {
+    if (requested < XEMEX_MIN_CHARGE_POWER) {
       reset_observation_();
       if (peak < 1.0f) {
         stopping_ = false;

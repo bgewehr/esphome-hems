@@ -333,6 +333,7 @@ packages:
   one_wire: !include 1-wire.yaml
   xemex_csmb: !include xemex-csmb.yaml
   fronius: !include fronius-gen24.yaml
+  battery_priority: !include battery-priority.yaml
   eebus_cs: !include eebus-cs.yaml
   eebus_eg1: !include eebus-eg-1.yaml
   eebus_eg2: !include eebus-eg-2.yaml

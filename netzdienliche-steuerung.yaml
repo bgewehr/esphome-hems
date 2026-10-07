@@ -104,10 +104,20 @@ script:
             const bool battery_valid =
               power_input_valid(battery, id(battery_power_last_update_ms), -25000.0f, 25000.0f);
           if (!limit_valid) limit = 0.0f;
-            const float battery_discharge = battery_valid ? std::max(0.0f, battery) : 0.0f;
-            const float generation_surplus = limit_valid && surplus_valid
-              ? std::max(0.0f, pv + battery_discharge - house) : 0.0f;
-            float budget = limit_valid ? limit + 0.8f * generation_surplus : 0.0f;
+          const float battery_discharge = battery_valid ? std::max(0.0f, battery) * 0.95f : 0.0f;
+          float reservation = battery_valid ? std::max(0.0f, -battery) / 0.95f : NAN;
+          if (id(charge_battery_first).state) {
+            const bool policy_fresh = id(solar_policy_updated_ms) != 0 &&
+                now - id(solar_policy_updated_ms) <= max_age_ms && (id(solar_policy_options) & 1);
+            const float target = id(solar_budget_reservation).state;
+            reservation = policy_fresh && std::isfinite(target) && std::isfinite(reservation)
+                ? std::max(reservation, target) : NAN;
+          }
+          float budget = esphome::power_distribution::solar_grid_budget(
+              limit_valid ? limit : NAN, surplus_valid ? pv * 0.95f : 0.0f,
+              surplus_valid ? house : 0.0f, surplus_valid ? battery_discharge : 0.0f, reservation);
+            const float generation_surplus = surplus_valid && std::isfinite(reservation)
+              ? std::max(0.0f, pv * 0.95f + battery_discharge - house - reservation) : 0.0f;
 
           // Drei steuerbare Verbraucher: WP (EG1), EV (Xemex CSMB), WB (EG2).
           // kind 0 = EEBus-EG-Instanz, kind 1 = EV-Ladepfad (CT-Addons)
@@ -120,6 +130,13 @@ script:
           };
           // EV-Deckel: Budget-Max UND manueller Slider (Nutzerwunsch) gelten beide
           float ev_cap = std::min(id(ev_budget_max).state, id(ev_user_limit_w));
+            const uint8_t solar_options = (id(charge_battery_first).state ? 1 : 0) |
+              (id(charge_ev_solar_support_only).state ? 2 : 0) |
+              (id(charge_ev_grid_low_solar).state ? 4 : 0);
+            ev_cap = esphome::power_distribution::solar_ev_limit(
+              ev_cap, id(charge_ev_solar_support_only).state,
+              id(solar_ev_permitted) && solar_options == id(solar_policy_options),
+              id(solar_policy_updated_ms), now);
           Dev devs[3] = {
             { "WP", 0, id(hems_eg1), id(eg1_budget_prio).state,
               id(eg1_budget_min).state, id(eg1_budget_max).state, 0.0f, true },
