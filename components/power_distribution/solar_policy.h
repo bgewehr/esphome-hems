@@ -53,6 +53,10 @@ struct SolarDecision {
   SolarReason reason{SolarReason::INVALID_DATA};
 };
 
+inline bool solar_blocked_load_active(const SolarSample &load, bool battery_allowed, uint32_t now) {
+  return !battery_allowed && load.valid(now) && load.watts > 30.0f;
+}
+
 inline float solar_outwrte(float target_dc_w, float reference_w) {
   if (!std::isfinite(target_dc_w) || target_dc_w < 0.0f ||
       !std::isfinite(reference_w) || reference_w <= 0.0f || reference_w > 100000.0f)

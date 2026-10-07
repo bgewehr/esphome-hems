@@ -237,7 +237,14 @@ interval:
               std::isfinite(rate_sf) && rate_sf >= -4 && rate_sf <= 4 &&
               std::isfinite(raw_reference) && raw_reference > 0 && raw_reference < 65535;
           const float target_dc = decision.battery_target_ac_w * efficiency;
-          const float outwrte = decision.valid && options.battery_first && target_dc > 0 &&
+            const bool enforcement_needed =
+              solar_blocked_load_active({house, id(house_power_last_update_ms)},
+                          id(include_meter_house), now) ||
+              solar_blocked_load_active({hp, id(hp_power_last_update_ms)},
+                          id(include_meter_hp), now) ||
+              solar_blocked_load_active({id(fronius_ev_power).state, id(ev_power_last_update_ms)},
+                          id(include_meter_ev), now);
+            const float outwrte = decision.valid && options.battery_first && enforcement_needed && target_dc > 0 &&
               status_valid && id(storage_charge_status).state != 1 &&
               id(storage_charge_status).state != 7 && reference_valid
               ? solar_outwrte(target_dc, raw_reference * powf(10.0f, reference_sf)) : NAN;

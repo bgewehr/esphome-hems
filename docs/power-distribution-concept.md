@@ -134,6 +134,28 @@ Berechnung und vorlaeufige Annahmen:
    Status FULL als Aufnahmegrenze 0 W. Sonst bleibt die Aufnahme unbekannt;
    vorsorglich wird der gesamte PV-Rest reserviert. `WChaMax` ist nur die
    Bezugsleistung fuer Prozentwerte, **keine dynamische BMS-Ladegrenze**.
+- Zwangsladung ist von dieser Reservierung getrennt: Ein negatives OutWRte
+   wird nur angefordert, wenn mindestens ein fuer Batterieversorgung gesperrter
+   Verbraucher (Haus, WP oder EV) mit frischer, plausibler Messung mehr als
+   30 W abnimmt. Standby oder ein nicht ladendes Auto allein loesen keine
+   Zwangsladung aus; eine weiterhin aktive gesperrte WP oder Hauslast schon.
+   Ohne solche Last gilt wieder die bestehende Entladepolitik, nicht ein
+   negativer Ladebefehl. Deren Modbus-Schreiber und Ruecklese-Schutz bleiben
+   aktiv. Die Reservierung fuer Batterieprioritaet bleibt ebenfalls erhalten.
+   Gemessene Last ist kein unabhaengiges Signal fuer den Ladewunsch des Autos.
+   OTA am 2026-10-07 um 17:24 Uhr erfolgreich, Live-Build `Oct 7 2026 17:21:59`.
+   Clean-Firmware-Build und alle drei Host-Tests bestanden. Nach Neustart:
+   EV-Stillstand bestaetigt bei 6,5 W Standby, keine negative Ladeanforderung,
+   normale Entladepolitik, Storage-Schreiber `Automatic`, Batterie laedt mit
+   rund 93 W. Nutzerlimit 11500 W und alle fuenf Ladeschalter unveraendert.
+   Solar-only und Low-Solar-Netzfreigabe sind an; die zehnminuetige
+   Freigabequalifikation beginnt durch den Neustart erneut.
+- Der Ohmpilot regelt laut Betreiber selbst ausschliesslich auf den
+   Einspeiseueberschuss. Sein Nachrang gegenueber anderen Verbrauchern und
+   Batterieladung benoetigt deshalb keine eigene HEMS-Steuerung. Die gewuenschte
+   Prioritaet lautet Haus, WP, Batterie, Auto, Ohmpilot, Einspeisung.
+   Sein gemessener Istverbrauch bleibt in der Leistungsbilanz enthalten;
+   das ist keine aktive Priorisierung oder Leistungszuteilung an den Ohmpiloten.
 - EV-Unterstuetzung ist der PV-Rest nach priorisierter Ladung. Ohne Prioritaet
    darf natuerliche Batterieladung fuer den EV-Start verdraengt werden;
    sie bleibt trotzdem in der diagnostizierten Budgetreservierung enthalten.
@@ -161,7 +183,8 @@ Berechnung und vorlaeufige Annahmen:
    Der Sollwertsensor `Battery Priority Charge Target` zeigt DC-Watt,
    EV-Unterstuetzung und Budgetreservierung zeigen AC-Aequivalente.
    `Battery Priority OutWRte` zeigt die negative Prozentanforderung fuer ein
-   positives Ladeziel mit frischen Metadaten, sonst unbekannt. Ohne gueltiges
+   positives Ladeziel mit frischen Metadaten und aktiver gesperrter Last,
+   sonst unbekannt. Ohne gueltiges
    Ladeziel kehrt der Schreiber zur bestehenden Entladepolitik zurueck.
    Bei Kommunikationsfehlern wird nicht blind weitergeschrieben: der Schreiber
    verriegelt, versucht Modus 0 und benoetigt nach Pruefung einen Neustart.

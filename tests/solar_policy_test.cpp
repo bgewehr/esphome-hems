@@ -29,6 +29,15 @@ SolarDecision advance(SolarPolicy &policy, SolarOptions options, uint32_t start,
 }
 
 void allocation() {
+        require(!solar_blocked_load_active({0, 1000}, false, 1000), "idle forbidden EV needs no forced battery charge");
+        require(!solar_blocked_load_active({6, 1000}, false, 1000), "wallbox standby needs no forced battery charge");
+        require(!solar_blocked_load_active({30, 1000}, false, 1000), "30 W boundary does not enforce charging");
+        require(solar_blocked_load_active({31, 1000}, false, 1000), "active forbidden consumer needs enforcement");
+        require(!solar_blocked_load_active({6000, 1000}, true, 1000), "battery-permitted consumer needs no enforcement");
+        require(!solar_blocked_load_active({6000, 1000}, false, 11001), "stale load cannot request forced charging");
+        require(!solar_blocked_load_active({6000, 0}, false, 1000), "missing load cannot request forced charging");
+        require(!solar_blocked_load_active({NAN, 1000}, false, 1000), "invalid load cannot request forced charging");
+        require(!solar_blocked_load_active({-100, 1000}, false, 1000), "negative load cannot request forced charging");
         constexpr float minimum = esphome::modbus_server::XEMEX_MIN_CHARGE_POWER;
         require(solar_charge_limit(11000, true, true, minimum) == minimum, "solar limit selects stable wallbox minimum");
         require(solar_charge_limit(11500, true, true, minimum, true) == 11500, "qualified low-solar grid mode bypasses solar cap");
