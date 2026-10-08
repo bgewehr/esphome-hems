@@ -202,13 +202,11 @@ interval:
           inputs.pv_ac = {inputs.pv_generation.watts * efficiency, inputs.pv_generation.updated_ms};
           const float house = id(fronius_house_power).state;
           const float hp = id(fronius_hp_power).state;
-          const float ohmpilot = id(fronius_ohmpilot_power).state;
           if (fresh(id(house_power_last_update_ms)) && fresh(id(hp_power_last_update_ms)) &&
-              fresh(id(ohmpilot_power_last_update_ms)) && std::isfinite(house) && house >= 0 &&
-              std::isfinite(hp) && hp >= 0 && std::isfinite(ohmpilot) && ohmpilot >= 0) {
+              std::isfinite(house) && house >= 0 && std::isfinite(hp) && hp >= 0) {
             const uint32_t updated = oldest(id(house_power_last_update_ms),
-                oldest(id(hp_power_last_update_ms), id(ohmpilot_power_last_update_ms)));
-            inputs.non_ev_load_ac = {house + hp + ohmpilot, updated};
+                id(hp_power_last_update_ms));
+            inputs.non_ev_load_ac = {house + hp, updated};
           }
           const float battery = id(fronius_battery_power).state;
           if (std::isfinite(battery) && std::abs(battery) <= 25000.0f)

@@ -124,8 +124,8 @@ Berechnung und vorlaeufige Annahmen:
    wetter- und ladezeitabhaengig, nicht durch das Leistungslimit garantiert.
 - PV-Erzeugung bleibt als separat validierte Eingangsgroesse erhalten.
    Fuer die Leistungsbilanz gilt vorlaeufig `PV_AC = 0,95 * PV_DC`.
-   Nicht-EV-Last ist Haus + Waermepumpe + Ohmpilot; EV-Verbrauch wird nicht
-   abgezogen und kann deshalb eine bestehende Freigabe nicht selbst aufheben.
+   Nicht-EV-Last ist Haus + Waermepumpe; EV- und Ohmpilot-Verbrauch werden nicht
+   abgezogen und koennen deshalb eine bestehende Freigabe nicht selbst aufheben.
 - Tatsaechliche Batterieladung wird mit `Ladung_DC / 0,95` als AC-Aequivalent
    reserviert. Das ist eine konservative Rechenannahme, kein gemessener
    Wirkungsgrad und kein validiertes Hybridwechselrichter-Modell.
@@ -154,8 +154,16 @@ Berechnung und vorlaeufige Annahmen:
    Einspeiseueberschuss. Sein Nachrang gegenueber anderen Verbrauchern und
    Batterieladung benoetigt deshalb keine eigene HEMS-Steuerung. Die gewuenschte
    Prioritaet lautet Haus, WP, Batterie, Auto, Ohmpilot, Einspeisung.
-   Sein gemessener Istverbrauch bleibt in der Leistungsbilanz enthalten;
-   das ist keine aktive Priorisierung oder Leistungszuteilung an den Ohmpiloten.
+   Sein Verbrauch wird weder vom Batterie-PV-Rest noch von der EV-PV-Unterstuetzung
+   abgezogen. Der Solaradapter benoetigt keinen Ohmpilot-Quellzeitstempel mehr.
+   Nur zur Ermittlung des reinen Hausverbrauchs wird er aus AC + Netz - EV - WP
+   herausgerechnet, damit er nicht indirekt als Hauslast in die Regelung eingeht.
+   Messwerte bleiben fuer die Anzeige erhalten. Diese Korrektur vom 2026-10-08
+   ist per OTA um 07:25 Uhr installiert; Live-Build `Oct 8 2026 07:17:00`.
+   Firmware-Build und alle drei Host-Tests bestanden. Nach Neustart:
+   Storage-Schreiber `Automatic`, EV-Stillstand bei 6,5 W und effektivem
+   Sollwert 0 W (PV-Pause). Nutzerlimit 11500 W und alle fuenf Ladeschalter
+   unveraendert; die Low-Solar-Freigabequalifikation beginnt erneut.
 - EV-Unterstuetzung ist der PV-Rest nach priorisierter Ladung. Ohne Prioritaet
    darf natuerliche Batterieladung fuer den EV-Start verdraengt werden;
    sie bleibt trotzdem in der diagnostizierten Budgetreservierung enthalten.
@@ -176,8 +184,11 @@ Berechnung und vorlaeufige Annahmen:
    Fehlende oder null-PV-Felder der Solar API gelten nicht als 0 W; dann kann
    nur ein frischer MPPT-Fallback eine gueltige Erzeugung liefern. Ungueltige
    Ohmpilot-Felder setzen dessen Quellzeitstempel zurueck. Der aktuelle
-   Ohmpilot-Poll wurde von 10 s auf 5 s verkuerzt; das Frischefenster bleibt
-   bei 10 s. Bei ungueltigen Daten bleibt Solar-only gesperrt.
+   Ohmpilot-Poll wurde von 10 s auf 5 s verkuerzt. Die Hauslastbereinigung nutzt
+   dessen Messwert bis 20 s Alter, sonst den bisherigen Ersatzwert 0 W;
+   dann kann Ohmpilot-Verbrauch konservativ als Hauslast erscheinen.
+   Die Solarfreigabe prueft Ohmpilot-Daten nicht separat. Bei ungueltigen
+   benoetigten Solar-Eingangsdaten bleibt Solar-only gesperrt.
 - Ungueltige Daten, Moduswechsel und Ausfuehrungsluecken ueber 10 s setzen
    die Freigabequalifikation zurueck. Ohne Solar-only entsteht kein neuer Stopp.
    Der Sollwertsensor `Battery Priority Charge Target` zeigt DC-Watt,
