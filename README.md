@@ -4,6 +4,91 @@ ESPHome configuration for a HEMS controller based on the **Waveshare ESP32-S3-PO
 
 The controller receives §14a EnWG power limits from the grid operator (VNB) via EEBus SHIP/SPINE and distributes them internally to controllable consumption units (StVE) such as heat pumps and wallboxes — also via EEBus.
 
+## Start here
+
+This repository is the current ESPHome integration. The earlier `eebus_wp`
+component in `bgewehr/openeebus@bg-hems` is a historical development version,
+not a standalone installation example. Use `eebus_cs` to receive limits from a
+CLS gateway and `eebus_eg` to send limits to a heat pump or another device.
+The OpenEEBus library fork is a dependency, not the ESPHome entry point.
+
+The reference hardware is **Waveshare ESP32-S3-POE-ETH-8DI-8RO**, with **16 MB
+flash and 8 MB octal PSRAM**, using **ESP-IDF**. CI compiles with **ESPHome
+2026.5.3** and Python 3.13. Newer ESPHome versions, including 2026.9.1, and other
+boards such as `esp32-poe-iso` are not verified by that CI configuration.
+Changing only the board name does not adapt Ethernet pins, memory or peripherals.
+
+### Get the complete source
+
+```bash
+git clone --recurse-submodules https://github.com/bgewehr/esphome-hems.git
+cd esphome-hems
+```
+
+For an existing Git checkout:
+
+```bash
+git submodule update --init --recursive
+```
+
+Keep `components/`, `openeebus/` and `port/` together. A GitHub ZIP download does
+not include the submodule contents; copying only `components/` is insufficient.
+The supported starting point is a complete local checkout, not an isolated
+`external_components: github://...` snippet. The build integration in `eebus_cs`
+also supplies the OpenEEBus C sources and ESP-IDF dependencies used by `eebus_eg`.
+
+The full configuration below is installation-specific. Review the hardware,
+connected devices and control behavior before flashing; successful compilation
+does not establish suitability or regulatory compliance for another installation.
+
+### Minimal EEBus example
+
+Start with [eebus-minimal.yaml](eebus-minimal.yaml) on the reference Waveshare
+board. It includes Ethernet (DHCP), time synchronization, a local web interface,
+both EEBus roles, pairing buttons, SKI displays and received-limit/power sensors.
+It needs no credentials, Home Assistant, MQTT, inverter, meter or relay wiring.
+Its build directory is separate from the full installation's firmware.
+
+Use Python 3.13 in a dedicated environment and install the CI version:
+
+```bash
+python -m pip install esphome==2026.5.3
+esphome config eebus-minimal.yaml
+esphome compile eebus-minimal.yaml
+```
+
+Alternatively, with Docker running, execute from the repository root:
+
+```bash
+docker run --rm -v "${PWD}:/config" -v hems-onboarding-build:/config/.esphome ghcr.io/esphome/esphome:2026.5.3 compile eebus-minimal.yaml
+```
+
+The named volume keeps the toolchain and build cache on Linux storage, avoiding
+slow package extraction on Windows bind mounts. With this command the generated
+firmware also lives in that volume, not in the host's `.esphome` directory. For
+example, copy the factory image to the current host directory after compilation:
+
+```bash
+docker run --rm -v "${PWD}:/out" -v hems-onboarding-build:/data alpine:3.22 cp /data/build/eebus-minimal/.pioenvs/eebus-minimal/firmware.factory.bin /out/eebus-minimal.factory.bin
+```
+
+The example has no OTA or Home Assistant API. For initial installation, upload
+over USB using `esphome upload eebus-minimal.yaml --device <serial-port>` after a
+native compile, or flash the exported Docker factory image with ESPHome Web.
+Use a spare/test controller, not a controller responsible for live power limits.
+Open its DHCP address in a browser. For a CLS gateway, start CS pairing, check
+the pending SKI and explicitly accept it. For a heat pump, start EG1 pairing and
+activate pairing at the remote device. The Forget buttons remove existing trust.
+
+**Lab use only:** the web interface is unauthenticated; use a trusted, isolated
+network and do not expose it to the Internet. There is no automatic forwarding
+of CS limits to EG1, no manual limit control and no relay fallback. This is a
+build/pairing example, not a complete Section 14a controller. Pairing is **not
+read-only**: the EG component negotiates failsafe settings (4200 W, 7200 seconds
+in this example) and participates in the device's control protocol. Review those
+settings and the device documentation before pairing. CI checks compilation,
+not physical operation or acceptance on other hardware.
+
 ---
 
 ## Overview
@@ -60,7 +145,7 @@ The package files are self-contained: each owns its entities, sorting groups, an
 
 ---
 
-## Beginner guide: §14a control in 3 steps
+## Reference installation: §14a control in 3 steps
 
 ### Step 1 — Create credentials
 
@@ -107,6 +192,26 @@ The script resolves ESPHome from `PATH` or its standard Windows install location
 and prints explicit start, completion, duration, and exit status for every stage.
 Do **not** use `esphome run` directly; compile and upload stay separate so OTA
 always uses the artifact that was just validated.
+
+On Linux, use the ESPHome CLI with the same pinned version as CI. The reference
+YAML contains a Windows-specific `build_path`; change it to a relative path such
+as `build/esphome-hems` first (resolved under ESPHome's data directory). Compile
+and upload separately:
+
+```bash
+esphome compile esphome-hems.yaml
+esphome upload esphome-hems.yaml --device <device-address>
+```
+
+### Build troubleshooting
+
+| Symptom | Check |
+| --- | --- |
+| `src/service/api/eebus_service_interface.h: No such file or directory` | Use the current integration and a complete recursive checkout. Confirm `openeebus/src/service/api/eebus_service_interface.h` exists. The old `eebus_wp` build hook does not integrate the library; adding one include path alone is not a complete fix. |
+| Missing OpenEEBus sources after downloading a ZIP | Clone with `--recurse-submodules`, or initialize submodules in an existing Git checkout. |
+| Undefined references after changing library sources | Clean the selected configuration with `esphome clean <configuration.yaml>`, then compile again. Cached CMake source discovery can miss newly generated source wrappers. |
+| YAML validates but compilation fails | Validation checks configuration schemas, not whether all C/C++ dependencies compile and link. Read the first compiler error. |
+| Errors with a different ESPHome release | Reproduce with ESPHome 2026.5.3 before investigating version compatibility. Include the version, board, configuration and first compiler error in a report; remove credentials. |
 
 ### Local validation tasks
 

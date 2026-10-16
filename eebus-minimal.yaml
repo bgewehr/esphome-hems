@@ -1,0 +1,141 @@
+esphome:
+  name: eebus-minimal
+  friendly_name: EEBus Minimal
+  min_version: 2026.5.3
+  build_path: build/eebus-minimal
+
+esp32:
+  board: esp32s3box
+  variant: ESP32S3
+  flash_size: 16MB
+  framework:
+    type: esp-idf
+    sdkconfig_options:
+      CONFIG_ESP_MAIN_TASK_STACK_SIZE: "65536"
+      CONFIG_SPIRAM_FETCH_INSTRUCTIONS: "y"
+      CONFIG_SPIRAM_RODATA: "y"
+      CONFIG_ESP_TLS_SERVER_MIN_AUTH_MODE_OPTIONAL: "y"
+      CONFIG_MBEDTLS_SSL_KEEP_PEER_CERTIFICATE: "y"
+      CONFIG_SPIRAM_USE_MALLOC: "y"
+      CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL: "2048"
+
+psram:
+  mode: octal
+  speed: 80MHz
+
+ethernet:
+  type: W5500
+  clk_pin: GPIO15
+  mosi_pin: GPIO13
+  miso_pin: GPIO14
+  cs_pin: GPIO16
+  interrupt_pin: GPIO12
+
+logger:
+  level: INFO
+
+web_server:
+  port: 80
+  local: true
+  version: 3
+
+time:
+  - platform: sntp
+    id: sntp_time
+    on_time_sync:
+      then:
+        - lambda: id(hems_eg).refresh_heartbeat();
+
+external_components:
+  - source:
+      type: local
+      path: components
+    components: [eebus_cs, eebus_eg]
+
+eebus_cs:
+  id: hems_cs
+  ship_port: 4712
+  device_model: eebus-minimal
+
+eebus_eg:
+  - id: hems_eg
+    ship_port: 4713
+    instance_name: EG1
+    device_model: eebus-minimal
+    failsafe_limit_w: 4200
+    failsafe_duration_s: 7200
+
+text_sensor:
+  - platform: template
+    name: CS Status
+    update_interval: 5s
+    lambda: return id(hems_cs).pairing_state();
+  - platform: template
+    name: CS Local SKI
+    update_interval: 10s
+    lambda: return id(hems_cs).local_ski();
+  - platform: template
+    name: CS Pending SKI
+    update_interval: 5s
+    lambda: return id(hems_cs).pending_remote_ski();
+  - platform: template
+    name: CS Paired SKI
+    update_interval: 5s
+    lambda: return id(hems_cs).paired_remote_ski();
+  - platform: template
+    name: EG1 Status
+    update_interval: 5s
+    lambda: return id(hems_eg).pairing_state();
+  - platform: template
+    name: EG1 Local SKI
+    update_interval: 10s
+    lambda: return id(hems_eg).local_ski();
+  - platform: template
+    name: EG1 Remote SKI
+    update_interval: 5s
+    lambda: return id(hems_eg).remote_ski();
+
+binary_sensor:
+  - platform: template
+    name: CS Limit Active
+    lambda: return id(hems_cs).is_limit_active();
+
+sensor:
+  - platform: template
+    name: CS Received Limit
+    unit_of_measurement: W
+    accuracy_decimals: 0
+    update_interval: 5s
+    lambda: "return id(hems_cs).is_limit_active() ? id(hems_cs).current_limit_w() : NAN;"
+  - platform: template
+    name: EG1 Power
+    unit_of_measurement: W
+    accuracy_decimals: 0
+    update_interval: 5s
+    lambda: "return id(hems_eg).mpc_connected() ? id(hems_eg).current_power_w() : NAN;"
+
+button:
+  - platform: template
+    name: CS Start Pairing
+    on_press:
+      - lambda: id(hems_cs).enter_pairing_mode();
+  - platform: template
+    name: CS Accept Pairing
+    on_press:
+      - lambda: id(hems_cs).accept_pairing();
+  - platform: template
+    name: CS Reject Pairing
+    on_press:
+      - lambda: id(hems_cs).reject_pairing();
+  - platform: template
+    name: CS Forget Pairing
+    on_press:
+      - lambda: id(hems_cs).forget_pairing(id(hems_cs).paired_remote_ski());
+  - platform: template
+    name: EG1 Start Pairing
+    on_press:
+      - lambda: id(hems_eg).enter_pairing_mode();
+  - platform: template
+    name: EG1 Forget Pairing
+    on_press:
+      - lambda: id(hems_eg).forget_pairing();
