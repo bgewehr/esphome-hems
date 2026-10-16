@@ -22,8 +22,8 @@ Message formats are derived from the openeebus EG/LPC test fixtures
 (openeebus/tests/src/use_case/actor/eg/lpc/).
 
 Usage:
-  python tools/fake_wallbox.py 192.168.178.24                 # pair + serve 300 s
-  python tools/fake_wallbox.py 192.168.178.24 --duration 600
+  python tools/fake_wallbox.py esphome-hems.local                 # pair + serve 300 s
+  python tools/fake_wallbox.py esphome-hems.local --duration 600
 """
 
 import argparse

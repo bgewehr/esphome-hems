@@ -12,7 +12,7 @@ from datetime import datetime
 from pathlib import Path
 
 
-HOST_DEFAULT = "192.168.178.24"
+HOST_DEFAULT = "k40.local"
 TEST_MODE = "switch/esphome_hems_eg1_untergrenzen-testmodus"
 TEST_LIMIT = "number/esphome_hems_eg1_test_leistungslimit"
 ACK = "binary_sensor/esphome_hems_eg1_testlimit_best__tigt"

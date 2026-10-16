@@ -45,7 +45,7 @@ def set_limit(host: str, value: float, timeout: float) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--host", default="192.168.178.24")
+    parser.add_argument("--host", default="esphome-hems.local")
     parser.add_argument("--baseline-duration", type=float, default=180.0)
     parser.add_argument("--response-duration", type=float, default=180.0)
     parser.add_argument("--setpoint", type=float, default=6000.0)

@@ -244,8 +244,8 @@ ethernet:
   interrupt_pin: GPIO12
   # Optional static IP — comment out for DHCP:
   # manual_ip:
-  #   static_ip: 192.168.1.100
-  #   gateway: 192.168.1.1
+  #   static_ip: 192.0.2.10
+  #   gateway: 192.0.2.1
   #   subnet: 255.255.255.0
 
 web_server:

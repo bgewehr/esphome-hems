@@ -14,7 +14,7 @@ import urllib.request
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--host", default="192.168.178.24")
+    parser.add_argument("--host", default="esphome-hems.local")
     parser.add_argument("--config", default="esphome-hems.yaml")
     parser.add_argument("--duration", type=int, default=90)
     parser.add_argument("--output-dir", default="private/captures")

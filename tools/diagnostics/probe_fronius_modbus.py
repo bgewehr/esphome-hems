@@ -11,9 +11,9 @@ Usage:
 
 import sys
 from pymodbus.client import ModbusTcpClient
+from env_config import get_fronius_endpoint
 
-HOST = "192.168.178.163"
-PORT = 502
+HOST, PORT = get_fronius_endpoint()
 
 KNOWN_UNITS = {
     0xF0:  "Grid Meter (240)",

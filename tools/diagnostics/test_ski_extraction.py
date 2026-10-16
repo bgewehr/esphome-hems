@@ -11,7 +11,7 @@ PASS: "WP Verbindungsstatus" sensor shows "Gepairt: <our_ski>"
 FAIL: Sensor shows "unknown" or handshake fails before DataExchange
 
 Usage:
-  python tools/test_ski_extraction.py 192.168.178.24
+  python tools/test_ski_extraction.py esphome-hems.local
 """
 
 import argparse, base64, hashlib, json, os, queue, socket, ssl, struct
@@ -263,7 +263,7 @@ def run_test(host: str, port: int, label: str,
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("host", nargs="?", default="192.168.178.24")
+    ap.add_argument("host", nargs="?", default="esphome-hems.local")
     ap.add_argument("--lpc-port", type=int, default=4712)
     ap.add_argument("--wp-port",  type=int, default=4713)
     args = ap.parse_args()

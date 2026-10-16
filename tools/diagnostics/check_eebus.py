@@ -10,7 +10,7 @@ Tests:
   5. ESPHome API sensor state readout
 
 Usage:
-  python tools/diagnostics/check_eebus.py [--host 192.168.178.24]
+  python tools/diagnostics/check_eebus.py [--host esphome-hems.local]
 
 Requires: zeroconf  (pip install zeroconf)
 Optional: cryptography (pip install cryptography) — for SHIP SKI extraction + test cert
@@ -429,7 +429,7 @@ def check_esphome_api(host: str, port: int = 6053) -> None:
 
 def main():
     parser = argparse.ArgumentParser(description="EEBus diagnostics for esphome-hems")
-    parser.add_argument("--host", default="192.168.178.24")
+    parser.add_argument("--host", default="esphome-hems.local")
     parser.add_argument("--lpc-port", type=int, default=4712)
     parser.add_argument("--wp-port", type=int, default=4713)
     parser.add_argument("--skip-mdns", action="store_true")

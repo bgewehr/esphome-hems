@@ -24,14 +24,14 @@ Requires:  pip install cryptography
 
 Usage:
   # Manual pairing only
-  python tools/fake_steuerbox.py 192.168.178.24
+  python tools/fake_steuerbox.py esphome-hems.local
 
   # Full auto §14a scenario: announce UC, activate limit, revoke after 60 s
-  python tools/fake_steuerbox.py 192.168.178.24 --scenario
-  python tools/fake_steuerbox.py 192.168.178.24 --scenario --limit 6000 --hold 120
+  python tools/fake_steuerbox.py esphome-hems.local --scenario
+  python tools/fake_steuerbox.py esphome-hems.local --scenario --limit 6000 --hold 120
 
   # Failsafe scenario: activate limit, go silent, verify HEMS applies 4200 W failsafe after 60 s
-  python tools/fake_steuerbox.py 192.168.178.24 --failsafe --limit 6000
+  python tools/fake_steuerbox.py esphome-hems.local --failsafe --limit 6000
 
 Before connecting (first-time pairing):
   1. Open HEMS web UI at http://<hems-ip>
@@ -950,7 +950,7 @@ def main():
     ap = argparse.ArgumentParser(
         description="EEBus fake Steuerbox (§14a EG) — pairing, use-case announce, LPC test"
     )
-    ap.add_argument("host", help="HEMS IP address, e.g. 192.168.178.24")
+    ap.add_argument("host", help="HEMS IP address, e.g. esphome-hems.local")
     ap.add_argument("--port", type=int, default=4712, help="eebus_cs SHIP port (default 4712)")
     ap.add_argument(
         "--limit", type=float, default=4200.0,

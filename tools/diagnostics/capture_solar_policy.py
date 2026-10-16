@@ -135,7 +135,7 @@ async def exercise(host: str, client: ModbusTcpClient, emit) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--host", default="192.168.178.24")
+    parser.add_argument("--host", default="esphome-hems.local")
     parser.add_argument("--expected-build", required=True)
     parser.add_argument("--execute", action="store_true")
     args = parser.parse_args()

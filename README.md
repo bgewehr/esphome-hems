@@ -170,6 +170,19 @@ eebus_eg2_remote_ski: ""           # EG2 device — wallbox (set during pairing)
 
 > **Note:** `secrets.yaml` is never committed — only `secrets.example.yaml` is in the repository.
 
+### Local diagnostics and private files
+
+Public diagnostic scripts use generic hostnames such as `esphome-hems.local`
+and `k40.local`. Supply your device address with the script's host argument.
+Fronius probes use `FRONIUS_HOST` and `FRONIUS_PORT` environment variables,
+defaulting to `fronius.local:502`.
+
+Keep private scripts and exports under `private/`. Local VS Code tasks,
+the local K40 PowerShell script, `.env` files, and private key/certificate
+files are ignored. Environment files are not loaded automatically by the tools.
+Git ignore rules match paths, not file contents; they do not detect new
+credentials or remove sensitive data from earlier commits.
+
 ---
 
 ### Step 2 — Compile and flash

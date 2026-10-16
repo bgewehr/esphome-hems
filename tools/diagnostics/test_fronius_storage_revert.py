@@ -149,7 +149,7 @@ async def run_test(client: ModbusTcpClient, hems_host: str, emit) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--execute", action="store_true")
-    parser.add_argument("--hems-host", default="192.168.178.24")
+    parser.add_argument("--hems-host", default="esphome-hems.local")
     parser.add_argument("--expected-build")
     args = parser.parse_args()
     if not args.execute:

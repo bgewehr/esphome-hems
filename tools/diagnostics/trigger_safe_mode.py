@@ -2,7 +2,7 @@
 import urllib.request
 import sys
 
-host = sys.argv[1] if len(sys.argv) > 1 else "192.168.178.24"
+host = sys.argv[1] if len(sys.argv) > 1 else "esphome-hems.local"
 # ESPHome web_server v3 exposes a /button/safe_mode/press endpoint
 url = f"http://{host}/button/safe_mode/press"
 try:

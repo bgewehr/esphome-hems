@@ -12,7 +12,7 @@ import urllib.request
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--host", default="192.168.178.24")
+    parser.add_argument("--host", default="esphome-hems.local")
     args = parser.parse_args()
 
     entities = {

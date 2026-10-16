@@ -37,7 +37,7 @@ extern "C" {
 /**
  * @brief Create an ESP32 WebSocket client creator.
  *
- * @param uri           Target URI, e.g. "wss://192.168.1.50:4712/ship/"
+ * @param uri           Target URI, e.g. "wss://192.0.2.1:4712/ship/"
  * @param cert_der      Client certificate in DER format (our identity)
  * @param cert_der_len  Length of cert_der
  * @param key_der       Private key in DER format

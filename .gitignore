@@ -1,6 +1,14 @@
 # ESPHome local state and secrets
 /.esphome/
 /secrets.yaml
+.env
+.env.*
+!.env.example
+!.env.sample
+*.pem
+*.key
+*.p12
+*.pfx
 
 # Python local environment and generated files
 /.venv/
@@ -10,6 +18,8 @@ __pycache__/
 
 # Local/private project material that is not part of the OSS release
 /private/
+/Günther Beike/
+/tools/diagnostics/read_k40_local.ps1
 
 # Generated openeebus wrapper files (auto-created by __init__.py on each compile)
 /components/eebus_cs/oe__*.c
@@ -18,6 +28,7 @@ __pycache__/
 # Editor/workspace files
 *.code-workspace
 /.vscode/settings.json
+/.vscode/tasks.json
 
 tools/.fake_steuerbox_cert.pem
 tools/.fake_steuerbox_key.pem
