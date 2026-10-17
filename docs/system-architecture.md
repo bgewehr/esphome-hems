@@ -1,5 +1,8 @@
 # Zielarchitektur und Entwicklungsplan
 
+Dokumentationsabgleich: 2026-10-17. Zielregeln und offene Abnahmen sind von
+den unten datierten Implementierungs- und Testergebnissen zu unterscheiden.
+
 ## Ziel
 
 Das Projekt entwickelt sich von einer ESPHome-Automation zu einem
@@ -52,8 +55,9 @@ verwendet. Fachliche Details stehen im
 
 ### Phase 1: Reproduzierbare Qualitaetssicherung
 
-- **SYS-10:** Root-CI einrichten. Sie validiert mindestens ESPHome-
-  Konfiguration, Python-Syntax, lokale Host-Tests und Submodule-Pinning.
+- **SYS-10 (erledigt):** Root-CI fuer ESPHome, Python-Syntax, Host-Tests und
+  rekursiven Submodule-Checkout eingerichtet. Seit 2026-10-16 wird auch das
+  minimale EEBus-Beispiel separat mit ESPHome 2026.5.3 kompiliert.
 - **SYS-11 (erledigt):** Ein gemeinsames CMake/CTest-Host-Testziel fuer reine
   Regelkernmodule und Protokoll-Fixtures ist unter `tests/` verfuegbar. Der
   erste Test deckt den read-only OSSHPCF-Decoder ab; GitHub Actions und ein
@@ -95,8 +99,9 @@ ausfuehren.
   `f714766` im Hauptrepository gepinnt. Commit, Push, OTA und Tests wurden am 2026-10-07
   vom Betreiber freigegeben. Ausgangsrevisionen fuer Rollback erhalten;
   kein automatischer Reset im Arbeitsbaum mit uncommitteten Aenderungen.
-- Upstreams geraetebezogener Event-Manager ersetzt die lokale Eventbus-
-  Filterung; CS/EG-Mehrinstanzen bleiben isoliert. DeviceDiagnosis-Szenario 3,
+- Upstreams geraetebezogener Event-Manager ersetzt den frueher globalen
+  Event-Bus; Remote-SKI-/Adresspruefungen bleiben trotzdem erforderlich.
+  CS/EG-Mehrinstanzen bleiben isoliert. DeviceDiagnosis-Szenario 3,
   Pairing-Fenster und SHIP-ID-Weitergabe sind weiterhin vorhanden.
 - Bewusst lokal erhalten: ESP32-mDNS nur als Advertisement mit eigenen
   Diensteintraegen im gemeinsamen Daemon, SPINE-Thread mit 12 KB Stack und
@@ -141,6 +146,29 @@ ausfuehren.
   Xemex-Hardwareabnahme bleiben separat zu pruefen. Ein erfolgreicher
   Startlauf ersetzt keinen Langzeitnachweis. Vor OTA isoliert neu bauen
   und die tatsaechliche Build-Time-Entity pruefen.
+
+### Ergaenzungen bis 2026-10-17
+
+- Der aktive Submodulstand bleibt `f714766` auf `hems`; historische
+  `bg-hems`-Komponenten sind kein Installationsweg. Der Einstieg erfolgt ueber
+  das vollstaendige Repository und `eebus-minimal.yaml`.
+- PV-/Batteriepriorisierung ist inzwischen aktiv integriert, nicht mehr nur
+  ein Dry Run. Die datierten Teilabnahmen bis 2026-10-08 und offenen
+  Fehlerfaelle stehen im Budgetkonzept; sie ersetzen keine Gesamtfreigabe.
+- OSSHPCF bleibt read-only. Die 24h-Auswertung vom 7./8. Oktober fand elf
+  leere Snapshots und eine Beobachtungsluecke im laufenden Betrieb. Seit
+  17. Oktober 10:49 laeuft eine neue 24h-Messung mit zehn SEMP-Read-Versuchen
+  im 60-s-Abstand nach einer 50-W-Startflanke. Ergebnis noch offen.
+- Die OHPCF-PR-Kette #75 bis #78 wurde gelesen, nicht integriert oder lokal
+  testausgefuehrt. Vor einer Controller-Integration sind API-Aenderungen,
+  Bosch-Daten und die Unterscheidung Schaetzleistung/Maximalleistung zu pruefen.
+- Codeabgleich der Budgetverteilung: Eine rechnerische EG-Zuteilung 0 W
+  kann ueber den 1-W-Ersatzwert und `min_limit_w` wieder angehoben werden.
+  Das ist ein offener End-to-End-Abnahmepunkt (BD-22/BD-33), kein bewiesener
+  physischer Stopppfad.
+- Lokale VS-Code-Tasks und Captures sind wegen ihrer Installationsdaten
+  ignoriert. Ein frischer Checkout verwendet die dokumentierten CLI-Aufrufe
+  und eigene lokale Task-Konfiguration; Ignore-Regeln bereinigen keine Historie.
 
 ### Phase 2: Betriebsmodell und Diagnose
 

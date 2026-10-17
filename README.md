@@ -4,6 +4,24 @@ ESPHome configuration for a HEMS controller based on the **Waveshare ESP32-S3-PO
 
 The controller receives §14a EnWG power limits from the grid operator (VNB) via EEBus SHIP/SPINE and distributes them internally to controllable consumption units (StVE) such as heat pumps and wallboxes — also via EEBus.
 
+## Work in progress and disclaimer
+
+**This project is a work in progress (WIP). Use it entirely at your own risk.**
+It is experimental, may contain bugs or incomplete features, and is not a
+certified or production-ready energy management system. Incorrect operation
+may disrupt connected equipment, cause damage or result in noncompliance with
+grid-operator requirements.
+
+The software and documentation are provided **"as is", without warranty of any
+kind**, express or implied, including fitness for a particular purpose. To the
+extent permitted by applicable law, the authors and contributors accept no
+liability for claims, damage or losses arising from its use. See the [MIT
+License](LICENSE) for the full terms.
+
+You are responsible for validating suitability, safe operation and compliance
+for your installation. Test on isolated equipment first and have electrical
+work and required protective measures assessed by a qualified professional.
+
 ## Start here
 
 This repository is the current ESPHome integration. The earlier `eebus_wp`
@@ -107,7 +125,7 @@ The controller combines:
 
 - **EEBus CS receiver** (`eebus_cs`): receives §14a limits from the VNB's CLS Steuerbox
 - **EEBus EG sender** (`eebus_eg`): sends limits to EEBus-capable devices (heat pump, wallbox)
-- **OSSHPCF/SEMP**: passive monitoring of compressor flexibility (PV self-consumption)
+- **OSSHPCF/SEMP**: read-only monitoring and diagnostic reads of compressor flexibility
 - **MPC**: reads current power consumption of devices via EEBus
 - **Xemex CSMB Modbus RTU** server emulation
 - **Fronius Gen24** Modbus TCP monitoring and battery discharge limiting
@@ -204,7 +222,8 @@ credentials or remove sensitive data from earlier commits.
 The script resolves ESPHome from `PATH` or its standard Windows install locations
 and prints explicit start, completion, duration, and exit status for every stage.
 Do **not** use `esphome run` directly; compile and upload stay separate so OTA
-always uses the artifact that was just validated.
+can use the artifact that was just validated. Do not overlap builds in the
+same build directory, and verify the live Build Time after deployment.
 
 On Linux, use the ESPHome CLI with the same pinned version as CI. The reference
 YAML contains a Windows-specific `build_path`; change it to a relative path such
@@ -228,7 +247,9 @@ esphome upload esphome-hems.yaml --device <device-address>
 
 ### Local validation tasks
 
-Run these tasks from **Terminal → Run Task** in VS Code:
+The reference installation has these local tasks under **Terminal → Run Task**
+in VS Code. Its task file is ignored because it contains installation-specific
+addresses; a fresh checkout does not include these task definitions:
 
 - `Validate local environment` checks Git, Docker client/daemon, Python, and ESPHome.
 - `Validate ESPHome firmware` compiles without uploading.
@@ -236,9 +257,20 @@ Run these tasks from **Terminal → Run Task** in VS Code:
 - `Validate OpenEEBus in Docker` builds and tests OpenEEBus with GCC 14 on Debian Trixie.
 - `Upload ESPHome firmware OTA` uploads the existing validated artifact without rebuilding it.
 
-The tasks use clean, noninteractive PowerShell processes and checked-in tool
+The local tasks use clean, noninteractive PowerShell processes and checked-in tool
 resolvers, so they do not depend on profile initialization or a particular
 integrated-terminal session. Long-running tasks end with an explicit exit status.
+
+Without that local task file, use the ESPHome commands above and the standard
+host-test commands (requires a C++ compiler and CMake):
+
+```bash
+cmake -S tests -B build/host-tests
+cmake --build build/host-tests --config Release
+ctest --test-dir build/host-tests -C Release --output-on-failure
+python tools/diagnostics/test_discover_one_wire.py
+python tools/diagnostics/test_capture_oshpcf.py
+```
 
 ---
 
@@ -268,6 +300,10 @@ Pairing must be done **once** for each connection.
 ### `eebus_cs` — CS receiver (VNB → HEMS)
 
 Receives §14a power limits from the VNB gateway.
+
+The following callback example is for one downstream device only. The full
+installation uses the central budget distributor instead; do not combine
+direct forwarding with that distributor or duplicate it for multiple devices.
 
 ```yaml
 eebus_cs:
@@ -312,7 +348,7 @@ eebus_eg:
   device_brand: "DIY"
   device_type: "HEMS"
   device_model: "esphome-hems"
-  failsafe_limit_w: 2600           # Limit the device holds if connection drops (default 4200)
+  failsafe_limit_w: 4200           # Device fallback setting; verify against the device documentation
   failsafe_duration_s: 7200        # Duration of failsafe in seconds (default 7200 = 2 h)
 
   on_eg_connected:                 # Called when StVE connects
@@ -333,7 +369,7 @@ eebus_eg:
 
 | Method | Parameter | Description |
 |--------|-----------|-------------|
-| `id(eg1).set_limit(watts)` | `float` | Set power limit (min. 4,200 W) |
+| `id(eg1).set_limit(watts)` | `float` | Set active limit; a configured per-device minimum may clamp it. Zero clears the limit. |
 | `id(eg1).clear_limit()` | — | Remove limit (full power) |
 | `id(eg1).current_power_w()` | — | Last MPC power reading in watts |
 | `id(eg1).active_limit_w()` | — | Last acknowledged limit in watts |
@@ -364,22 +400,15 @@ eebus_eg:
     failsafe_duration_s: 7200
 ```
 
-**Plugin pattern**: each EG package file adds its own `eebus_cs: on_limit_active:` block.
-ESPHome concatenates trigger lists across packages — the CS does not need to enumerate EGs.
+**Central distribution:** `netzdienliche-steuerung.yaml` allocates the aggregate
+CS budget between EG1, the local EV path and EG2. Do not forward the complete
+CS limit independently to each device. Adding another EG also requires updating
+the allocator, operator parameters and validation; a new package alone is not enough.
 
-```yaml
-# In eebus-eg-1.yaml — forward CS limit to EG1
-eebus_cs:
-  on_limit_active:
-    - lambda: "id(hems_eg1).set_limit(x);"
-  on_limit_cleared:
-    - lambda: "id(hems_eg1).clear_limit();"
-```
-
-Adding EG3 means creating a new `eebus-eg-3.yaml` and adding `id: hems_eg3` —
-no changes to existing files.
-
-> **§14a note:** The VNB sends at least 4,200 W per registered StVE. Internal distribution is up to the HEMS operator. Limits below 4,200 W are not acknowledged by EEBus devices.
+The Bosch K40RF tests support a 4200 W active-limit floor for this installation,
+not a universal EEBus minimum. The local wallbox has separate charging-current
+constraints. See [budget distribution](docs/power-distribution-concept.md) for
+the implementation and unresolved hardware-compliance limits.
 
 ---
 
@@ -399,6 +428,19 @@ captured and documented before control requests are enabled. See
 [Bosch heat pump OSSHPCF / SEMP](docs/oss-hpcf-bosch.md) for the known SPINE
 contract, open Bosch-specific questions and the staged implementation plan.
 
+For a bounded, start-triggered observation on the full reference firmware:
+
+```bash
+python -u tools/diagnostics/capture_oshpcf.py --host <device-address> --duration 86400 --start-reads
+```
+
+This mode presses only the existing SEMP read button: ten attempts at 60-second
+intervals following an external HP-meter transition from <=50 W to >50 W.
+It does not start heating or select a sequence. Keep the recording machine
+awake; raw captures contain private identifiers and stay under `private/captures/`.
+Busy reads or connection/data gaps can reduce the number of completed replies.
+Omit `--start-reads` for passive logging.
+
 The project-wide target architecture and phased roadmap are documented in
 [System architecture](docs/system-architecture.md). Work status and execution
 order are tracked in the central [development TODO](TODO.md).
@@ -407,14 +449,18 @@ order are tracked in the central [development TODO](TODO.md).
 
 ## Failsafe behaviour
 
-When the connection between HEMS and StVE drops, the StVE falls back to its failsafe limit:
+The EG negotiates fallback parameters with the StVE. Heartbeat loss and the
+device's own timeout handling determine when they take effect:
 
-- `failsafe_limit_w`: Power the device holds itself (e.g. 2,600 W)
-- `failsafe_duration_s`: How long the failsafe applies (then: full power)
+- `failsafe_limit_w`: Configured fallback power (4200 W in the reference setup).
+- `failsafe_duration_s`: Configured duration parameter (7200 seconds in the reference setup).
 
 Both values can be changed at runtime via the web UI without restarting.
 
-The failsafe test (web UI → "EG1 Failsafe testen") stops the heartbeat for 120 s and verifies that the device correctly switches to its failsafe value.
+The failsafe test (web UI → "EG1 Failsafe testen") suppresses heartbeats for
+120 seconds. It changes live protocol behavior; it is not a read-only check.
+Measure the actual device response separately. Pressing the button does not
+by itself verify fallback, recovery or physical compliance.
 
 ---
 
@@ -441,7 +487,7 @@ The script uses `.fake_steuerbox_cert.pem` / `.fake_steuerbox_key.pem` (self-sig
 python -m pip install -r requirements-dev.txt
 
 # Run:
-python tools/diagnostics/fake_steuerbox.py --host 192.168.x.x
+python tools/fake_steuerbox.py <device-address>
 ```
 
 ### `read_fronius.py` — Fronius Modbus TCP diagnostics
@@ -455,7 +501,11 @@ python tools/diagnostics/read_fronius.py
 
 ## Security
 
-`secrets.yaml`, ESPHome build output, virtual environments, and private documentation are not committed. The repository contains only `secrets.example.yaml` with empty values.
+Local secrets, build output, virtual environments and private captures are
+excluded by ignore rules. `secrets.example.yaml` contains placeholders, not
+usable credentials. This is not a historical-secret audit: ignore rules do
+not remove past commits. Do not expose the reference web or Modbus interfaces
+to untrusted networks; access hardening remains an open project task.
 
 ---
 
@@ -463,7 +513,7 @@ python tools/diagnostics/read_fronius.py
 
 | Component | Author / Project | License |
 |-----------|-----------------|---------|
-| **openeebus** — SHIP/SPINE C library | [NIBE AB](https://github.com/nibe-stefan/openeebus) | Apache 2.0 |
+| **openeebus** — SHIP/SPINE C library | [NIBE AB](https://github.com/NIBEGroup/openeebus) | Apache 2.0 |
 | **esphome_modbus_tcp** — Modbus TCP server | [creepystefan](https://github.com/creepystefan/esphome_modbus_tcp) | see repo |
 | **xemex-csmb** — Modbus RTU server emulation | [thomase1234](https://github.com/thomase1234/esphome-fake-xemex-csmb) | see repo |
 | **eebus_cs / eebus_eg** — EEBus ESPHome components | bgewehr (own development) | MIT |

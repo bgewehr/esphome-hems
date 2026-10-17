@@ -1,5 +1,8 @@
 # Konzept: §14a-Leistungsbudget-Verteilung im HEMS
 
+Code- und Dokumentationsabgleich: 2026-10-17. Datierte Hardwaretests unten
+bleiben auf ihren jeweiligen Firmwarestand begrenzt.
+
 Wie entscheidet der Betreiber des HEMS, welches Gerät wie viel Leistung aus dem
 Budget bekommt, das der Verteilnetzbetreiber (VNB) vorgibt?
 
@@ -32,19 +35,23 @@ Netzentgelte):
    Steuerbox des VNB **einen** Summenwert (LPC `loadControlLimitListData`).
    Wie sich dieser Wert aus Anzahl der SteuVE und Gleichzeitigkeitsfaktoren
    berechnet, ist Sache des VNB — **das HEMS verteilt nur, was ankommt.**
-   Garantiert ist: das Limit beträgt nie weniger als 4,2 kW.
+   Der konfigurierte Geraetesockel ist dabei nicht mit einer universellen
+   Untergrenze fuer jeden empfangenen Protokollwert gleichzusetzen.
 
-4. **Zeitverhalten:** Die Begrenzung muss innerhalb weniger Minuten wirksam
-   sein (Festlegung: Umsetzung „unverzüglich", Toleranzband ~2 min für
-   Regelabweichungen). Bei Ausfall der Steuerbox-Verbindung gilt der
-   vereinbarte Failsafe-Wert (hier: 4200 W, bereits implementiert).
+4. **Zeitverhalten:** Verbindliche Reaktions- und Rueckfallvorgaben sind fuer
+   die konkrete Installation mit VNB und Geraetedokumentation abzugleichen.
+   Die unten vorgeschlagenen Zwei-Minuten-Regeln sind Entwurfsparameter,
+   keine hier nachgewiesene regulatorische Toleranz. Ein konfigurierter
+   Failsafe ersetzt keinen gemessenen Ausfalltest.
 
-## 2. Ist-Zustand im esphome-hems (Stand 2026-07-19)
+## 2. Ist-Zustand im esphome-hems (Codeabgleich 2026-10-17)
 
 Der Prioritätsverteiler in `netzdienliche-steuerung.yaml` berechnet bei
-aktivem CS-Limit und alle 30 Sekunden `P_Limit + 0,8 × PV-Überschuss`. Der
-PV-Überschuss ist die positive Differenz aus Solarleistung und unsteuerbarem
-Hausverbrauch. Anschließend sortiert der Verteiler Wärmepumpe, lokalen
+aktivem CS-Limit und alle 30 Sekunden das Netzbudget mit 80 % des gueltigen
+Erzeugungsueberschusses. PV und Batterieentladung werden als AC-Aequivalente
+beruecksichtigt, Batterieladung wird zuvor reserviert; nicht durch Erzeugung
+gedeckte Ladung reduziert das Netzbudget. Die genaue Formel steht unten.
+Anschließend sortiert der Verteiler Wärmepumpe, lokalen
 EV-Ladepfad und Wallbox nach Betreiberpriorität und verteilt atomare Sockel
 sowie Restbudget bis zum jeweiligen Deckel. Die Parameter Priorität, Sockel
 und Maximum sind persistente ESPHome-Entities. Der aktuelle Verteilstand wird
@@ -62,33 +69,43 @@ Quellzeitstempel: PowerFlow beziehungsweise beide MPPT-Kanaele fuer Solar sowie
 AC, Grid, EV und HP fuer die abgeleitete Hausleistung. Ein Wert ist nur bei
 gueltigem Zeitstempel, hoechstens 10 s Alter, endlichem Zahlenwert und
 plausiblem Wertebereich verwendbar. Ein alter oder ungueltiger Solar-/Hauswert
-setzt ausschliesslich den PV-Zuschlag auf 0 W; das gueltige VNB-Basislimit bleibt
-wirksam. Ein ungueltiges VNB-Limit erzeugt konservativ 0 W Gesamtbudget.
+setzt den Erzeugungszuschlag auf 0 W. Die verbleibende Ladereservierung kann
+das Netzbudget weiter reduzieren. Ein ungueltiges VNB-Limit oder eine
+ungueltige Ladereservierung erzeugt konservativ 0 W Gesamtbudget.
 
 `Fronius Battery Power` kombiniert die getrennten DC-Rohwerte mit dem
 dokumentierten Vorzeichen `Entladung - Ladung`; positive Werte sind Entladung.
 Nur wenn beide Rohwerte hoechstens 10 s alt, endlich und im Bereich 0 bis
 25 kW liegen, wird die positive Entladung zum Erzeugungsueberschuss addiert.
-Ein negativer Wert (Laden) und jeder ungueltige Batteriewert erhoehen das Budget
-nicht. Die bestehende 80-%-Sicherheitsmarge gilt fuer den gemeinsamen
-Erzeugungsueberschuss aus PV und Batterieentladung.
+Ein negativer Wert (Laden) erhoeht das Budget nicht, sondern geht in die
+Ladereservierung ein. Ungueltige Batteriedaten machen diese Reservierung
+ungueltig und fuehren im aktuellen Regelkern zu 0 W Budget. Die
+80-%-Sicherheitsmarge gilt fuer den verbleibenden gemeinsamen Ueberschuss.
 
 Der bestehende Verteiler ist damit eine funktionsfähige erste Stufe, aber
 noch kein vollständig verifizierter Compliance-Regelkreis.
+
+**Offener Adapterkonflikt:** Bei EG-Zuteilung 0 W sendet die Lambda 1 W,
+weil `set_limit(0)` das Limit loescht. Der Geraeteadapter kann diesen positiven
+Wert durch `min_limit_w` wieder auf 4200 W anheben. Rechnerisch atomare
+Sockel garantieren deshalb noch keinen physischen Stopp bei Budgetmangel.
+Auch zu kleine positive Sockel sind gegen den Geraetemindestwert zu validieren.
+Dies bleibt Teil von BD-22/BD-33 und der Hardwareabnahme; keine nachgewiesene
+Budgettreue aus der Statusanzeige ableiten.
 
 ## 3. Budget-Modell
 
 ### PV- und Batteriepriorisierung
 
-Stand 2026-10-07: `battery-priority.yaml` integriert den host-getesteten
+Implementiert seit Oktober 2026: `battery-priority.yaml` integriert den host-getesteten
 Regelkern aus `components/power_distribution/solar_policy.h`. Die vier neuen
 Schalter sind persistent und standardmaessig aus. Der Regelkern ist jetzt
 mit Storage-Schreibpfad, Xemex-Freigabe und Budgetverteilung verbunden.
 Die erste Dry-Run-Firmware wurde am 2026-10-07 um 15:23 Uhr OTA ausgerollt
 (Build Time `Oct 7 2026 15:20:40`). Der aktive Korrekturbuild wurde um
 16:17 Uhr OTA installiert, Build Time `Oct 7 2026 16:17:01` live bestaetigt.
-Die Hardware-Abnahme ist noch nicht vollstaendig. Die Home-Assistant-Karte `Batterie (Reserva)` unter
-`http://mediasafe2:8123/energie-management/uebersicht` wurde angepasst und
+Die Hardware-Abnahme ist noch nicht vollstaendig. Die lokale Home-Assistant-Karte
+`Batterie (Reserva)` wurde angepasst und
 nach Neuladen geprueft: `Charge Battery first` steht direkt ueber
 `Charge EV from Battery`, die beiden Solar-Schalter direkt darunter.
 Verwendet werden die nativen ESPHome-Entities desselben Geraets, nicht die
@@ -119,7 +136,7 @@ Berechnung und vorlaeufige Annahmen:
    Der Schalter ist persistent, standardmaessig aus und steht in HA direkt
    unter Solar-only. OTA am 2026-10-07 um 16:30 Uhr, Live-Build 16:29:35;
    Host-Tests bestanden, HA-Konfiguration zurueckgelesen. Aktuelle Schalter
-   und Nutzerlimit 5600 W unveraendert; physische Minimum-Regelguete nicht neu
+   und das damalige Nutzerlimit 5600 W unveraendert; physische Minimum-Regelguete nicht neu
    vermessen. Ein hoeherer PV-Eigenverbrauch ueber die gesamte Ladung ist
    wetter- und ladezeitabhaengig, nicht durch das Leistungslimit garantiert.
 - PV-Erzeugung bleibt als separat validierte Eingangsgroesse erhalten.
@@ -304,16 +321,20 @@ Verbleibende Hardware-Abnahme:
     und ungenutztes EV-Budget neu verteilen; Aufhebung eines CS-Limits darf
     keine PV-Pause aufheben. Abschliessend Hardware-Abnahme aller Kombinationen.
 
-Bei aktivem Limit berechnet das HEMS zyklisch (alle 10 s und bei jeder
-Limit-/PV-Änderung):
+Bei aktivem Limit berechnet die Verteilung alle 30 s und bei expliziten
+Aufrufen von `distribute_budget` folgenden Kern (`solar_grid_budget`):
 
 ```
-PV_Überschuss = max(0, P_PV_aktuell - P_Haus)
-Budget = P_Limit + 0,8 × PV_Überschuss
-
-# Künftig zusätzlich:
-PV_Überschuss = max(0, P_PV_aktuell + P_Batt_Entladung - P_Haus)
+Erzeugung_AC = 0,95 * P_PV_DC + 0,95 * max(0, P_Batt_DC)
+Ladereservierung_AC = max(0, -P_Batt_DC) / 0,95
+# Bei Batterieprioritaet: Maximum aus Istladung und frischer Policy-Reservierung
+Netzladung = max(0, Ladereservierung_AC - Erzeugung_AC)
+Ueberschuss = max(0, Erzeugung_AC - Ladereservierung_AC - P_Haus)
+Budget = max(0, P_Limit - Netzladung + 0,8 * Ueberschuss)
 ```
+
+Die Formel setzt gueltige Eingaben voraus; Fehlerbehandlung siehe Abschnitt 2.
+Die Faktoren 0,95 sind Modellannahmen, keine dynamisch gemessenen Wirkungsgrade.
 
 Messgrößen sind vorhanden: Fronius Solar Power, Battery Power, Grid Power,
 WP-Leistung (EG1 MPC), Wallbox-Leistung (EG2 MPC), EV-Ladeleistung (Fronius).
@@ -326,7 +347,7 @@ Der Betreiber konfiguriert **pro Gerät drei Werte** in der ESPHome-UI
 | Parameter | Bedeutung | Beispiel WP | Beispiel Wallbox | Beispiel EV (Fronius) |
 |---|---|---|---|---|
 | **Priorität** (1 = höchste) | Reihenfolge bei Knappheit | 1 | 3 | 2 |
-| **Sockel** (optional) | atomare technische/komfortbezogene Zuteilung; reicht das Budget nicht vollständig, erhält das Gerät 0 | 4200 W¹ | 0 W | 1380 W (6 A) |
+| **Sockel** (optional) | atomare technische/komfortbezogene Zuteilung; reicht das Budget nicht vollständig, erhält das Gerät rechnerisch 0 | 4200 W¹ | 0 W | 5544 W (lokaler 8-A-Ladepfad) |
 | **P_max** | Deckel, mehr wird nie zugeteilt | 9000 W | 11000 W | 11000 W |
 
 ¹ Der K40RF-Hardwaretest vom 20.07.2026 bestaetigt die Grenze: 4.200 W wurden
@@ -341,12 +362,13 @@ jeweils ohne ACK. Der im Component als `min_limit_w` hinterlegte Sockel von
 2. Runde 1 (Sockel): Teile jedem Gerät der Reihe nach seinen Sockel zu,
    solange Budget vorhanden. Reicht das Budget nicht einmal für alle
    Sockel, bekommen die niedrig priorisierten Geräte 0 (Wallbox pausiert,
-   EV-Laden stoppt) — die WP bekommt als Prio 1 immer ihre 4200 W
-   (das VNB-Limit ist nie kleiner).
+   EV-Laden stoppt). Auch Prio 1 erhaelt nur bei ausreichendem Budget einen
+   Sockel; die physische Umsetzung von 0 W im EG-Adapter ist noch offen.
 3. Runde 2 (Rest): Verteile das Restbudget in Prioritätsreihenfolge
    bis P_max je Gerät.
-4. Quantisierung: Wallbox/EV auf Ladestrom-Stufen abrunden
-   (230 V × Phasen × ganze Ampere; unter 6 A → 0 / Pause).
+4. Geplant (BD-23): Wallbox/EV auf tatsaechlich unterstuetzte Ladestrom-Stufen
+   abrunden. Der lokale Xemex-Pfad benoetigt mindestens 8 A beziehungsweise
+   5544 W; ein allgemeiner 6-A-Sockel ist hier kein stabiler Betriebspunkt.
 5. Anwenden:  EG1.set_limit(share_WP)
               EG2.set_limit(share_Wallbox)
               EV-Leistungsbegrenzungs-Slider = share_EV
@@ -355,6 +377,10 @@ jeweils ohne ACK. Der im Component als `min_limit_w` hinterlegte Sockel von
    in Xemex-Addonwerte umrechnet. Nach Ende des §14a-Eingriffs wird der zuvor
    vom Benutzer eingestellte Sliderwert wiederhergestellt.
 ```
+
+Der interne EV-Budget-Override darf dabei den persistenten Nutzerwunsch
+nicht ueberschreiben. Physischer Stopp und erneuter Ladestart sind getrennt
+zu messen; eine interne 0-W-Zuteilung allein ist kein Abschaltnachweis.
 
 **Alternative Strategien** (per Select wählbar, wenn gewünscht):
 - *Proportional*: Budget im Verhältnis der P_max verteilen — fühlt sich
@@ -365,7 +391,11 @@ jeweils ohne ACK. Der im Component als `min_limit_w` hinterlegte Sockel von
 Strikte Priorität ist deterministisch, für den VNB-Nachweis auditierbar und
 entspricht dem üblichen Komfortempfinden (Heizen vor Laden).
 
-## 5. Regelkreis und Toleranzen
+## 5. Geplanter Regelkreis und Toleranzen
+
+BD-30 bis BD-33 sind noch nicht vollstaendig umgesetzt oder abgenommen.
+Die folgenden Reaktionen sind Ziele, keine Beschreibung eines bereits
+verifizierten Closed-Loop-Waechters.
 
 - **Nachführung:** Neue Zuteilung nur senden, wenn sich der Anteil eines
   Geräts um > 100 W ändert oder 60 s vergangen sind (LPC-Schreibrate schonen,
@@ -375,19 +405,22 @@ entspricht dem üblichen Komfortempfinden (Heizen vor Laden).
   Anteile stufenweise um 10 % kürzen und Ereignis loggen.
 - **PV-Einbruch:** Wolkenzug oder steigender Hausverbrauch reduziert den
    Überschuss sofort. Nur 80 % des nach Hausverbrauch verbleibenden
-   PV-Überschusses werden angerechnet; eine Zeit-/Qualitätsprüfung bleibt als
-   weitere Absicherung vorgesehen.
-  (Sicherheitsmarge gegen Überschreitung).
+   Erzeugungsueberschusses werden angerechnet. Die Zeit-/Qualitaetspruefung
+   ist bereits implementiert, ersetzt aber nicht die physische Wirkkontrolle.
 
 ## 6. Failsafe-Verhalten (Verbindung zur Steuerbox verloren)
 
-Bereits implementiert und vom Konzept unverändert: Jede EG-Instanz kennt
-ihren Failsafe (4200 W / 7200 s). Bei Heartbeat-Verlust der CS-Verbindung:
+Die beiden Kommunikationsstrecken muessen getrennt betrachtet werden:
+VNB/CLS zur HEMS-CS-Instanz und HEMS-EG zum jeweiligen Verbraucher. Die
+EG-Instanzen konfigurieren fuer ihre Geraete Failsafe-Werte von 4200 W /
+7200 s; damit ist noch keine globale Ersatzverteilung bei CLS-Ausfall belegt.
 
-- WP → 4200 W (entspricht gesetzlichem Minimum)
-- Wallbox → 0 W (Prio-3-Gerät verzichtet)
-- EV-Laden → `ladebegrenzung_addon` (bestehender Mechanismus)
-- Verteil-Logik pausiert, bis die Steuerbox wieder verbunden ist.
+Der lokale Xemex-Pfad hat eigene Messwert-Watchdogs und Stopplogik. Weder
+deren synthetischer CSMB-Stellwert noch ein EEBus-Failsafeparameter garantiert
+ohne Hardwaretest einen physischen Stopp. Fuer BD-33/BD-41 sind beide
+Verbindungsabbrueche, verbleibende Limits, Budgetverteilung und Wiederanlauf
+getrennt zu pruefen. Die fruehere pauschale Zusage "WP 4200 W, Wallbox 0 W,
+Verteilung pausiert" ist kein nachgewiesener Systemzustand.
 
 ## 7. Entwicklungsplan
 
@@ -423,7 +456,7 @@ alle bisherigen Verteilfälle sind automatisiert reproduzierbar.
 - **BD-21 (erledigt):** Positive Batterieentladung mit dokumentiertem Vorzeichen,
    Quellfrische, Plausibilitaetsgrenzen und 80-%-Sicherheitsmarge in die
    Saldierung aufgenommen; Laden zaehlt nicht als Erzeugung.
-- **BD-22 (erledigt):** Technische Sockelleistung atomar behandeln: Reicht das
+- **BD-22 (Allokation implementiert, Adapterabnahme offen):** Technische Sockelleistung atomar behandeln: Reicht das
    Budget nicht für den Sockel, erhält das Gerät 0 statt eines nicht
    ausführbaren Zwischenwertes.
 - **BD-23:** EV und Wallbox auf tatsächlich unterstützte Phasen- und
@@ -464,18 +497,23 @@ Messwerten nachvollziehbar; offene Abweichungen sind im TODO erfasst.
 
 ## 8. Beispielrechnung
 
-VNB dimmt auf 4200 W, PV liefert 3000 W, der unsteuerbare Hausverbrauch
-beträgt 1000 W und die Batterie ist idle:
+VNB dimmt auf 4200 W, PV liefert rechnerisch 3000 W AC, der unsteuerbare
+Hausverbrauch betraegt 1000 W und die Batterie ist idle. Beispielparameter:
+WP-Sockel 4200 W, WP-Deckel mindestens 5800 W, EV-Sockel 5544 W:
 
 ```
 PV-Überschuss = max(0, 3000 - 1000) = 2000 W
 Budget = 4200 + 0.8 × 2000 = 5800 W
-Runde 1: WP 4200 (Prio 1) → Rest 1600; EV 1380 (Prio 2, 6 A) → Rest 220;
+Runde 1: WP 4200 (Prio 1) → Rest 1600; EV 0 (Sockel 5544 passt nicht);
          Wallbox 0 (Prio 3, Sockel 0)
-Runde 2: WP +220 → 4420 W; Rest 0 W
-Ergebnis: WP 4420 | EV 1380 | WB 0  — netzwirksam ≤ 4200 W eingehalten,
-          Haushaltsverbrauch unbegrenzt zusätzlich.
+Runde 2: WP +1600 → 5800 W; Rest 0 W
+Rechnerisches Ergebnis: WP 5800 | EV 0 | WB 0.
+5800 - 2000 = 3800 W netzwirksame SteuVE-Leistung, falls die Geraete folgen.
 ```
+
+Das Beispiel ist eine Budgetrechnung, kein Hardware-Nachweis. Insbesondere
+der 0-W-Pfad zu einer verbundenen EG-Wallbox muss den Adapterkonflikt aus
+Abschnitt 2 loesen; Haushaltslast und lokale Erzeugung bleiben separat bilanziert.
 
 ## 9. Abgrenzung zu OSSHPCF
 

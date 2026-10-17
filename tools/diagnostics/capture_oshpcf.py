@@ -4,11 +4,16 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import json
+import math
 import pathlib
+import queue
 import re
 import subprocess
 import sys
+import threading
 import time
+import urllib.request
 
 
 RELEVANT_LINE = re.compile(
@@ -20,12 +25,94 @@ HP_POWER = re.compile(r"Fronius HP Power' >> ([0-9.]+) W")
 MPC_POWER = re.compile(r"EG1 MPC Leistung' >> ([0-9.]+) W")
 
 
+class StartReads:
+    def __init__(self) -> None:
+        self.previous: float | None = None
+        self.last_sample: float | None = None
+        self.low_since: float | None = None
+        self.armed = True
+        self.next_read: float | None = None
+        self.remaining = 0
+        self.series = 0
+
+    def reset(self) -> None:
+        self.previous = None
+        self.last_sample = None
+        self.low_since = None
+        self.next_read = None
+        self.remaining = 0
+        self.armed = True
+
+    def sample(self, power: float, now: float) -> bool:
+        if not math.isfinite(power) or power < 0:
+            self.reset()
+            return False
+        if self.last_sample is not None and now - self.last_sample > 15:
+            self.reset()
+        started = False
+        if power <= 50:
+            if self.low_since is None:
+                self.low_since = now
+            if now - self.low_since >= 60:
+                self.armed = True
+        else:
+            if self.previous is not None and self.previous <= 50 and self.armed and not self.remaining:
+                self.series += 1
+                self.remaining = 10
+                self.next_read = now
+                self.armed = False
+                started = True
+            self.low_since = None
+        self.previous = power
+        self.last_sample = now
+        return started
+
+    def due(self, now: float) -> int | None:
+        if self.last_sample is not None and now - self.last_sample > 15:
+            self.reset()
+        if not self.remaining or self.next_read is None or now < self.next_read:
+            return None
+        index = 11 - self.remaining
+        self.remaining -= 1
+        self.next_read = now + 60 if self.remaining else None
+        return index
+
+
+def request_semp_read(host: str) -> str:
+    base = f"http://{host}"
+    with urllib.request.urlopen(
+        f"{base}/text_sensor/esphome_hems_eg1_osshpcf_read_status", timeout=3
+    ) as response:
+        status = json.load(response)["value"]
+    if status not in (
+        "Noch nicht angefordert", "Antwort mit Alternativen", "Antwort ohne Alternativen",
+        "Timeout: keine Read-Antwort", "Read fehlgeschlagen (siehe Log)",
+    ):
+        return f"skipped: {status}"
+    request = urllib.request.Request(
+        f"{base}/button/esphome_hems_eg1_osshpcf_daten_lesen/press", data=b"", method="POST"
+    )
+    with urllib.request.urlopen(request, timeout=3) as response:
+        response.read()
+    return "requested (reply must be confirmed in SEMP log)"
+
+
+def enqueue_lines(stream, lines: queue.Queue) -> None:
+    try:
+        for line in stream:
+            lines.put(line)
+    finally:
+        lines.put(None)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", default="esphome-hems.local")
     parser.add_argument("--config", default="esphome-hems.yaml")
     parser.add_argument("--duration", type=int, default=24 * 60 * 60)
     parser.add_argument("--output-dir", default="private/captures")
+    parser.add_argument("--start-reads", action="store_true")
+    parser.add_argument("--esphome", default="esphome")
     return parser.parse_args()
 
 
@@ -50,14 +137,25 @@ def main() -> int:
     reconnects = 0
     max_hp_power = 0.0
     max_mpc_power = 0.0
+    start_reads = StartReads()
+    api_disconnects = 0
+    read_attempts = 0
 
     with output_path.open("w", encoding="utf-8", newline="\n") as output:
         header = f"Capture started {started.isoformat()} for {args.duration} seconds\n"
         output.write(header)
         print(header, end="")
 
+        def emit(message: str) -> None:
+            line = f"CAPTURE {datetime.datetime.now().astimezone().isoformat()} {message}\n"
+            output.write(line)
+            output.flush()
+            print(line, end="", flush=True)
+
+        emit(f"start_reads={args.start_reads}; threshold=50 W; count=10; interval=60 s; rearm_low=60 s")
+
         while time.monotonic() < deadline:
-            command = ["esphome", "logs", args.config, "--device", args.host]
+            command = [args.esphome, "logs", args.config, "--device", args.host]
             process = subprocess.Popen(
                 command,
                 stdout=subprocess.PIPE,
@@ -67,19 +165,42 @@ def main() -> int:
                 errors="replace",
             )
             assert process.stdout is not None
+            lines = queue.Queue()
+            reader = threading.Thread(target=enqueue_lines, args=(process.stdout, lines), daemon=True)
+            reader.start()
             try:
-                for line in process.stdout:
-                    if time.monotonic() >= deadline:
+                while time.monotonic() < deadline:
+                    try:
+                        line = lines.get(timeout=min(1, max(0.001, deadline - time.monotonic())))
+                    except queue.Empty:
+                        line = ""
+                    if line is None:
                         break
-                    if not RELEVANT_LINE.search(line):
-                        continue
-                    output.write(line)
-                    output.flush()
-                    sys.stdout.write(line)
-                    semp_messages += "SempData" in line or "OSSHPCF data:" in line
-                    subscriptions += "subscribed to remote SEMP" in line
-                    max_hp_power = update_maximum(line, HP_POWER, max_hp_power)
-                    max_mpc_power = update_maximum(line, MPC_POWER, max_mpc_power)
+                    if RELEVANT_LINE.search(line):
+                        output.write(line)
+                        output.flush()
+                        sys.stdout.write(line)
+                        semp_messages += "OSSHPCF msg" in line and "SempData" in line
+                        subscriptions += "remote SEMP entity" in line and "subscribe_err=0" in line
+                        max_hp_power = update_maximum(line, HP_POWER, max_hp_power)
+                        max_mpc_power = update_maximum(line, MPC_POWER, max_mpc_power)
+                    if "Disconnected" in line or "Connection error" in line:
+                        api_disconnects += 1
+                        start_reads.reset()
+                        emit("connection_lost; read series cancelled")
+                    if args.start_reads:
+                        match = HP_POWER.search(line)
+                        now = time.monotonic()
+                        if match and start_reads.sample(float(match.group(1)), now):
+                            emit(f"start series={start_reads.series}; power={match.group(1)} W")
+                        index = start_reads.due(now) if now < deadline else None
+                        if index is not None:
+                            read_attempts += 1
+                            try:
+                                result = request_semp_read(args.host)
+                            except Exception as error:
+                                result = f"failed: {type(error).__name__}"
+                            emit(f"read series={start_reads.series} index={index}/10 power={start_reads.previous} W; {result}")
             finally:
                 process.terminate()
                 try:
@@ -87,6 +208,9 @@ def main() -> int:
                 except subprocess.TimeoutExpired:
                     process.kill()
                     process.wait(timeout=5)
+                reader.join(timeout=2)
+                process.stdout.close()
+                start_reads.reset()
 
             if time.monotonic() < deadline:
                 reconnects += 1
@@ -96,6 +220,7 @@ def main() -> int:
         summary = (
             f"Capture finished {finished.isoformat()}; SEMP messages={semp_messages}; "
             f"subscriptions={subscriptions}; logger reconnects={reconnects}; "
+            f"API disconnects={api_disconnects}; event read attempts={read_attempts}; "
             f"max HP power={max_hp_power:.0f} W; max MPC power={max_mpc_power:.0f} W\n"
         )
         output.write(summary)

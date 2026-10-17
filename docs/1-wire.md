@@ -1,6 +1,7 @@
 # 1-Wire-Temperatursensoren
 
-Stand: 2026-07-26
+Dokumentationspruefung: 2026-10-17. Hardwarestand zuletzt dokumentiert am
+2026-07-26; die folgende Aktualisierung ist keine neue Hardwareabnahme.
 
 ## Ziel und Status
 
@@ -34,8 +35,8 @@ Relaiszugriffe und die Echtzeituhr gleichzeitig blockieren.
 Die Erweiterungsleiste stellt unter anderem GPIO1, GPIO2, GPIO3 und GPIO21
 sowie 3,3 V und GND bereit. GPIO21 ist fuer einen direkten 1-Wire-Prototyp
 geeignet. Fuer einen zweiten I2C-Bus werden GPIO1 als SDA und GPIO2 als SCL
-reserviert. Beide Pins sind in der aktuellen Konfiguration unbenutzt und sind
-keine ESP32-S3-Strapping-Pins.
+verwendet. Beide Pins sind durch `temperature_bridge_i2c` in `1-wire.yaml`
+belegt und sind keine ESP32-S3-Strapping-Pins.
 
 GPIO3 soll wegen seiner Strapping-Funktion nicht verwendet werden. GPIO19/20
 sind fuer USB, GPIO43/44 fuer eine moegliche UART-Erweiterung und GPIO45/47/48
@@ -44,7 +45,7 @@ fuer die TF-Karten-Schnittstelle freizuhalten.
 ## Entscheidung
 
 Fuer die fest installierte HEMS-Hardware wird ein **DS2484 auf einem eigenen
-zweiten I2C-Bus an GPIO1/2** bevorzugt.
+zweiten I2C-Bus an GPIO1/2** installiert.
 
 Der DS2484 sitzt auf einer kurzen lokalen Verbindung nahe am HEMS. Nur der
 1-Wire-Bus verlaesst das Gehaeuse. Der vorhandene I2C-Bus auf GPIO41/42 wird
@@ -123,10 +124,10 @@ Bei langen, unvermeidbar sternfoermigen Leitungen sind mehrere getrennte
 1-Wire-Busse oder robuste RS485-Temperaturmodule einem einzelnen grossen
 1-Wire-Netz vorzuziehen.
 
-## Vorgesehene ESPHome-Konfiguration
+## Aktive ESPHome-Konfiguration
 
 Der vorhandene Bus behaelt seine ID und Pinbelegung. Der Temperaturadapter
-erhaelt einen eigenen Bus:
+verwendet einen eigenen Bus:
 
 ```yaml
 i2c:
@@ -174,6 +175,12 @@ stattdessen die sichere Adressregistrierung:
 5. `1-wire-sensors.yaml` wird deterministisch mit festen Adressen erzeugt.
 6. Der VS-Code-Task `Register 1-Wire sensors OTA` fuehrt Erkennung,
   Clean-Build und OTA-Upload nacheinander aus.
+
+Die Task-Datei ist installationsspezifisch und wird nicht mitgeliefert.
+Ohne lokalen Task zeigt `python tools/diagnostics/discover_one_wire.py --help`
+die verfuegbaren Aufrufparameter. Registrierung mit anschliessendem OTA ist
+keine rein lesende Diagnose und darf eine laufende Langzeitmessung nicht
+ungeplant unterbrechen.
 
 Damit erfordert eine neue Sonde technisch weiterhin einen Firmware-Build,
 aber keine manuelle Adressregistrierung und nur einen Task-Aufruf plus die

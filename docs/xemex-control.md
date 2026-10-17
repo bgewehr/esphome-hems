@@ -1,6 +1,7 @@
 # Xemex CSMB EV-Regelung
 
-Stand: 2026-10-07
+Dokumentationsabgleich: 2026-10-17. Der letzte hier ausgewertete
+6-kW-Hardwaretest stammt vom 2026-10-07; keine neue Gesamtfreigabe.
 
 ## Ziel
 
@@ -118,13 +119,16 @@ Benutzersollwert.
 	Mindestladestufe
 - Sollwerte unter 8 A werden sicher auf AUS abgebildet; damit fuehrt das
 	§14a-Maximum von 4.200 W deterministisch zum Ladestopp
-- Firmware-Clean-Build und OTA erfolgreich; aktuelle live verifizierte Build-Zeit:
+- Firmware-Clean-Build und OTA fuer den unten beschriebenen Test erfolgreich; damalige Build-Zeit:
 	`Oct 7 2026 10:56:20` (Integrationsfix `d643778`)
 - OpenEEBUS-Submodul: Branch `hems`
 
 ## Hardware-Abnahme
 
-Die Oktober-Firmware ist seit 2026-10-07, 10:57 auf dem Geraet. Die vollstaendige
+Die Messungen unten beziehen sich auf die jeweils genannte Firmware.
+Spaetere OTA-Versionen enthalten zusaetzlich Solar-/Storage-Freigabepfade;
+deren Teiltests stehen im [Budgetkonzept](power-distribution-concept.md).
+Sie belegen keine neue stationaere 6-kW-Regelguete. Die vollstaendige
 Hardwareabnahme bleibt offen; Softwaretests und erfolgreicher OTA-Start sind
 kein Ersatz fuer die nachstehenden Kriterien.
 
@@ -222,11 +226,10 @@ Messwertausfall/Wiederkehr, DI1/Simulation, ueberlappenden EEBus-Limits und
 Wiederanlaeufen muss vor produktiver Freigabe am realen Geraet geprueft werden.
 Das bekannte Session-/Fahrzeugproblem nach Ladepause gilt nicht als geloest.
 
-Abnahmestand 2026-10-07: OpenEEBus-Upstream wurde zunaechst lokal vorgezogen.
-Inzwischen ist das Fahrzeug angeschlossen; vor OTA wurden 10,43 kW und
-15,2 bis 15,6 A pro Phase bei 11.500 W Sollwert gemessen. Der Betreiber hat
-Tests, Commit, Push und OTA freigegeben. Der oben dokumentierte 6-kW-Test
-erfuellt die Abnahme noch nicht; die Softwaretests ersetzen sie nicht.
+Abnahmestand des Tests vom 2026-10-07: Vor der damaligen OTA wurden 10,43 kW
+und 15,2 bis 15,6 A pro Phase bei 11.500 W Sollwert gemessen. Die damalige
+Freigabe gilt nicht automatisch fuer neue Live-Eingriffe. Der dokumentierte
+6-kW-Test erfuellt die Abnahme weiterhin nicht; Softwaretests ersetzen sie nicht.
 
 Die lokale Abschlusspruefung hat eine Beobachtungsluecke im Abbruchwaechter
 behoben: Liegen mehr als 5 s zwischen Regleraufrufen, beginnen Lade- und

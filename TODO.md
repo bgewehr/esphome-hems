@@ -1,6 +1,6 @@
 # Entwicklungs-TODO
 
-Stand: 2026-10-07
+Stand: 2026-10-17
 
 Diese Datei ist die zentrale Status- und Reihenfolgenliste. Fachliche
 Begruendung und Abnahmekriterien stehen in den verlinkten Konzeptdokumenten.
@@ -21,16 +21,17 @@ Begruendung und Abnahmekriterien stehen in den verlinkten Konzeptdokumenten.
 
 ## Naechste Aufgaben
 
-1. **SYS-15** OpenEEBus mit Upstream aktualisieren und unsere Funktionalitaet
-  samt lokalen Anpassungen erhalten. Auf Betreiberwunsch am 2026-10-07
-  vorgezogen; Commit, Push, OTA und Tests inzwischen freigegeben.
+1. **SYS-15** Verbleibende Hardware-Regressionen der bereits integrierten
+  OpenEEBus-Aktualisierung abschliessen. Gepinnter Stand bleibt `f714766`;
+  weitere Upstream-PRs sind dadurch nicht automatisch uebernommen.
 2. **BD-24** Xemex-Optimierung und CSMB-Hardwareabnahme abschliessen.
-  Fahrzeug am 2026-10-07 angeschlossen, Ausgangswert 10,43 kW bei
-  11.500 W Sollwert; OTA und Tests vom Betreiber freigegeben.
-3. **SYS-16** Geeignete OpenEEBus-PRs aus den Erkenntnissen erstellen,
-  gemaess Maintainer-Regeln und Formatierungsvorgaben.
+  Der 6-kW-Test vom 2026-10-07 verfehlte die Abnahmekriterien. Historische
+  Testfreigaben sind keine Freigabe fuer neue Live-Eingriffe.
+3. **SYS-16** Bestehende Upstream-Beitraege nachverfolgen und weitere
+  belegte Kandidaten pruefen; keine Doppelbeitraege erstellen.
 4. **BD-23** EV und Wallbox auf reale Leistungsstufen quantisieren.
-5. **OHP-20** Bosch-Capture-Matrix am realen Geraet abarbeiten.
+5. **OHP-20** Laufende 24h-Startflankenmessung vom 17./18. Oktober auswerten
+  und fehlende Zustaende der Bosch-Capture-Matrix gezielt erfassen.
 6. **OHP-21** Bosch-Einheiten, Zeiten und State-Transitions dokumentieren.
 
 ## Systemarchitektur
@@ -45,6 +46,9 @@ Konzept: [Zielarchitektur und Entwicklungsplan](docs/system-architecture.md)
   Abhaengigkeiten, kompiliert die ESPHome-Firmware mit CI-Secrets und fuehrt die
   CMake/CTest-Host-Tests mit rekursivem Submodule-Checkout aus. actionlint,
   `compileall`, Host-Tests und vollstaendiger Firmware-Compile sind lokal gruen.
+  Seit 2026-10-16 ist zusaetzlich `eebus-minimal.yaml` mit eigener CI enthalten;
+  der lokale Docker-Build mit ESPHome 2026.5.3 bestand. Das belegt keine
+  Hardwarekompatibilitaet ausserhalb der dokumentierten Referenzplattform.
 - [x] **SYS-11** Gemeinsames CMake/CTest-Host-Testziel fuer Regelkern und
   Fixtures bereitgestellt (2026-07-13).
 - [ ] **SYS-12** Fake-Steuerbox/-Wallbox in reproduzierbare Szenariotests
@@ -93,6 +97,9 @@ Konzept: [Zielarchitektur und Entwicklungsplan](docs/system-architecture.md)
   Pairing-Abbruch ist bereits Gegenstand von [#56](https://github.com/NIBEGroup/openeebus/pull/56),
   daher kein doppelter PR. Heartbeat-Sendemarge bleibt ein offener Kandidat;
   bestehende Heartbeat-Beitraege und Maintainer-Rueckmeldungen vorher abgleichen.
+  Review 2026-10-17: citolens OHPCF-PRs #75 bis #78 bilden eine aufeinander
+  aufbauende Kette, #78 ist Draft. Code und Tests gelesen, nicht lokal
+  ausgefuehrt oder integriert; Details im Bosch-Konzept.
 - [ ] **SYS-20** Systemzustaende normal/limited/degraded/failsafe definieren.
 - [ ] **SYS-21** Strukturierte Betriebs- und Regeldiagnose bereitstellen.
 - [ ] **SYS-22** Betreiberkonfiguration gegen Geraetefaehigkeiten validieren.
@@ -124,8 +131,12 @@ Konzept: [§14a-Leistungsbudget-Verteilung](docs/power-distribution-concept.md)
   mit PV den Erzeugungsueberschuss; Laden sowie alte, fehlende, nicht-finite
   oder unplausible Batteriewerte zaehlen als 0 W Zusatzleistung. Beide
   Rohregister tragen echte 10-s-Quellzeitstempel und Wertebereichspruefungen.
-- [x] **BD-22** Technische Mindestleistung atomar in der Lambda behandelt:
-  Reicht das Budget nicht fuer den Sockel, erhaelt das Geraet 0 W.
+- [ ] **BD-22** Atomare Mindestleistung bis zum Geraeteadapter absichern.
+  Die Lambda weist bei unzureichendem Sockelbudget bereits rechnerisch 0 W zu.
+  Codeabgleich 2026-10-17: EG sendet dafuer 1 W, weil `set_limit(0)` das
+  Limit loescht; `min_limit_w` kann 1 W anschliessend auf 4200 W anheben.
+  Auch positive Sockel unterhalb des Adapterminimums sind abzugleichen.
+  End-to-End-Budgettreue und physischer Stopppfad sind daher noch offen.
 - [ ] **BD-23** EV und Wallbox auf reale Leistungsstufen quantisieren.
 - [ ] **BD-24** Stromverlaeufe der Wallbox auswerten und das CSMB-Regelkonzept
   bei Bedarf auf eine feine, schwingungsarme Steuerung ueberarbeiten. Als
@@ -155,7 +166,7 @@ Konzept: [§14a-Leistungsbudget-Verteilung](docs/power-distribution-concept.md)
 
 ## PV- und Batteriepriorisierung
 
-Stand 2026-10-07: Regelkern mit Host-Tests aktiv integriert,
+Dokumentierter Implementierungsstand bis 2026-10-08: Regelkern mit Host-Tests aktiv integriert,
 Korrektur-OTA um 16:17 Uhr ausgerollt (Live-Build 16:17:01).
 Storage-Callback-Kollision und Transaktionsabbrueche bei kleinen PV-Aenderungen
 korrigiert; fehlende aktuelle Storage-Bestaetigung sperrt EV bei verbotener
@@ -168,10 +179,15 @@ Nutzerlimit 6000 W unveraendert, keine Batterieentladung in den Samples,
 0 Ladeabbrueche. BMS-Ladegrenzen, Low-Solar-Zeitablauf und physische Fehlerfaelle offen.
 Grenzen und Freigabekriterien: [Priorisierung](docs/power-distribution-concept.md#pv-und-batteriepriorisierung).
 BAT-00 bis BAT-02 bleiben bis zur vollstaendigen Hardware-Abnahme offen.
+Spaetere Korrekturen sind ebenfalls implementiert: einheitliche 500-W-Schwelle
+auf verbleibender EV-PV-Unterstuetzung, Low-Solar-Netzfreigabe ohne Solar-Limit,
+negative OutWRte nur bei tatsaechlich aktiver batteriegesperrter Last und
+Ohmpilot-Nachrang ohne eigene HEMS-Steuerung. Letzter dort dokumentierter
+OTA-Stand ist `Oct 8 2026 07:17:00`, kein aktuell erneut gemessener Live-Stand.
 
-- [ ] **BAT-00** Schalter `Charge Battery first` in Home Assistant in der
-  Karte `Batterie (Reserva)` direkt ueber `Charge EV from Battery` ergaenzen
-  (Wunsch, praezisiert am 2026-10-07). Bevorzugte Umsetzung: negative
+- [ ] **BAT-00** Implementierte Batterieprioritaet vollstaendig abnehmen.
+  `Charge Battery first` ist in der Karte `Batterie (Reserva)` direkt ueber
+  `Charge EV from Battery` vorhanden. Umsetzung: negative
   `OutWRte` zur Zwangsladung mit dem nach Haus/WP verbleibenden PV-Ueberschuss.
   Der Schalter allein pausiert keine gewuenschte EV-Ladung; deren fehlender
   PV-Anteil darf aus dem Netz kommen. Haus und WP behalten ihre PV-Versorgung.
@@ -183,29 +199,30 @@ BAT-00 bis BAT-02 bleiben bis zur vollstaendigen Hardware-Abnahme offen.
   keine konkurrierenden Regler. Unbeabsichtigte Batterie-Netzladung verhindern;
   BMS-/Ladegrenzen, Messwertalter, Rueckfall bei Kommunikationsausfall und
   Zusammenspiel mit `Charge EV from Battery` absichern.
-- [ ] **BAT-01** Schalter `Charge EV with solar support only` ergaenzen.
+- [ ] **BAT-01** Implementierte Funktion `Charge EV with solar support only`
+  unter allen vorgesehenen Betriebsbedingungen abnehmen.
   Aktiv: EV-Ladung nur bei ausreichender verfuegbarer PV-Unterstuetzung
   freigeben, sonst pausieren. Gemeint ist der PV-Rest nach Haus/WP und
   priorisierter Batterieladung, nicht die gesamte PV-Erzeugung und nicht nur
   die gemessene Netzeinspeisung: Bereits vom EV genutzte PV-Leistung muss
-  weiterhin als Unterstuetzung zaehlen. Beispielschwelle >500 W, genaue
-  Ein-/Ausschaltschwellen und Haltezeiten gegen Takten festlegen.
+  weiterhin als Unterstuetzung zaehlen. Implementiert: Freigabe >500 W fuer
+  60 s, Pause <500 W fuer 120 s. Genau 500 W haelt den Zustand und setzt
+  laufende Qualifikationszeiten zurueck.
   Keine reine PV-Ueberschussladung: Die uebrige EV-Leistung darf aus dem Netz
   kommen, auch wenn die PV-Unterstuetzung unter der EV-Mindestleistung liegt.
   Batterieprioritaet kann den PV-Rest auf null reduzieren und dadurch die
   EV-Ladung pausieren; bei voller Batterie und ausreichendem Rest startet sie
   wieder. Inaktiv: keine PV-bedingte Ladepause.
-- [ ] **BAT-02** Schalter `Charge EV from net at low solar` als Ausnahme
-  zur PV-Freigabe ergaenzen: Bei niedriger PV-Erzeugung, insbesondere nachts,
-  darf eine gewuenschte EV-Ladung trotz fehlender PV-Unterstuetzung fortlaufen.
-  Niedrige Erzeugung getrennt von fehlendem Ueberschuss durch priorisierte
-  Batterieladung erkennen, damit die Ausnahme BAT-01 tagsueber nicht aushebelt.
-  Eine zuvor wegen fehlender PV-Unterstuetzung pausierte, weiterhin gewuenschte
-  Ladung automatisch wieder freigeben, sobald die Low-Solar-Bedingung stabil
-  erfuellt ist (bestaetigt am 2026-10-07). Manuelle Stopps und Schutzsperren
-  bleiben bestehen. Schwelle/Hysterese sowie Verhalten bei Wolken vor Umsetzung
-  festlegen. Ohne BAT-01 keine zusaetzliche
-  Freigabewirkung; niemals Schutzfunktionen, Nutzerlimit oder §14a umgehen.
+- [ ] **BAT-02** Implementierte Ausnahme `Charge EV from net at low solar`
+  zeitgesteuert am realen Geraet abnehmen. Auf Betreiberwunsch gilt inzwischen
+  dieselbe Rest-PV-Unterstuetzung wie bei BAT-01, nicht die gesamte Erzeugung:
+  <500 W fuer 10 min erlaubt Netzfreigabe, >500 W fuer 5 min beendet sie.
+  Damit koennen auch Hauslast oder Batterieprioritaet die Ausnahme tagsueber
+  ausloesen. Genau 500 W setzt laufende Qualifikationszeiten zurueck.
+  Die Ausnahme hebt nur die PV-Pause und das Solar-Minimum auf; manuelle
+  Stopps, Schutzsperren, Nutzerlimit und §14a bleiben verbindlich.
+  Ohne BAT-01 keine zusaetzliche Freigabewirkung. Host-Tests bestanden;
+  daraus folgt kein abgeschlossener Live-Zeitablauftest.
 
 - [ ] **BAT-03** `Charge EV with solar limit`: Zusammen mit Solar-only auf
   stabiles Wallbox-Minimum begrenzen, sonst normale Nutzer-/§14a-Leistung.
@@ -231,6 +248,13 @@ Konzept: [Bosch-Waermepumpe: OSSHPCF / SEMP](docs/oss-hpcf-bosch.md)
   allein liefert keinen initialen Zustand. Read-only Snapshot waehrend laufender
   Warmwasserbereitung zeigt Remote-Control-Faehigkeit, aber kein aktuelles
   Flexibilitaetsangebot (2026-07-14).
+  Auswertung 2026-10-17: 24h-Capture vom 7./8. Oktober enthaelt elf leere
+  Snapshots, alle bei 16-23 W; trotz Betrieb bis 2937 W kein neuer Snapshot
+  in der Hochleistungsphase. Zehn API-Unterbrechungen, kein lueckenloser
+  Stabilitaetsnachweis. Neue Messung seit 17. Oktober 10:49 lokal: Flanke
+  <=50 W auf >50 W, zehn Read-Versuche im 60-s-Abstand, Ende nach 24h.
+  Sieben Offline-Tests und kurzer Live-Logger-Test bestanden; die laufende
+  Messung und die tatsaechlichen Bosch-Antworten bleiben auszuwerten.
 - [ ] **OHP-21** Bosch-Einheiten, Zeiten und State-Transitions dokumentieren.
 - [ ] **OHP-22** Herstellerneutrales Flexibilitaetsmodell implementieren.
 - [ ] **OHP-30** Constraint-bewussten Dry-run-Planer implementieren.
@@ -259,8 +283,9 @@ Konzept: [1-Wire-Temperatursensoren](docs/1-wire.md)
   erforderlich. Parser, Registry und YAML-Generierung sind mit fokussierten
   Python-Tests abgedeckt; der Firmware-Build mit aktiviertem DS2484-Paket und
   sieben fest adressierten Sensoren war erfolgreich.
-- [ ] **OW-20** DS2484, Schutzbeschaltung und maximale Feldverkabelung gemaess
-  Konzept aufbauen und die Hardware-Abnahme durchfuehren.
+- [ ] **OW-20** Installierten DS2484 samt Schutzbeschaltung und maximaler
+  Feldverkabelung vollstaendig abnehmen. Sieben adressgebundene Sensoren sind
+  integriert; Langzeit-, Stoerungs- und Referenztemperaturtests bleiben offen.
 
 ## Abhaengigkeiten
 

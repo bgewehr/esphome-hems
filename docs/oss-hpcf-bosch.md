@@ -1,5 +1,7 @@
 # Bosch-Waermepumpe: OSSHPCF / SEMP
 
+Stand: 2026-10-17. Laufende Messungen sind keine abgeschlossene Hardwareabnahme.
+
 ## Ziel und Status
 
 `optimizationOfSelfConsumptionByHeatPumpCompressorFlexibility` (OSSHPCF,
@@ -43,11 +45,18 @@ zurueck. Es gibt kein periodisches Polling, keine automatische Read-Wiederholung
 und keine Sequenzauswahl oder Aenderung von Heizungs-/LPC-Sollwerten.
 Eine Antwort mit Alternativen ist noch keine Freigabe zur aktiven Steuerung.
 
-Fuer eine Heizbetriebsaufnahme zuerst den vorhandenen Task
-`Capture OSSHPCF for 24 hours` starten und bei tatsaechlichem Heizbetrieb den
-Read-Button ausloesen. Die lokale Aufzeichnung liegt unter `private/captures/`;
-der Rechner muss waehrenddessen laufen. Leere Antworten, Timeouts und
-Verdichterleistung getrennt auswerten.
+Fuer eine Betriebsaufnahme kann der lokale Task
+`Capture OSSHPCF for 24 hours` verwendet werden. Ohne lokale Task-Datei:
+
+```bash
+python -u tools/diagnostics/capture_oshpcf.py --host <device-address> --duration 86400 --start-reads
+```
+
+ESPHome muss mit den benoetigten Abhaengigkeiten verfuegbar sein; bei Bedarf
+`--esphome <executable-path>` angeben. Der Modus benoetigt neben dem API-Log
+die HTTP-Diagnose des HEMS. Ohne `--start-reads` bleibt der Logger passiv.
+Die Aufzeichnung liegt unter `private/captures/`; der Rechner muss wach und
+verbunden bleiben. Leere Antworten, Timeouts und Leistung getrennt auswerten.
 
 Live-Pruefung am 2026-10-07 mit OTA-Build `Oct 7 2026 12:08:48`:
 
@@ -69,8 +78,67 @@ Privates Testprotokoll: `private/captures/semp-read-diagnostic-20261007.log`.
 Die Statusanzeige prueft den lokalen Zustand weiterhin jede Sekunde, publiziert
 aber nur initial und bei Aenderungen. Dadurch entfallen wiederholte identische
 Textsensor-Logs und UI-Updates; echte SEMP-Telegramme bleiben unveraendert sichtbar.
-Diese Entduplizierung wurde am 2026-10-07 erfolgreich kompiliert, aber wegen der
-laufenden 24-Stunden-Aufzeichnung noch nicht per OTA eingespielt.
+Die fruehere Aussage, dass die Aenderung wegen der Aufzeichnung noch auf OTA
+wartet, ist kein aktueller Deploy-Status: waehrend der Oktober-Aufzeichnung
+gab es weitere Firmwarewechsel. Den tatsaechlichen Stand immer anhand der
+Live-Build-Time bestimmen; keine Updates fuer eine reine Diagnose ausloesen.
+
+### Abgeschlossene 24h-Aufzeichnung vom 7./8. Oktober
+
+Die Aufzeichnung lief von 2026-10-07 12:14 bis 2026-10-08 12:14 und wurde
+regulaer beendet. Sie enthielt elf SEMP-Snapshots, alle ohne Alternativen,
+Sequenzen, Slots oder Werte und mit `truncated=false`. Zehn Antworten hatten
+zusaetzlich einen protokollierten korrelierten Read-Nachweis.
+
+Der externe HP-Zaehler erreichte 2937 W, Bosch-MPC 2899 W. Saemtliche
+Snapshots lagen jedoch bei nur 16-23 W externer Leistung; waehrend der
+hohen Leistungsaufnahme wurde kein neuer SEMP-Snapshot aufgezeichnet.
+Daraus folgt weder, dass Bosch im laufenden Betrieb Angebote liefert,
+noch, dass Bosch grundsaetzlich keine Flexibilitaet anbietet.
+
+Die alte Zusammenfassung zaehlte 33 Logzeilen als SEMP-Meldungen, tatsaechlich
+drei Zeilen je Snapshot. `logger reconnects=0` bezeichnete nur Neustarts des
+Logger-Unterprozesses; im Log stehen zehn intern wiederverbundene API-Abbrueche.
+Es war daher kein lueckenloser 24h-Stabilitaetsnachweis.
+
+### Ereignisgesteuerte Messung ab 17. Oktober
+
+Der Betreiber identifiziert den Wechsel des externen HP-Zaehlers von
+<=50 W auf >50 W als Anlagenstart, nicht zwingend als Verdichterstart.
+`--start-reads` plant darauf zehn Read-Versuche: sofort sowie nach jeweils
+60 Sekunden bis Minute 9. Die Reihe laeuft auch bei wieder sinkender Leistung
+weiter. Weitere hohe Messwerte starten keine zweite Reihe; nach einem Start
+sind 60 Sekunden bei <=50 W zum erneuten Scharfschalten erforderlich.
+
+Ein bereits hoher Anfangswert erzeugt keinen Start. Messluecken ueber
+15 Sekunden oder API-Abbruch verwerfen die laufende Reihe. Ein laufender Read
+oder ein nicht lesebereiter Status ueberspringt den Termin; keine nachtraeglichen
+Abfragebursts. Ein HTTP-Erfolg ist kein Beleg fuer eine Bosch-Antwort:
+Ausloeser, Reihennummer, Versuch und korrelierte Antwort getrennt auswerten.
+
+Die neue 24h-Messung startete am 2026-10-17 um 10:49 lokal und soll am
+2026-10-18 um 10:49 enden. Sie ist noch nicht ausgewertet. Sieben Offline-Tests
+und ein achtsekundiger Live-Test von Logzugang und automatischem Ende bestanden;
+der Kurztest loeste bei bereits laufender Anlage keinen Read aus.
+
+### Vorhandene OHPCF-Aktoren und Upstream-PRs
+
+OpenEEBus enthaelt bereits CEM- und Compressor-OHPCF-Aktoren mit Tests.
+Unsere ESPHome-Anbindung nutzt bisher den direkten SEMP-Read und eigenen
+Decoder, nicht den CEM-OHPCF-Controller. Ein Bibliotheksupdate allein aktiviert
+keine Sequenzauswahl und erzeugt keine fehlenden Bosch-Angebote.
+
+Am 2026-10-17 wurden citolens offene PRs geprueft:
+[#75](https://github.com/NIBEGroup/openeebus/pull/75) korrigiert Zustaende,
+[#76](https://github.com/NIBEGroup/openeebus/pull/76) trennt den Zustand je
+Verdichter und [#77](https://github.com/NIBEGroup/openeebus/pull/77) meldet
+Angebote auch nach Verbindung mit bereits laufenden Prozessen und verwendet
+zusammengefuehrte Daten fuer Teilmeldungen. Draft
+[#78](https://github.com/NIBEGroup/openeebus/pull/78) enthaelt diese Kette und
+akzeptiert unter anderem `power` statt nur `powerMax`. Die PRs wurden nicht
+integriert oder lokal ausgefuehrt. Unser Decoder erkennt beide Werttypen bereits.
+Der `power`-Fallback in `max_power_w` ist ein Schaetzwert, keine garantierte
+Obergrenze; diese Semantik muss ein spaeteres Budgetmodell erhalten.
 
 ### Verifizierter Kommunikationsstand vom 2026-07-13
 
@@ -171,11 +239,13 @@ Funktion anbietet und welche Preissemantik sie erwartet, ist noch unbekannt.
 ## Bosch-spezifisch noch unbekannt
 
 Die OpenEEBus-Modelldefinitionen belegen die moeglichen Felder, aber nicht,
-welche Teilmenge und Semantik das konkrete Bosch-Gateway verwendet. Es fehlen
-aktuell reale, vollstaendig dekodierte Bosch-Telegramme fuer:
+welche Teilmenge und Semantik das konkrete Bosch-Gateway verwendet.
+Aus den bisherigen Snapshots sind `remote=true`, `single_slot_only=true`,
+`sequences_max=1` und `reselection=false` bekannt. Es fehlen reale Angebote
+und Zustandswechsel, um folgende Eigenschaften zu belegen:
 
-- `nodeScheduleInformation` und die Remote-Control-Flags,
-- Anzahl und Bedeutung der Alternativen und Sequenzen,
+- sequenzbezogene Remote-Control-Freigaben,
+- Bedeutung tatsaechlich angebotener Alternativen und Sequenzen,
 - Einheit, Vorzeichen und Skalierung der Leistungs-/Energiewerte,
 - absolute oder relative Zeitangaben und deren Bezugszeitpunkt,
 - Mindest-/Maximaldauer sowie optionale und verpflichtende Slots,
@@ -213,7 +283,10 @@ Jeder Capture soll enthalten:
 - parallele MPC-Leistung, Betriebsart und aktives LPC-Limit,
 - Folge-Telegramme bis mindestens 60 Sekunden nach einer Zustandsaenderung.
 
-Private SKIs und Seriennummern werden beim Ablegen der Captures anonymisiert.
+Rohmitschnitte koennen private SKIs, Adressen und Seriennummern enthalten.
+Sie bleiben im ignorierten Verzeichnis `private/captures/`. Vor einer
+Veroeffentlichung muessen Auszuege explizit anonymisiert werden; der Logger
+anonymisiert nicht automatisch.
 
 ### Capture-Matrix
 
@@ -221,6 +294,8 @@ Private SKIs und Seriennummern werden beim Ablegen der Captures anonymisiert.
 |---|---|---|---|
 | 2026-07-13 | Idle/Standby, MPC 25 W, externer Zaehler ca. 16 W | Kontrollierter Neustart, 90 Sekunden Beobachtung mit Decoder-Build `14:59:31` | `Comp/OSSHPCF` angekuendigt, SEMP-Subscription auf Entity 2 mit `err=0`; ohne expliziten Read keine initiale Nachricht, daher kein belastbarer SEMP-Zustandsbefund |
 | 2026-07-14 | Warmwasserbereitung laeuft, Bosch-MPC 2461-2569 W, externer HP-Zaehler 2505-2566 W | Reconnect mit einmaligem read-only `SmartEnergyManagementPsData`-Read | Subscription und Read `err=0`; Snapshot mit `remote=true`, `single_slot_only=true`, `sequences_max=1`, aber ohne Alternativen, Sequenzen, Slots oder Werte |
+| 2026-10-07/08 | 24h mit Betriebsphasen bis 2937 W; Snapshots nur bei 16-23 W | Elf leere Snapshots, zehn API-Unterbrechungen | Kein Flexibilitaetsangebot; kein Read-Nachweis waehrend der hohen Leistungsaufnahme |
+| 2026-10-17/18 | Startflanke >50 W, zehn Read-Versuche im 60-s-Abstand | Neue 24h-Aufzeichnung ab 10:49 lokal | Laufend; Ergebnis noch offen |
 
 Der Rohmitschnitt liegt ausschliesslich im ignorierten Verzeichnis
 `private/captures/`. Die Matrix enthaelt keine SKI, Seriennummer oder sonstige
