@@ -5,6 +5,7 @@
 
 #include "eebus_eg.h"
 #include "semp_decoder.h"
+#include "semp_diagnostics.h"
 
 #include <cmath>
 #include <cstdarg>
@@ -40,6 +41,7 @@ extern "C" {
 #include "src/spine/api/entity_remote_interface.h"
 #include "src/spine/entity/entity_local.h"
 #include "src/spine/model/entity_types.h"
+#include "src/spine/model/model.h"
 #include "src/spine/model/node_management_types.h"
 #include "src/spine/events/events.h"
 #include "src/use_case/actor/eg/lpc/eg_lpc.h"
@@ -161,9 +163,6 @@ static void spine_event_handler(const EventPayload* payload, void* ctx) {
         ESP_LOGI("eebus", "%s SPINE device discovered: ski=%s", self->instance_name(), ski);
       break;
     case kEventTypeDataChange: {
-      /* Passive observer — log SmartEnergyManagementPs (OSSHPCF) data at WARN
-       * so it is visible during testing even without verbose logging enabled.
-       * All other data changes are logged at DEBUG for diagnostics. */
       struct { FunctionType fn; const char* name; } static const kSemp[] = {
         { kFunctionTypeSmartEnergyManagementPsData,                        "SempData" },
         { kFunctionTypeSmartEnergyManagementPsConfigurationRequestCall,    "SempCfgReq" },
@@ -172,19 +171,33 @@ static void spine_event_handler(const EventPayload* payload, void* ctx) {
       };
       for (const auto& e : kSemp) {
         if (payload->function_type == e.fn) {
-          ESP_LOGW("eebus_eg", "%s OSSHPCF msg from %s: %s (fn=%d) — data=%s",
-                   self->instance_name(), ski, e.name, (int)payload->function_type,
+            const char* feature_type = payload->feature == nullptr ? nullptr :
+              ModelFeatureTypeToString(FEATURE_GET_TYPE(FEATURE_OBJECT(payload->feature)));
+            ESP_LOGI("eebus_eg", "%s OSSHPCF msg: %s feature_type=%s cmd=%s data=%s",
+                 self->instance_name(), e.name, feature_type ? feature_type : "unknown",
+                   esphome::eebus_eg::semp_command_name(payload->cmd_classifier),
                    payload->function_data ? "present" : "null");
           if (e.fn == kFunctionTypeSmartEnergyManagementPsData) {
             const auto *data = static_cast<const SmartEnergyManagementPsDataType *>(payload->function_data);
             const auto decoded = esphome::eebus_eg::decode_semp_data(data);
             for (const auto &line : decoded.lines)
-              ESP_LOGW("eebus_eg", "%s OSSHPCF data: %s", self->instance_name(), line.c_str());
+              if (self->should_log_semp_line(line, false))
+                ESP_LOGI("eebus_eg", "%s OSSHPCF data: %s", self->instance_name(), line.c_str());
+            const auto* merged = payload->feature == nullptr ? nullptr :
+                static_cast<const SmartEnergyManagementPsDataType*>(
+                    FEATURE_REMOTE_GET_DATA(payload->feature, e.fn));
+            const auto snapshot = esphome::eebus_eg::decode_semp_data(merged);
+            const bool log_merged = decoded.truncated || snapshot.truncated || decoded.lines != snapshot.lines;
+            for (const auto &line : snapshot.lines) {
+              const bool changed = self->should_log_semp_line(line, true);
+              if (log_merged && changed)
+                ESP_LOGI("eebus_eg", "%s OSSHPCF merged: %s", self->instance_name(), line.c_str());
+            }
           }
           break;
         }
       }
-      ESP_LOGD("eebus_eg", "%s SPINE data change from %s: fn=%d",
+      ESP_LOGV("eebus_eg", "%s SPINE data change from %s: fn=%d",
                self->instance_name(), ski, (int)payload->function_type);
       break;
     }
@@ -198,6 +211,13 @@ extern "C" void eebus_log_d(const char* tag, int line, const char* fmt, ...) {
   va_list args;
   va_start(args, fmt);
   esphome::esp_log_vprintf_(ESPHOME_LOG_LEVEL_DEBUG, tag, line, fmt, args);
+  va_end(args);
+}
+
+extern "C" void eebus_log_w(const char* tag, int line, const char* fmt, ...) {
+  va_list args;
+  va_start(args, fmt);
+  esphome::esp_log_vprintf_(ESPHOME_LOG_LEVEL_WARN, tag, line, fmt, args);
   va_end(args);
 }
 
@@ -577,8 +597,23 @@ void EebusEgComponent::loop() {
   }
 
   /* Subscribe to SEMP data once the OSSHPCF use case has been announced */
-  if (connected_ && local_semp_feature_ && semp_subscribe_pending_.exchange(false)) {
-    subscribe_semp_();
+  if (connected_ && semp_cleanup_pending_.exchange(false) && !semp_gate_.available()) {
+    clear_semp_registrations_();
+  }
+  if (connected_ && local_semp_feature_ && semp_gate_.available() &&
+      semp_read_status_ != SempReadStatus::PENDING &&
+      semp_subscription_.status != SempRegistrationStatus::PENDING &&
+      semp_binding_.status != SempRegistrationStatus::PENDING) {
+    const bool requested = semp_subscribe_pending_.exchange(false);
+    const bool retry = semp_registration_retry_.due(semp_gate_.generation(), now, false,
+        semp_subscription_.status == SempRegistrationStatus::CONFIRMED &&
+        semp_binding_.status == SempRegistrationStatus::CONFIRMED);
+    if (requested || retry) {
+      if (retry && !requested)
+        ESP_LOGW(TAG, "%s OSSHPCF automatic registration retry: attempt=%u/3", instance_name(),
+                 (unsigned)semp_registration_retry_.attempts() + 1);
+      subscribe_semp_();
+    }
   }
 
   /* Retry power limit if ACK not received within 10 s (SPINE subscription race at connect) */
@@ -675,6 +710,14 @@ void EebusEgComponent::set_limit(float watts) {
  * ====================================================================== */
 
 void EebusEgComponent::on_remote_use_case(int actor, int uc_name_id, const char* /*uc_str*/, const char* /*actor_str*/, bool add) {
+  if (semp_gate_.update(actor, uc_name_id, add)) {
+    semp_subscribe_pending_ = add;
+    semp_cleanup_pending_ = !add;
+    if (semp_read_status_ != SempReadStatus::PENDING)
+      semp_read_status_ = add ? SempReadStatus::IDLE : SempReadStatus::UNAVAILABLE;
+    ESP_LOGI(TAG, "%s OSSHPCF capability: available=%s; subscription and binding %s", instance_name(),
+             add ? "true" : "false", add ? "setup queued" : "cleanup queued");
+  }
   /* Official EEBus SPINE abbreviations (EEBus Initiative documentation) */
   const char* a;
   switch (actor) {
@@ -701,8 +744,6 @@ void EebusEgComponent::on_remote_use_case(int actor, int uc_name_id, const char*
       ESP_LOGW(TAG, "%s use case added by remote: %s", instance_name_.c_str(), buf + 3);  /* skip " | " */
       publish_supported_use_cases_();
     }
-    if (actor == 4 && uc_name_id == 30)
-      semp_subscribe_pending_ = true;
   } else {
     auto pos = remote_uc_seen_.find(buf);
     if (pos != std::string::npos) {
@@ -725,6 +766,11 @@ void EebusEgComponent::request_semp_read() {
     return;
   }
   const auto status = semp_read_status_.load();
+  if (!semp_gate_.available()) {
+    if (status != SempReadStatus::PENDING) semp_read_status_ = SempReadStatus::UNAVAILABLE;
+    ESP_LOGW(TAG, "%s OSSHPCF read rejected: remote HPCF use case unavailable", instance_name());
+    return;
+  }
   if (status == SempReadStatus::QUEUED || status == SempReadStatus::PENDING) {
     ESP_LOGW(TAG, "%s OSSHPCF read already pending", instance_name());
     return;
@@ -734,6 +780,7 @@ void EebusEgComponent::request_semp_read() {
 }
 
 const char* EebusEgComponent::semp_read_status() const {
+  if (connected_ && !semp_gate_.available()) return "HPCF nicht angeboten";
   switch (semp_read_status_.load()) {
     case SempReadStatus::IDLE: return "Noch nicht angefordert";
     case SempReadStatus::QUEUED: return "Read vorgemerkt";
@@ -743,12 +790,167 @@ const char* EebusEgComponent::semp_read_status() const {
     case SempReadStatus::TIMEOUT: return "Timeout: keine Read-Antwort";
     case SempReadStatus::FAILED: return "Read fehlgeschlagen (siehe Log)";
     case SempReadStatus::DISCONNECTED: return "Nicht verbunden";
+    case SempReadStatus::UNAVAILABLE: return "HPCF nicht angeboten";
   }
   return "Unbekannt";
 }
 
+const char* EebusEgComponent::registration_status_name_(SempRegistrationStatus status) {
+  switch (status) {
+    case SempRegistrationStatus::UNKNOWN: return "Nicht verifiziert";
+    case SempRegistrationStatus::PENDING: return "Pruefung ausstehend";
+    case SempRegistrationStatus::CONFIRMED: return "In Geraetetabelle bestaetigt";
+    case SempRegistrationStatus::ABSENT: return "Kein passender Tabelleneintrag";
+    case SempRegistrationStatus::FAILED: return "Pruefung fehlgeschlagen";
+    case SempRegistrationStatus::DISCONNECTED: return "Nicht verbunden";
+  }
+  return "Unbekannt";
+}
+
+const char* EebusEgComponent::semp_binding_status() const {
+  if (!connected_) return "Nicht verbunden";
+  if (!semp_gate_.available()) return "HPCF nicht angeboten";
+  return registration_status_name_(semp_binding_.status.load());
+}
+
+void EebusEgComponent::verify_semp_registrations_(DeviceRemoteObject* remote, FeatureRemoteObject* server) {
+  if (!semp_gate_.available()) return;
+  auto* local_device = EEBUS_SERVICE_GET_LOCAL_DEVICE(service_);
+  auto* local_node = FEATURE_LOCAL_OBJECT(DEVICE_LOCAL_GET_NODE_MANAGEMENT(local_device));
+  auto* remote_node = FEATURE_REMOTE_OBJECT(DEVICE_REMOTE_GET_NODE_MANAGEMENT(remote));
+  for (auto* check : {&semp_subscription_, &semp_binding_}) {
+    const bool binding = check == &semp_binding_;
+    if (check->status == SempRegistrationStatus::PENDING) continue;
+    const char* kind = binding ? "binding" : "subscription";
+    if (local_node == nullptr || remote_node == nullptr) {
+      check->status = SempRegistrationStatus::FAILED;
+      ESP_LOGW(TAG, "%s OSSHPCF %s verification failed: node management unavailable", instance_name(), kind);
+      continue;
+    }
+    check->owner = this;
+    check->remote = remote;
+    check->server = server;
+    check->generation = semp_gate_.generation();
+    check->status = SempRegistrationStatus::PENDING;
+    const EebusError request_err = FEATURE_LOCAL_READ_FROM_REMOTE(
+        local_node, remote_node, check->function, nullptr, nullptr,
+        [](const ReplyMessage* reply, const FeatureAddressType*, EebusError err, void* context) {
+          auto* check = static_cast<SempRegistrationCheck*>(context);
+          auto* self = check->owner;
+          const bool binding = check->function == kFunctionTypeNodeManagementBindingData;
+          const char* kind = binding ? "binding" : "subscription";
+          if (!self->connected_) {
+            check->status = SempRegistrationStatus::DISCONNECTED;
+            return;
+          }
+          if (!self->semp_gate_.available() || check->generation != self->semp_gate_.generation()) {
+            check->status = SempRegistrationStatus::UNKNOWN;
+            if (self->semp_gate_.available()) self->semp_subscribe_pending_ = true;
+            ESP_LOGW(TAG, "%s OSSHPCF %s verification discarded: capability changed", self->instance_name(), kind);
+            return;
+          }
+          if (err != kEebusErrorOk || reply == nullptr || reply->function_data == nullptr ||
+              reply->function_type != check->function || reply->device_remote != check->remote) {
+            check->status = SempRegistrationStatus::FAILED;
+            ESP_LOGW(TAG, "%s OSSHPCF %s verification failed: err=%d", self->instance_name(), kind, (int)err);
+            return;
+          }
+          const auto* entities = DEVICE_REMOTE_GET_ENTITIES(reply->device_remote);
+          FeatureRemoteObject* current_server = nullptr;
+          for (size_t index = 0; entities && index < VectorGetSize(entities); ++index) {
+            auto* entity = static_cast<EntityRemoteObject*>(VectorGetElement(entities, index));
+            if (!entity) continue;
+            auto* candidate = ENTITY_REMOTE_GET_FEATURE_WITH_TYPE_AND_ROLE(
+                entity, kFeatureTypeTypeSmartEnergyManagementPs, kRoleTypeServer);
+            if (candidate == check->server) current_server = candidate;
+          }
+          if (!current_server) {
+            check->status = SempRegistrationStatus::UNKNOWN;
+            ESP_LOGW(TAG, "%s OSSHPCF %s verification failed: SEMP server removed", self->instance_name(), kind);
+            return;
+          }
+          const auto* client_address = FEATURE_GET_ADDRESS(FEATURE_OBJECT(self->local_semp_feature_));
+          const auto* server_address = FEATURE_GET_ADDRESS(FEATURE_OBJECT(current_server));
+          const auto* table_device = DEVICE_GET_ADDRESS(DEVICE_OBJECT(reply->device_remote));
+          const auto verify_entries = [&](const auto* table, size_t count) {
+            const bool present = semp_registration_present(table, count, client_address, server_address, table_device);
+            check->status = present ? SempRegistrationStatus::CONFIRMED : SempRegistrationStatus::ABSENT;
+            const char* feature_type = ModelFeatureTypeToString(FEATURE_GET_TYPE(FEATURE_OBJECT(current_server)));
+            if (present) {
+              for (size_t index = 0; table && index < count; ++index) {
+                const auto* entry = table[index];
+                if (!entry || !semp_address_equal(entry->client_address, client_address, table_device) ||
+                    !semp_address_equal(entry->server_address, server_address, table_device)) continue;
+                ESP_LOGI(TAG, "%s OSSHPCF %s verified: present=true entries=%zu msg_ref=%llu feature_type=%s client={%s} server={%s}",
+                         self->instance_name(), kind, count, (unsigned long long)reply->msg_cnt_ref,
+                         feature_type ? feature_type : "unknown",
+                         semp_address_description(entry->client_address, table_device).c_str(),
+                         semp_address_description(entry->server_address, table_device).c_str());
+                break;
+              }
+            } else {
+              ESP_LOGW(TAG, "%s OSSHPCF %s verified: present=false entries=%zu msg_ref=%llu array=%s feature_type=%s; expected client={%s} server={%s}",
+                       self->instance_name(), kind, count, (unsigned long long)reply->msg_cnt_ref,
+                       table ? "present" : "null", feature_type ? feature_type : "unknown",
+                       semp_address_description(client_address).c_str(), semp_address_description(server_address).c_str());
+            }
+            for (size_t index = 0; table && index < count && index < 16; ++index) {
+              const auto* entry = table[index];
+              const auto* actual_client = entry ? entry->client_address : nullptr;
+              const auto* actual_server = entry ? entry->server_address : nullptr;
+              ESP_LOGD(TAG, "%s OSSHPCF %s entry[%zu] client: %s comparison=%s", self->instance_name(), kind, index,
+                       semp_address_description(actual_client, table_device).c_str(),
+                       semp_address_match_reason(actual_client, client_address, table_device));
+              ESP_LOGD(TAG, "%s OSSHPCF %s entry[%zu] server: %s comparison=%s", self->instance_name(), kind, index,
+                       semp_address_description(actual_server, table_device).c_str(),
+                       semp_address_match_reason(actual_server, server_address, table_device));
+            }
+            if (count > 16)
+              ESP_LOGD(TAG, "%s OSSHPCF %s table logging truncated: shown=16 total=%zu; matching checks all entries",
+                       self->instance_name(), kind, count);
+          };
+          if (binding) {
+            const auto* data = static_cast<const NodeManagementBindingDataType*>(reply->function_data);
+            verify_entries(data->binding_entry, data->binding_entry_size);
+          } else {
+            const auto* data = static_cast<const NodeManagementSubscriptionDataType*>(reply->function_data);
+            verify_entries(data->subscription_entry, data->subscription_entry_size);
+          }
+        }, check);
+    if (request_err != kEebusErrorOk) {
+      check->status = SempRegistrationStatus::FAILED;
+      ESP_LOGW(TAG, "%s OSSHPCF %s verification failed: send_err=%d", instance_name(), kind, (int)request_err);
+    }
+  }
+}
+
+void EebusEgComponent::clear_semp_registrations_() {
+  if (!service_ || !local_semp_feature_) return;
+  auto* local_device = EEBUS_SERVICE_GET_LOCAL_DEVICE(service_);
+  if (!local_device) return;
+  auto* remote = DEVICE_LOCAL_GET_REMOTE_DEVICE_WITH_SKI(local_device, remote_ski_.c_str());
+  if (!remote) return;
+  const auto* entities = DEVICE_REMOTE_GET_ENTITIES(remote);
+  for (size_t index = 0; entities && index < VectorGetSize(entities); ++index) {
+    auto* entity = static_cast<EntityRemoteObject*>(VectorGetElement(entities, index));
+    if (!entity) continue;
+    FeatureInfoClient client;
+    if (FeatureInfoClientConstruct(&client, kFeatureTypeTypeSmartEnergyManagementPs, local_entity_, entity) != kEebusErrorOk)
+      continue;
+    const EebusError unbind_err = HasBinding(&client) ? Unbind(&client) : kEebusErrorOk;
+    const EebusError unsubscribe_err = HasSubscription(&client) ? Unsubscribe(&client) : kEebusErrorOk;
+    ESP_LOGW(TAG, "%s OSSHPCF cleanup: unbind_send_err=%d unsubscribe_send_err=%d", instance_name(),
+             (int)unbind_err, (int)unsubscribe_err);
+  }
+  for (auto* check : {&semp_subscription_, &semp_binding_}) {
+    if (check->status != SempRegistrationStatus::PENDING) check->status = SempRegistrationStatus::UNKNOWN;
+  }
+}
+
 void EebusEgComponent::subscribe_semp_() {
+  if (!connected_ || !semp_gate_.available()) return;
   if (semp_read_status_ == SempReadStatus::PENDING) return;
+  semp_registration_retry_.record_attempt(semp_gate_.generation(), millis());
   semp_read_status_ = SempReadStatus::FAILED;
   if (!local_semp_feature_ || !service_ || remote_ski_.empty()) {
     ESP_LOGW(TAG, "%s OSSHPCF read unavailable: client not ready", instance_name());
@@ -785,14 +987,36 @@ void EebusEgComponent::subscribe_semp_() {
     }
 
     EebusError subscribe_err = kEebusErrorOk;
-    if (!HasSubscription(&client))
+    if (!HasSubscription(&client) || semp_subscription_.status == SempRegistrationStatus::ABSENT) {
       subscribe_err = Subscribe(&client);
+      if (subscribe_err == kEebusErrorOk)
+        ESP_LOGI(TAG, "%s OSSHPCF subscription request: result=sent err=0", instance_name());
+      else
+        ESP_LOGW(TAG, "%s OSSHPCF subscription request: result=failed err=%d", instance_name(), (int)subscribe_err);
+    }
+    EebusError binding_err = kEebusErrorOk;
+    if (!HasBinding(&client) || semp_binding_.status == SempRegistrationStatus::ABSENT) {
+      binding_err = Bind(&client);
+      if (binding_err == kEebusErrorOk)
+        ESP_LOGI(TAG, "%s OSSHPCF binding request: result=sent err=0", instance_name());
+      else
+        ESP_LOGW(TAG, "%s OSSHPCF binding request: result=failed err=%d", instance_name(), (int)binding_err);
+    }
+    verify_semp_registrations_(remote_dev, semp);
     semp_read_status_ = SempReadStatus::PENDING;
+    semp_read_generation_ = semp_gate_.generation();
     EebusError read_err = FEATURE_LOCAL_READ_FROM_REMOTE(
       client.local_feature, client.remote_feature,
       kFunctionTypeSmartEnergyManagementPsData, nullptr, nullptr,
       [](const ReplyMessage* reply, const FeatureAddressType*, EebusError err, void* context) {
         auto* self = static_cast<EebusEgComponent*>(context);
+        if (!self->connected_) return;
+        if (!self->semp_gate_.available() || self->semp_read_generation_ != self->semp_gate_.generation()) {
+          self->semp_read_status_ = self->semp_gate_.available() ? SempReadStatus::IDLE : SempReadStatus::UNAVAILABLE;
+          if (self->semp_gate_.available()) self->semp_subscribe_pending_ = true;
+          ESP_LOGW(TAG, "%s OSSHPCF read reply discarded: capability changed", self->instance_name());
+          return;
+        }
         if (err != kEebusErrorOk || reply == nullptr || reply->function_data == nullptr ||
             reply->function_type != kFunctionTypeSmartEnergyManagementPsData) {
           auto expected = SempReadStatus::PENDING;
@@ -807,14 +1031,15 @@ void EebusEgComponent::subscribe_semp_() {
         auto expected = SempReadStatus::PENDING;
         self->semp_read_status_.compare_exchange_strong(expected,
             data->alternatives_size == 0 ? SempReadStatus::EMPTY : SempReadStatus::RECEIVED);
-        ESP_LOGW(TAG, "%s OSSHPCF read reply: msg_ref=%llu fn=%d alternatives=%u",
+        ESP_LOGI(TAG, "%s OSSHPCF read reply: msg_ref=%llu function=smartEnergyManagementPsData alternatives=%u",
                  self->instance_name(), (unsigned long long) reply->msg_cnt_ref,
-                 (int) reply->function_type, (unsigned) data->alternatives_size);
+               (unsigned) data->alternatives_size);
       }, this);
     if (read_err != kEebusErrorOk)
       semp_read_status_ = SempReadStatus::FAILED;
-    ESP_LOGW(TAG, "%s OSSHPCF: remote SEMP entity %zu subscribe_err=%d read_err=%d",
-             instance_name_.c_str(), i, (int) subscribe_err, (int) read_err);
+    if (subscribe_err != kEebusErrorOk || binding_err != kEebusErrorOk || read_err != kEebusErrorOk)
+      ESP_LOGW(TAG, "%s OSSHPCF setup: entity=%zu subscription_send_err=%d binding_send_err=%d read_err=%d",
+               instance_name_.c_str(), i, (int)subscribe_err, (int)binding_err, (int)read_err);
     return;
   }
   ESP_LOGW(TAG, "%s OSSHPCF: no SEMP server feature found on remote device (%zu entities)", instance_name_.c_str(), n);
@@ -879,6 +1104,10 @@ void EebusEgComponent::on_entity_disconnect(const EntityAddressType* /*addr*/) {
   remote_spine_addr_       = {};
   semp_subscribe_pending_  = false;
   semp_read_status_        = SempReadStatus::DISCONNECTED;
+  semp_subscription_.status = SempRegistrationStatus::DISCONNECTED;
+  semp_binding_.status = SempRegistrationStatus::DISCONNECTED;
+  semp_gate_.reset();
+  semp_cleanup_pending_ = false;
   pairing_state_      = remote_ski_.empty() ? "Inaktiv" : "Getrennt — suche Gerät...";
   /* Re-announce mDNS so the remote device reconnects immediately (eebus-go: checkAutoReannounce on disconnect) */
   set_mdns_register(false);
@@ -1227,6 +1456,10 @@ bool EebusEgComponent::start_eebus_service_(
       local_entity_, kFeatureTypeTypeSmartEnergyManagementPs, kRoleTypeClient);
   if (!local_semp_feature_)
     ESP_LOGW(TAG, "SEMP client feature init failed — OSSHPCF data unavailable");
+  else
+    FEATURE_LOCAL_SET_FUNCTION_OPERATIONS(local_semp_feature_, kFunctionTypeSmartEnergyManagementPsData, true, false);
+  ESP_LOGI(TAG, "%s OSSHPCF setup: diagnostic SEMP client; CEM use case not advertised; subscription/binding await remote HPCF; control commands disabled",
+           instance_name());
 
   /* Register entity with device so it is advertised via SPINE/mDNS */
   DEVICE_LOCAL_ADD_ENTITY(device_local, local_entity_);
@@ -1332,6 +1565,10 @@ void EebusEgComponent::forget_pairing() {
   remote_spine_addr_   = {};
   semp_subscribe_pending_ = false;
   semp_read_status_    = SempReadStatus::DISCONNECTED;
+  semp_gate_.reset();
+  semp_cleanup_pending_ = false;
+  semp_subscription_.status = SempRegistrationStatus::DISCONNECTED;
+  semp_binding_.status = SempRegistrationStatus::DISCONNECTED;
   failsafe_set_        = false;
   heartbeat_alarm_     = false;
   pairing_state_       = "Inaktiv";

@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<datagram xmlns="http://docs.eebus.org/spine/xsd/v1"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://docs.eebus.org/spine/xsd/v1 file:../../XSDs/EEBus_SPINE_TS_Datagram.xsd">
+    <header>
+        <specificationVersion>1.3.0</specificationVersion>
+        <addressSource>
+            <device>d:_i:46925_TestDevice-S</device>
+            <entity>1</entity>
+            <feature>2</feature>
+        </addressSource>
+        <addressDestination>
+            <device>d:_i:46925_TestDevice-C</device>
+            <entity>1</entity>
+            <feature>2</feature>
+        </addressDestination>
+        <msgCounter>34</msgCounter>
+        <cmdClassifier>notify</cmdClassifier>
+        <timestamp>2016-03-16T18:25:00.0Z</timestamp>
+    </header>
+    <payload>
+        <cmd>
+            <function>setpointListData</function>
+			<filter>
+				<cmdControl>
+					<delete/>
+				</cmdControl>
+			    <setpointListDataSelectors>
+			        <setpointId>1</setpointId> <!-- Identifier of the list entry, where elements were deleted -->    
+			    </setpointListDataSelectors>
+                <setpointDataElements>
+                    <valueMax/> <!-- Deleted element -->    
+                </setpointDataElements>
+            </filter>
+			<filter>
+				<cmdControl>
+					<partial/>
+				</cmdControl>
+            </filter>
+            <setpointListData>
+                <setpointData>
+                    <setpointId>1</setpointId> <!-- Identifier of the list entry, where elements were added or modified -->
+                    <valueMin> <!-- Modified element (was present before) -->
+                        <number>4</number>
+                    </valueMin>
+                    <valueToleranceAbsolute> <!-- Added element (was not present before) -->
+                        <number>1</number>
+                    </valueToleranceAbsolute>
+                </setpointData>
+            </setpointListData>
+        </cmd>
+    </payload>
+</datagram>

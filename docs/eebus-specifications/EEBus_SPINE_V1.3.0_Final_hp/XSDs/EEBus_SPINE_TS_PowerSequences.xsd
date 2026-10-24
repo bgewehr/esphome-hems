@@ -1,0 +1,447 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Smart Premises Interoperable Neutral-Message Exchange (SPINE)
+    Version 1.3.0 (final)
+    2023-08-31
+    Copyright (c) 2023 EEBus Initiative e.V.  All Rights Reserved.
+    Source: https://www.eebus.org/en/specifications/
+-->
+<xs:schema xmlns:ns_p="http://docs.eebus.org/spine/xsd/v1" xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://docs.eebus.org/spine/xsd/v1" version="1.3.0"
+    blockDefault="#all" elementFormDefault="qualified">
+    <xs:annotation>
+        <xs:documentation>EEBus SPINE Specification schema. Copyright 2023 EEBus Initiative e.V.  All rights reserved.</xs:documentation>
+    </xs:annotation>
+    <xs:include schemaLocation="EEBus_SPINE_TS_CommonDataTypes.xsd"/>
+    <xs:include schemaLocation="EEBus_SPINE_TS_Measurement.xsd"/>
+    <xs:simpleType name="AlternativesIdType">
+        <xs:restriction base="xs:unsignedInt"/>
+    </xs:simpleType>
+    <xs:simpleType name="PowerSequenceIdType">
+        <xs:restriction base="xs:unsignedInt"/>
+    </xs:simpleType>
+    <xs:simpleType name="PowerTimeSlotNumberType">
+        <xs:restriction base="xs:unsignedInt"/>
+    </xs:simpleType>
+    <xs:simpleType name="PowerTimeSlotValueTypeType">
+        <xs:union memberTypes="ns_p:PowerTimeSlotValueTypeEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="PowerTimeSlotValueTypeEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="power"/>
+            <xs:enumeration value="powerMin"/>
+            <xs:enumeration value="powerMax"/>
+            <xs:enumeration value="powerExpectedValue"/>
+            <xs:enumeration value="powerStandardDeviation"/>
+            <xs:enumeration value="powerSkewness"/>
+            <xs:enumeration value="energy"/>
+            <xs:enumeration value="energyMin"/>
+            <xs:enumeration value="energyMax"/>
+            <xs:enumeration value="energyExpectedValue"/>
+            <xs:enumeration value="energyStandardDeviation"/>
+            <xs:enumeration value="energySkewness"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="PowerSequenceScopeType">
+        <xs:union memberTypes="ns_p:PowerSequenceScopeEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="PowerSequenceScopeEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="forecast"/>
+            <xs:enumeration value="measurement"/>
+            <xs:enumeration value="recommendation"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="PowerSequenceStateType">
+        <xs:union memberTypes="ns_p:PowerSequenceStateEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="PowerSequenceStateEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="running"/>
+            <xs:enumeration value="paused"/>
+            <xs:enumeration value="scheduled"/>
+            <xs:enumeration value="scheduledPaused"/>
+            <xs:enumeration value="pending"/>
+            <xs:enumeration value="inactive"/>
+            <xs:enumeration value="completed"/>
+            <xs:enumeration value="invalid"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:complexType name="PowerTimeSlotScheduleDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:PowerSequenceIdType"/>
+            <xs:element minOccurs="0" name="slotNumber" type="ns_p:PowerTimeSlotNumberType"/>
+            <xs:element minOccurs="0" name="timePeriod" type="ns_p:TimePeriodType"/>
+            <xs:element minOccurs="0" name="defaultDuration" type="xs:duration"/>
+            <xs:element minOccurs="0" name="durationUncertainty" type="xs:duration"/>
+            <xs:element minOccurs="0" name="slotActivated" type="xs:boolean"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:DescriptionType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerTimeSlotScheduleData" type="ns_p:PowerTimeSlotScheduleDataType"/>
+    <xs:complexType name="PowerTimeSlotScheduleDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="slotNumber" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="timePeriod" type="ns_p:TimePeriodElementsType"/>
+            <xs:element minOccurs="0" name="defaultDuration" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="durationUncertainty" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="slotActivated" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerTimeSlotScheduleDataElements" type="ns_p:PowerTimeSlotScheduleDataElementsType"/>
+    <xs:complexType name="PowerTimeSlotScheduleListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:powerTimeSlotScheduleData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerTimeSlotScheduleListData" type="ns_p:PowerTimeSlotScheduleListDataType"/>
+    <xs:complexType name="PowerTimeSlotScheduleListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:PowerSequenceIdType"/>
+            <xs:element minOccurs="0" name="slotNumber" type="ns_p:PowerTimeSlotNumberType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerTimeSlotScheduleListDataSelectors" type="ns_p:PowerTimeSlotScheduleListDataSelectorsType"/>
+    <xs:complexType name="PowerTimeSlotValueDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:PowerSequenceIdType"/>
+            <xs:element minOccurs="0" name="slotNumber" type="ns_p:PowerTimeSlotNumberType"/>
+            <xs:element minOccurs="0" name="valueType" type="ns_p:PowerTimeSlotValueTypeType"/>
+            <xs:element minOccurs="0" name="value" type="ns_p:ScaledNumberType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerTimeSlotValueData" type="ns_p:PowerTimeSlotValueDataType"/>
+    <xs:complexType name="PowerTimeSlotValueDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="slotNumber" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="valueType" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="value" type="ns_p:ScaledNumberElementsType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerTimeSlotValueDataElements" type="ns_p:PowerTimeSlotValueDataElementsType"/>
+    <xs:complexType name="PowerTimeSlotValueListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:powerTimeSlotValueData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerTimeSlotValueListData" type="ns_p:PowerTimeSlotValueListDataType"/>
+    <xs:complexType name="PowerTimeSlotValueListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:PowerSequenceIdType"/>
+            <xs:element minOccurs="0" name="slotNumber" type="ns_p:PowerTimeSlotNumberType"/>
+            <xs:element minOccurs="0" name="valueType" type="ns_p:PowerTimeSlotValueTypeType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerTimeSlotValueListDataSelectors" type="ns_p:PowerTimeSlotValueListDataSelectorsType"/>
+    <xs:complexType name="PowerTimeSlotScheduleConstraintsDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:PowerSequenceIdType"/>
+            <xs:element minOccurs="0" name="slotNumber" type="ns_p:PowerTimeSlotNumberType"/>
+            <xs:element minOccurs="0" name="earliestStartTime" type="ns_p:AbsoluteOrRelativeTimeType"/>
+            <xs:element minOccurs="0" name="latestEndTime" type="ns_p:AbsoluteOrRelativeTimeType"/>
+            <xs:element minOccurs="0" name="minDuration" type="xs:duration"/>
+            <xs:element minOccurs="0" name="maxDuration" type="xs:duration"/>
+            <xs:element minOccurs="0" name="optionalSlot" type="xs:boolean"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerTimeSlotScheduleConstraintsData" type="ns_p:PowerTimeSlotScheduleConstraintsDataType"/>
+    <xs:complexType name="PowerTimeSlotScheduleConstraintsDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="slotNumber" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="earliestStartTime" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="latestEndTime" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="minDuration" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="maxDuration" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="optionalSlot" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerTimeSlotScheduleConstraintsDataElements" type="ns_p:PowerTimeSlotScheduleConstraintsDataElementsType"/>
+    <xs:complexType name="PowerTimeSlotScheduleConstraintsListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:powerTimeSlotScheduleConstraintsData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerTimeSlotScheduleConstraintsListData" type="ns_p:PowerTimeSlotScheduleConstraintsListDataType"/>
+    <xs:complexType name="PowerTimeSlotScheduleConstraintsListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:PowerSequenceIdType"/>
+            <xs:element minOccurs="0" name="slotNumber" type="ns_p:PowerTimeSlotNumberType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerTimeSlotScheduleConstraintsListDataSelectors" type="ns_p:PowerTimeSlotScheduleConstraintsListDataSelectorsType"/>
+    <xs:complexType name="PowerSequenceAlternativesRelationDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="alternativesId" type="ns_p:AlternativesIdType"/>
+            <xs:element name="sequenceId" type="ns_p:PowerSequenceIdType" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerSequenceAlternativesRelationData" type="ns_p:PowerSequenceAlternativesRelationDataType"/>
+    <xs:complexType name="PowerSequenceAlternativesRelationDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="alternativesId" type="ns_p:ElementTagType"/>
+            <xs:element name="sequenceId" minOccurs="0" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerSequenceAlternativesRelationDataElements" type="ns_p:PowerSequenceAlternativesRelationDataElementsType"/>
+    <xs:complexType name="PowerSequenceAlternativesRelationListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:powerSequenceAlternativesRelationData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerSequenceAlternativesRelationListData" type="ns_p:PowerSequenceAlternativesRelationListDataType"/>
+    <xs:complexType name="PowerSequenceAlternativesRelationListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="alternativesId" type="ns_p:AlternativesIdType"/>
+            <xs:element name="sequenceId" type="ns_p:PowerSequenceIdType" minOccurs="0"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerSequenceAlternativesRelationListDataSelectors" type="ns_p:PowerSequenceAlternativesRelationListDataSelectorsType"/>
+    <xs:complexType name="PowerSequenceDescriptionDataType">
+        <xs:sequence>
+            <xs:element name="sequenceId" type="ns_p:PowerSequenceIdType" minOccurs="0"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:DescriptionType"/>
+            <xs:element minOccurs="0" name="positiveEnergyDirection" type="ns_p:EnergyDirectionType"/>
+            <xs:element minOccurs="0" name="powerUnit" type="ns_p:UnitOfMeasurementType"/>
+            <xs:element minOccurs="0" name="energyUnit" type="ns_p:UnitOfMeasurementType"/>
+            <xs:element minOccurs="0" name="valueSource" type="ns_p:MeasurementValueSourceType"/>
+            <xs:element minOccurs="0" name="scope" type="ns_p:PowerSequenceScopeType"/>
+            <xs:element minOccurs="0" name="taskIdentifier" type="xs:unsignedInt"/>
+            <xs:element minOccurs="0" name="repetitionsTotal" type="xs:unsignedInt"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerSequenceDescriptionData" type="ns_p:PowerSequenceDescriptionDataType"/>
+    <xs:complexType name="PowerSequenceDescriptionDataElementsType">
+        <xs:sequence>
+            <xs:element name="sequenceId" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="positiveEnergyDirection" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="powerUnit" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="energyUnit" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="valueSource" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="scope" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="taskIdentifier" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="repetitionsTotal" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerSequenceDescriptionDataElements" type="ns_p:PowerSequenceDescriptionDataElementsType"/>
+    <xs:complexType name="PowerSequenceDescriptionListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:powerSequenceDescriptionData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerSequenceDescriptionListData" type="ns_p:PowerSequenceDescriptionListDataType"/>
+    <xs:complexType name="PowerSequenceDescriptionListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:PowerSequenceIdType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerSequenceDescriptionListDataSelectors" type="ns_p:PowerSequenceDescriptionListDataSelectorsType"/>
+    <xs:complexType name="PowerSequenceStateDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:PowerSequenceIdType"/>
+            <xs:element minOccurs="0" name="state" type="ns_p:PowerSequenceStateType"/>
+            <xs:element minOccurs="0" name="activeSlotNumber" type="ns_p:PowerTimeSlotNumberType"/>
+            <xs:element minOccurs="0" name="elapsedSlotTime" type="xs:duration"/>
+            <xs:element minOccurs="0" name="remainingSlotTime" type="xs:duration"/>
+            <xs:element minOccurs="0" name="sequenceRemoteControllable" type="xs:boolean"/>
+            <xs:element minOccurs="0" name="activeRepetitionNumber" type="xs:unsignedInt"/>
+            <xs:element minOccurs="0" name="remainingPauseTime" type="xs:duration"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerSequenceStateData" type="ns_p:PowerSequenceStateDataType"/>
+    <xs:complexType name="PowerSequenceStateDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="state" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="activeSlotNumber" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="elapsedSlotTime" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="remainingSlotTime" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="sequenceRemoteControllable" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="activeRepetitionNumber" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="remainingPauseTime" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerSequenceStateDataElements" type="ns_p:PowerSequenceStateDataElementsType"/>
+    <xs:complexType name="PowerSequenceStateListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:powerSequenceStateData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerSequenceStateListData" type="ns_p:PowerSequenceStateListDataType"/>
+    <xs:complexType name="PowerSequenceStateListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:PowerSequenceIdType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerSequenceStateListDataSelectors" type="ns_p:PowerSequenceStateListDataSelectorsType"/>
+    <xs:complexType name="PowerSequenceScheduleDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:PowerSequenceIdType"/>
+            <xs:element minOccurs="0" name="startTime" type="ns_p:AbsoluteOrRelativeTimeType"/>
+            <xs:element minOccurs="0" name="endTime" type="ns_p:AbsoluteOrRelativeTimeType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerSequenceScheduleData" type="ns_p:PowerSequenceScheduleDataType"/>
+    <xs:complexType name="PowerSequenceScheduleDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="startTime" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="endTime" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerSequenceScheduleDataElements" type="ns_p:PowerSequenceScheduleDataElementsType"/>
+    <xs:complexType name="PowerSequenceScheduleListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:powerSequenceScheduleData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerSequenceScheduleListData" type="ns_p:PowerSequenceScheduleListDataType"/>
+    <xs:complexType name="PowerSequenceScheduleListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:PowerSequenceIdType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerSequenceScheduleListDataSelectors" type="ns_p:PowerSequenceScheduleListDataSelectorsType"/>
+    <xs:complexType name="PowerSequenceScheduleConstraintsDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:PowerSequenceIdType"/>
+            <xs:element minOccurs="0" name="earliestStartTime" type="ns_p:AbsoluteOrRelativeTimeType"/>
+            <xs:element minOccurs="0" name="latestStartTime" type="ns_p:AbsoluteOrRelativeTimeType"/>
+            <xs:element minOccurs="0" name="earliestEndTime" type="ns_p:AbsoluteOrRelativeTimeType"/>
+            <xs:element minOccurs="0" name="latestEndTime" type="ns_p:AbsoluteOrRelativeTimeType"/>
+            <xs:element minOccurs="0" name="optionalSequence" type="xs:boolean"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerSequenceScheduleConstraintsData" type="ns_p:PowerSequenceScheduleConstraintsDataType"/>
+    <xs:complexType name="PowerSequenceScheduleConstraintsDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="earliestStartTime" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="latestStartTime" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="earliestEndTime" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="latestEndTime" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="optionalSequence" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerSequenceScheduleConstraintsDataElements" type="ns_p:PowerSequenceScheduleConstraintsDataElementsType"/>
+    <xs:complexType name="PowerSequenceScheduleConstraintsListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:powerSequenceScheduleConstraintsData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerSequenceScheduleConstraintsListData" type="ns_p:PowerSequenceScheduleConstraintsListDataType"/>
+    <xs:complexType name="PowerSequenceScheduleConstraintsListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:PowerSequenceIdType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerSequenceScheduleConstraintsListDataSelectors" type="ns_p:PowerSequenceScheduleConstraintsListDataSelectorsType"/>
+    <xs:complexType name="PowerSequencePriceDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:PowerSequenceIdType"/>
+            <xs:element minOccurs="0" name="potentialStartTime" type="ns_p:AbsoluteOrRelativeTimeType"/>
+            <xs:element minOccurs="0" name="price" type="ns_p:ScaledNumberType"/>
+            <xs:element minOccurs="0" name="currency" type="ns_p:CurrencyType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerSequencePriceData" type="ns_p:PowerSequencePriceDataType"/>
+    <xs:complexType name="PowerSequencePriceDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="potentialStartTime" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="price" type="ns_p:ScaledNumberElementsType"/>
+            <xs:element minOccurs="0" name="currency" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerSequencePriceDataElements" type="ns_p:PowerSequencePriceDataElementsType"/>
+    <xs:complexType name="PowerSequencePriceListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:powerSequencePriceData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerSequencePriceListData" type="ns_p:PowerSequencePriceListDataType"/>
+    <xs:complexType name="PowerSequencePriceListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:PowerSequenceIdType"/>
+            <xs:element minOccurs="0" name="potentialStartTimeInterval" type="ns_p:TimestampIntervalType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerSequencePriceListDataSelectors" type="ns_p:PowerSequencePriceListDataSelectorsType"/>
+    <xs:complexType name="PowerSequenceSchedulePreferenceDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:PowerSequenceIdType"/>
+            <xs:element minOccurs="0" name="greenest" type="xs:boolean"/>
+            <xs:element minOccurs="0" name="cheapest" type="xs:boolean"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerSequenceSchedulePreferenceData" type="ns_p:PowerSequenceSchedulePreferenceDataType"/>
+    <xs:complexType name="PowerSequenceSchedulePreferenceDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="greenest" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="cheapest" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerSequenceSchedulePreferenceDataElements" type="ns_p:PowerSequenceSchedulePreferenceDataElementsType"/>
+    <xs:complexType name="PowerSequenceSchedulePreferenceListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:powerSequenceSchedulePreferenceData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerSequenceSchedulePreferenceListData" type="ns_p:PowerSequenceSchedulePreferenceListDataType"/>
+    <xs:complexType name="PowerSequenceSchedulePreferenceListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:PowerSequenceIdType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerSequenceSchedulePreferenceListDataSelectors" type="ns_p:PowerSequenceSchedulePreferenceListDataSelectorsType"/>
+    <xs:complexType name="PowerSequenceNodeScheduleInformationDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="nodeRemoteControllable" type="xs:boolean"/>
+            <xs:element minOccurs="0" name="supportsSingleSlotSchedulingOnly" type="xs:boolean"/>
+            <xs:element minOccurs="0" name="alternativesCount" type="xs:unsignedInt"/>
+            <xs:element minOccurs="0" name="totalSequencesCountMax" type="xs:unsignedInt"/>
+            <xs:element minOccurs="0" name="supportsReselection" type="xs:boolean"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerSequenceNodeScheduleInformationData" type="ns_p:PowerSequenceNodeScheduleInformationDataType"/>
+    <xs:complexType name="PowerSequenceNodeScheduleInformationDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="nodeRemoteControllable" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="supportsSingleSlotSchedulingOnly" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="alternativesCount" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="totalSequencesCountMax" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="supportsReselection" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerSequenceNodeScheduleInformationDataElements" type="ns_p:PowerSequenceNodeScheduleInformationDataElementsType"/>
+    <xs:complexType name="PowerSequenceScheduleConfigurationRequestCallType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:PowerSequenceIdType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerSequenceScheduleConfigurationRequestCall" type="ns_p:PowerSequenceScheduleConfigurationRequestCallType"/>
+    <xs:complexType name="PowerSequenceScheduleConfigurationRequestCallElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerSequenceScheduleConfigurationRequestCallElements" type="ns_p:PowerSequenceScheduleConfigurationRequestCallElementsType"/>
+    <xs:complexType name="PowerSequencePriceCalculationRequestCallType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:PowerSequenceIdType"/>
+            <xs:element minOccurs="0" name="potentialStartTime" type="ns_p:AbsoluteOrRelativeTimeType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerSequencePriceCalculationRequestCall" type="ns_p:PowerSequencePriceCalculationRequestCallType"/>
+    <xs:complexType name="PowerSequencePriceCalculationRequestCallElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="potentialStartTime" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="powerSequencePriceCalculationRequestCallElements" type="ns_p:PowerSequencePriceCalculationRequestCallElementsType"/>
+</xs:schema>

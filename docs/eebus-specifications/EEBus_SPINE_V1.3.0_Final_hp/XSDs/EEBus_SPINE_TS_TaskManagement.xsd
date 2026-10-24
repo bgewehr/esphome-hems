@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Smart Premises Interoperable Neutral-Message Exchange (SPINE)
+    Version 1.3.0 (final)
+    2023-08-31
+    Copyright (c) 2023 EEBus Initiative e.V.  All Rights Reserved.
+    Source: https://www.eebus.org/en/specifications/
+-->
+<xs:schema xmlns:ns_p="http://docs.eebus.org/spine/xsd/v1" xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://docs.eebus.org/spine/xsd/v1" version="1.3.0"
+    blockDefault="#all" elementFormDefault="qualified">
+    <xs:annotation>
+        <xs:documentation>EEBus SPINE Specification schema. Copyright 2023 EEBus Initiative e.V.  All rights reserved.</xs:documentation>
+    </xs:annotation>
+    <xs:include schemaLocation="EEBus_SPINE_TS_CommonDataTypes.xsd"/>
+    <xs:include schemaLocation="EEBus_SPINE_TS_DirectControl.xsd"/>
+    <xs:include schemaLocation="EEBus_SPINE_TS_HVAC.xsd"/>
+    <xs:include schemaLocation="EEBus_SPINE_TS_LoadControl.xsd"/>
+    <xs:include schemaLocation="EEBus_SPINE_TS_PowerSequences.xsd"/>
+    <xs:simpleType name="TaskManagementJobIdType">
+        <xs:restriction base="xs:unsignedInt"/>
+    </xs:simpleType>
+    <xs:simpleType name="TaskManagementJobStateType">
+        <xs:union memberTypes="ns_p:DirectControlActivityStateEnumType ns_p:HvacOverrunStatusEnumType ns_p:LoadControlEventStateEnumType ns_p:PowerSequenceStateEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="TaskManagementJobSourceType">
+        <xs:union memberTypes="ns_p:TaskManagementJobSourceEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="TaskManagementJobSourceEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="internalMechanism"/>
+            <xs:enumeration value="userInteraction"/>
+            <xs:enumeration value="externalConfiguration"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:complexType name="TaskManagementDirectControlRelatedType"/>
+    <xs:complexType name="TaskManagementDirectControlRelatedElementsType"/>
+    <xs:complexType name="TaskManagementHvacRelatedType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="overrunId" type="ns_p:HvacOverrunIdType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="TaskManagementHvacRelatedElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="overrunId" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="TaskManagementLoadControlReleatedType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="eventId" type="ns_p:LoadControlEventIdType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="TaskManagementLoadControlReleatedElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="eventId" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="TaskManagementPowerSequencesRelatedType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:PowerSequenceIdType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="TaskManagementPowerSequencesRelatedElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="TaskManagementSmartEnergyManagementPsRelatedType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:PowerSequenceIdType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="TaskManagementSmartEnergyManagementPsRelatedElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="TaskManagementJobDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="jobId" type="ns_p:TaskManagementJobIdType"/>
+            <xs:element name="timestamp" type="ns_p:AbsoluteOrRelativeTimeType" minOccurs="0"/>
+            <xs:element minOccurs="0" name="jobState" type="ns_p:TaskManagementJobStateType"/>
+            <xs:element name="elapsedTime" type="xs:duration" minOccurs="0"/>
+            <xs:element name="remainingTime" type="xs:duration" minOccurs="0"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="taskManagementJobData" type="ns_p:TaskManagementJobDataType"/>
+    <xs:complexType name="TaskManagementJobDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="jobId" type="ns_p:ElementTagType"/>
+            <xs:element name="timestamp" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="jobState" type="ns_p:ElementTagType"/>
+            <xs:element name="elapsedTime" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element name="remainingTime" minOccurs="0" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="taskManagementJobDataElements" type="ns_p:TaskManagementJobDataElementsType"/>
+    <xs:complexType name="TaskManagementJobListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:taskManagementJobData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="taskManagementJobListData" type="ns_p:TaskManagementJobListDataType"/>
+    <xs:complexType name="TaskManagementJobListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="jobId" type="ns_p:TaskManagementJobIdType"/>
+            <xs:element minOccurs="0" name="jobState" type="ns_p:TaskManagementJobStateType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="taskManagementJobListDataSelectors" type="ns_p:TaskManagementJobListDataSelectorsType"/>
+    <xs:complexType name="TaskManagementJobRelationDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="jobId" type="ns_p:TaskManagementJobIdType"/>
+            <xs:element minOccurs="0" name="directControlRelated" type="ns_p:TaskManagementDirectControlRelatedType"/>
+            <xs:element minOccurs="0" name="hvacRelated" type="ns_p:TaskManagementHvacRelatedType"/>
+            <xs:element minOccurs="0" name="loadControlReleated" type="ns_p:TaskManagementLoadControlReleatedType"/>
+            <xs:element minOccurs="0" name="powerSequencesRelated" type="ns_p:TaskManagementPowerSequencesRelatedType"/>
+            <xs:element minOccurs="0" name="smartEnergyManagementPsRelated" type="ns_p:TaskManagementSmartEnergyManagementPsRelatedType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="taskManagementJobRelationData" type="ns_p:TaskManagementJobRelationDataType"/>
+    <xs:complexType name="TaskManagementJobRelationDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="jobId" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="directControlRelated" type="ns_p:TaskManagementDirectControlRelatedElementsType"/>
+            <xs:element minOccurs="0" name="hvacRelated" type="ns_p:TaskManagementHvacRelatedElementsType"/>
+            <xs:element minOccurs="0" name="loadControlReleated" type="ns_p:TaskManagementLoadControlReleatedElementsType"/>
+            <xs:element minOccurs="0" name="powerSequencesRelated" type="ns_p:TaskManagementPowerSequencesRelatedElementsType"/>
+            <xs:element minOccurs="0" name="smartEnergyManagementPsRelated" type="ns_p:TaskManagementSmartEnergyManagementPsRelatedElementsType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="taskManagementJobRelationDataElements" type="ns_p:TaskManagementJobRelationDataElementsType"/>
+    <xs:complexType name="TaskManagementJobRelationListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:taskManagementJobRelationData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="taskManagementJobRelationListData" type="ns_p:TaskManagementJobRelationListDataType"/>
+    <xs:complexType name="TaskManagementJobRelationListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="jobId" type="ns_p:TaskManagementJobIdType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="taskManagementJobRelationListDataSelectors" type="ns_p:TaskManagementJobRelationListDataSelectorsType"/>
+    <xs:complexType name="TaskManagementJobDescriptionDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="jobId" type="ns_p:TaskManagementJobIdType"/>
+            <xs:element minOccurs="0" name="jobSource" type="ns_p:TaskManagementJobSourceType"/>
+            <xs:element minOccurs="0" name="label" type="ns_p:LabelType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:DescriptionType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="taskManagementJobDescriptionData" type="ns_p:TaskManagementJobDescriptionDataType"/>
+    <xs:complexType name="TaskManagementJobDescriptionDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="jobId" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="jobSource" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="label" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="taskManagementJobDescriptionDataElements" type="ns_p:TaskManagementJobDescriptionDataElementsType"/>
+    <xs:complexType name="TaskManagementJobDescriptionListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:taskManagementJobDescriptionData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="taskManagementJobDescriptionListData" type="ns_p:TaskManagementJobDescriptionListDataType"/>
+    <xs:complexType name="TaskManagementJobDescriptionListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="jobId" type="ns_p:TaskManagementJobIdType"/>
+            <xs:element minOccurs="0" name="jobSource" type="ns_p:TaskManagementJobSourceType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="taskManagementJobDescriptionListDataSelectors" type="ns_p:TaskManagementJobDescriptionListDataSelectorsType"/>
+    <xs:complexType name="TaskManagementOverviewDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="remoteControllable" type="xs:boolean"/>
+            <xs:element minOccurs="0" name="jobsActive" type="xs:boolean"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="taskManagementOverviewData" type="ns_p:TaskManagementOverviewDataType"/>
+    <xs:complexType name="TaskManagementOverviewDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="remoteControllable" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="jobsActive" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="taskManagementOverviewDataElements" type="ns_p:TaskManagementOverviewDataElementsType"/>
+</xs:schema>

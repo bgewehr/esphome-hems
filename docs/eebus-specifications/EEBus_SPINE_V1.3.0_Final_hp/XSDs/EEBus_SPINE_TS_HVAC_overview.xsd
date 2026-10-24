@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Smart Premises Interoperable Neutral-Message Exchange (SPINE)
+    Version 1.3.0 (final)
+    2023-08-31
+    Copyright (c) 2023 EEBus Initiative e.V.  All Rights Reserved.
+    Source: https://www.eebus.org/en/specifications/
+-->
+<xs:schema xmlns:ns_p="http://docs.eebus.org/spine/xsd/v1" xmlns:xs="http://www.w3.org/2001/XMLSchema"
+    targetNamespace="http://docs.eebus.org/spine/xsd/v1" version="1.3.0" blockDefault="#all" elementFormDefault="qualified">
+    <xs:annotation>
+        <xs:documentation>EEBus SPINE Specification schema. Copyright 2023 EEBus Initiative e.V.  All rights reserved.</xs:documentation>
+    </xs:annotation>
+    <xs:include schemaLocation="EEBus_SPINE_TS_HVAC.xsd"/>
+    <xs:group name="group_hvac">
+        <xs:sequence>
+            <xs:group ref="ns_p:hvacSystemFunction"/>
+            <xs:group ref="ns_p:hvacSystemFunctionOperationModeRelation"/>
+            <xs:group ref="ns_p:hvacSystemFunctionSetpointRelation"/>
+            <xs:group ref="ns_p:hvacSystemFunctionPowerSequenceRelation"/>
+            <xs:group ref="ns_p:hvacSystemFunctionDescription"/>
+            <xs:group ref="ns_p:hvacOperationModeDescription"/>
+            <xs:group ref="ns_p:hvacOverrun"/>
+            <xs:group ref="ns_p:hvacOverrunDescription"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="hvacSystemFunction">
+        <xs:sequence>
+            <xs:element ref="ns_p:hvacSystemFunctionListData"/>
+            <xs:element ref="ns_p:hvacSystemFunctionListDataSelectors"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="hvacSystemFunctionOperationModeRelation">
+        <xs:sequence>
+            <xs:element ref="ns_p:hvacSystemFunctionOperationModeRelationListData"/>
+            <xs:element ref="ns_p:hvacSystemFunctionOperationModeRelationListDataSelectors"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="hvacSystemFunctionSetpointRelation">
+        <xs:sequence>
+            <xs:element ref="ns_p:hvacSystemFunctionSetpointRelationListData"/>
+            <xs:element ref="ns_p:hvacSystemFunctionSetpointRelationListDataSelectors"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="hvacSystemFunctionPowerSequenceRelation">
+        <xs:sequence>
+            <xs:element ref="ns_p:hvacSystemFunctionPowerSequenceRelationListData"/>
+            <xs:element ref="ns_p:hvacSystemFunctionPowerSequenceRelationListDataSelectors"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="hvacSystemFunctionDescription">
+        <xs:sequence>
+            <xs:element ref="ns_p:hvacSystemFunctionDescriptionListData"/>
+            <xs:element ref="ns_p:hvacSystemFunctionDescriptionListDataSelectors"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="hvacOperationModeDescription">
+        <xs:sequence>
+            <xs:element ref="ns_p:hvacOperationModeDescriptionListData"/>
+            <xs:element ref="ns_p:hvacOperationModeDescriptionListDataSelectors"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="hvacOverrun">
+        <xs:sequence>
+            <xs:element ref="ns_p:hvacOverrunListData"/>
+            <xs:element ref="ns_p:hvacOverrunListDataSelectors"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="hvacOverrunDescription">
+        <xs:sequence>
+            <xs:element ref="ns_p:hvacOverrunDescriptionListData"/>
+            <xs:element ref="ns_p:hvacOverrunDescriptionListDataSelectors"/>
+        </xs:sequence>
+    </xs:group>
+</xs:schema>

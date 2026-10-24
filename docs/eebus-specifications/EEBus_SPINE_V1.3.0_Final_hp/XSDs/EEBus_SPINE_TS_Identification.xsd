@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Smart Premises Interoperable Neutral-Message Exchange (SPINE)
+    Version 1.3.0 (final)
+    2023-08-31
+    Copyright (c) 2023 EEBus Initiative e.V.  All Rights Reserved.
+    Source: https://www.eebus.org/en/specifications/
+-->
+<xs:schema xmlns:ns_p="http://docs.eebus.org/spine/xsd/v1" xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://docs.eebus.org/spine/xsd/v1" version="1.3.0"
+    blockDefault="#all" elementFormDefault="qualified">
+    <xs:annotation>
+        <xs:documentation>EEBus SPINE Specification schema. Copyright 2023 EEBus Initiative e.V.  All rights reserved.</xs:documentation>
+    </xs:annotation>
+    <xs:include schemaLocation="EEBus_SPINE_TS_CommonDataTypes.xsd"/>
+    <xs:include schemaLocation="EEBus_SPINE_TS_Measurement.xsd"/>
+    <xs:simpleType name="IdentificationIdType">
+        <xs:restriction base="xs:unsignedInt"/>
+    </xs:simpleType>
+    <xs:simpleType name="IdentificationTypeType">
+        <xs:union memberTypes="ns_p:IdentificationTypeEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="IdentificationTypeEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="eui48"/>
+            <xs:enumeration value="eui64"/>
+            <xs:enumeration value="userRfidTag"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="IdentificationValueType">
+        <xs:restriction base="xs:string"/>
+    </xs:simpleType>
+    <xs:simpleType name="SessionIdType">
+        <xs:restriction base="xs:unsignedInt"/>
+    </xs:simpleType>
+    <xs:complexType name="IdentificationDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="identificationId" type="ns_p:IdentificationIdType"/>
+            <xs:element minOccurs="0" name="identificationType" type="ns_p:IdentificationTypeType"/>
+            <xs:element minOccurs="0" name="identificationValue" type="ns_p:IdentificationValueType"/>
+            <xs:element minOccurs="0" name="authorized" type="xs:boolean"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="identificationData" type="ns_p:IdentificationDataType"/>
+    <xs:complexType name="IdentificationDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="identificationId" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="identificationType" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="identificationValue" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="authorized" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="identificationDataElements" type="ns_p:IdentificationDataElementsType"/>
+    <xs:complexType name="IdentificationListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:identificationData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="identificationListData" type="ns_p:IdentificationListDataType"/>
+    <xs:complexType name="IdentificationListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="identificationId" type="ns_p:IdentificationIdType"/>
+            <xs:element minOccurs="0" name="identificationType" type="ns_p:IdentificationTypeType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="identificationListDataSelectors" type="ns_p:IdentificationListDataSelectorsType"/>
+    <xs:complexType name="SessionIdentificationDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sessionId" type="ns_p:SessionIdType"/>
+            <xs:element minOccurs="0" name="identificationId" type="ns_p:IdentificationIdType"/>
+            <xs:element minOccurs="0" name="isLatestSession" type="xs:boolean"/>
+            <xs:element minOccurs="0" name="timePeriod" type="ns_p:TimePeriodType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="sessionIdentificationData" type="ns_p:SessionIdentificationDataType"/>
+    <xs:complexType name="SessionIdentificationDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sessionId" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="identificationId" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="isLatestSession" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="timePeriod" type="ns_p:TimePeriodElementsType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="sessionIdentificationDataElements" type="ns_p:SessionIdentificationDataElementsType"/>
+    <xs:complexType name="SessionIdentificationListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:sessionIdentificationData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="sessionIdentificationListData" type="ns_p:SessionIdentificationListDataType"/>
+    <xs:complexType name="SessionIdentificationListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sessionId" type="ns_p:SessionIdType"/>
+            <xs:element minOccurs="0" name="identificationId" type="ns_p:IdentificationIdType"/>
+            <xs:element minOccurs="0" name="isLatestSession" type="xs:boolean"/>
+            <xs:element minOccurs="0" name="timePeriod" type="ns_p:TimePeriodType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="sessionIdentificationListDataSelectors" type="ns_p:SessionIdentificationListDataSelectorsType"/>
+    <xs:complexType name="SessionMeasurementRelationDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sessionId" type="ns_p:SessionIdType"/>
+            <xs:element minOccurs="0" name="measurementId" type="ns_p:MeasurementIdType" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="sessionMeasurementRelationData" type="ns_p:SessionMeasurementRelationDataType"/>
+    <xs:complexType name="SessionMeasurementRelationDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sessionId" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="measurementId" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="sessionMeasurementRelationDataElements" type="ns_p:SessionMeasurementRelationDataElementsType"/>
+    <xs:complexType name="SessionMeasurementRelationListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:sessionMeasurementRelationData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="sessionMeasurementRelationListData" type="ns_p:SessionMeasurementRelationListDataType"/>
+    <xs:complexType name="SessionMeasurementRelationListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sessionId" type="ns_p:SessionIdType"/>
+            <xs:element minOccurs="0" name="measurementId" type="ns_p:MeasurementIdType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="sessionMeasurementRelationListDataSelectors" type="ns_p:SessionMeasurementRelationListDataSelectorsType"/>
+</xs:schema>

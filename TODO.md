@@ -1,6 +1,6 @@
 # Entwicklungs-TODO
 
-Stand: 2026-10-17
+Stand: 2026-10-18
 
 Diese Datei ist die zentrale Status- und Reihenfolgenliste. Fachliche
 Begruendung und Abnahmekriterien stehen in den verlinkten Konzeptdokumenten.
@@ -30,13 +30,23 @@ Begruendung und Abnahmekriterien stehen in den verlinkten Konzeptdokumenten.
 3. **SYS-16** Bestehende Upstream-Beitraege nachverfolgen und weitere
   belegte Kandidaten pruefen; keine Doppelbeitraege erstellen.
 4. **BD-23** EV und Wallbox auf reale Leistungsstufen quantisieren.
-5. **OHP-20** Laufende 24h-Startflankenmessung vom 17./18. Oktober auswerten
-  und fehlende Zustaende der Bosch-Capture-Matrix gezielt erfassen.
+5. **OHP-20** Fehlende Zustaende der Bosch-Capture-Matrix sowie automatische
+  Subscription und Binding am Geraet gezielt pruefen; neue Live-Freigabe erforderlich.
 6. **OHP-21** Bosch-Einheiten, Zeiten und State-Transitions dokumentieren.
 
 ## Systemarchitektur
 
 Konzept: [Zielarchitektur und Entwicklungsplan](docs/system-architecture.md)
+
+- [x] **SYS-17** HEMS-UI-Diagnose inventarisiert und bereinigt
+  (aufgenommen und umgesetzt 2026-10-18, auf Benutzerwunsch vorgezogen).
+  Sechs UI-Elemente entfernt: drei abgeschlossene K40RF-Testelemente,
+  doppelte §14a-Kanalanzeige, Grid-Charge-Rohwert und Ladezustands-Rohanzeige.
+  Ladezustand bleibt intern fuer den Regler; Testskript, Testzustand und
+  exklusiver ACK-Getter entfernt. Doppelte Heartbeat-Auswertung und reine
+  MPC-Log-Automationen entfernt. Inventar/Begruendung im Architekturkonzept.
+  3/3 Hosttests und Firmware-Build `2026-10-18 11:45:40 +0200` bestanden.
+  Produktive Steuerungs-/Schutzlogik erhalten; kein OTA, keine Live-Abnahme.
 
 - [x] **SYS-00** Zielarchitektur und Entwicklungsplaene dokumentiert
   (2026-07-13).
@@ -160,6 +170,14 @@ Konzept: [§14a-Leistungsbudget-Verteilung](docs/power-distribution-concept.md)
 - [ ] **BD-31** Requested/acknowledged/measured je Verbraucher verfolgen.
 - [ ] **BD-32** Closed-Loop-Compliance-Waechter implementieren.
 - [ ] **BD-33** Degradierung, Failsafe und Reconnect deterministisch machen.
+  Storage-Schutzpause und regulaere EV-Freigabesperre sind keine pauschale
+  Geraetestoerung. Seit OTA 2026-10-18, Live-Build 20:58:39, nennt die
+  Diagnose Zeitpunkt, Transaktionsphase bzw. Soll-/Ist-Ruecklesewerte.
+  Mitschnitt 22:47 am 2026-10-18 nennt fuer die Pause um 21:23:40:
+  `transaction expired`, `stage=read-timeout`, `age_ms=10423`.
+  Ursache der ausbleibenden Read-Bestaetigung noch offen; der Writer bleibt
+  bis zum Neustart angehalten. Wiederanlauf separat bewerten, Schutz nicht
+  durch automatisches Ruecksetzen umgehen.
 - [ ] **BD-40** Budget- und Compliance-Diagnose bereitstellen.
 - [ ] **BD-41** Fake- und Hardware-Szenariotests durchfuehren.
 - [ ] **BD-42** Reproduzierbares Compliance-Abnahmeprotokoll erstellen.
@@ -235,8 +253,9 @@ OTA-Stand ist `Oct 8 2026 07:17:00`, kein aktuell erneut gemessener Live-Stand.
 
 Konzept: [Bosch-Waermepumpe: OSSHPCF / SEMP](docs/oss-hpcf-bosch.md)
 
-- [x] **OHP-00** Use Case erkennen und SEMP-Server abonnieren; am realen
-  Bosch-Geraet mit `err=0` verifiziert (2026-07-13).
+- [x] **OHP-00** Use Case erkennen und SEMP-Subscription lokal senden;
+  `err=0` am Bosch-Geraet belegt nur den lokalen Versand (2026-07-13),
+  nicht die Annahme in der entfernten Subscription-Tabelle.
 - [x] **OHP-01** Standardvertrag und Bosch-Unbekannte dokumentiert
   (2026-07-13).
 - [x] **OHP-10** `SmartEnergyManagementPsData` strukturiert und read-only
@@ -251,10 +270,19 @@ Konzept: [Bosch-Waermepumpe: OSSHPCF / SEMP](docs/oss-hpcf-bosch.md)
   Auswertung 2026-10-17: 24h-Capture vom 7./8. Oktober enthaelt elf leere
   Snapshots, alle bei 16-23 W; trotz Betrieb bis 2937 W kein neuer Snapshot
   in der Hochleistungsphase. Zehn API-Unterbrechungen, kein lueckenloser
-  Stabilitaetsnachweis. Neue Messung seit 17. Oktober 10:49 lokal: Flanke
-  <=50 W auf >50 W, zehn Read-Versuche im 60-s-Abstand, Ende nach 24h.
-  Sieben Offline-Tests und kurzer Live-Logger-Test bestanden; die laufende
-  Messung und die tatsaechlichen Bosch-Antworten bleiben auszuwerten.
+  Stabilitaetsnachweis. Messung 17./18. Oktober 10:49 lokal abgeschlossen:
+  elf Startreihen, 110 korrelierte leere Antworten, davon 85 bei >500 W;
+  keine Timeouts/API-Abbrueche. Alte Subscription-Zaehlung kein Annahmenachweis.
+  Automatische HPCF-abhaengige Subscription/Binding, Tabellenpruefung und
+  getrennte Notify-/Reply-Diagnose lokal implementiert; 835 OpenEEBus-Tests,
+  3 Hosttests, 16 Capture-Tests und Firmware-Build bestanden. OTA am
+  2026-10-18 erfolgreich, aktueller Live-Build 22:52:10 bestaetigt.
+  Relative Geraeteadressen korrekt gegen Tabellenbesitzer aufgeloest;
+  begrenzte automatische Wiederholung mit Negativfaellen getestet.
+  Passiver Anlauf 22:53: erste Tabellen noch unvollstaendig, Versuch 2/3
+  bestaetigt Subscription und Binding ohne Tastendruck, beide ACKs `error=0`.
+  Registrierung damit am Bosch-Geraet nachgewiesen; Flexibilitaetsangebote
+  und echte SEMP-Notifications bleiben Teil der offenen Capture-Matrix.
 - [ ] **OHP-21** Bosch-Einheiten, Zeiten und State-Transitions dokumentieren.
 - [ ] **OHP-22** Herstellerneutrales Flexibilitaetsmodell implementieren.
 - [ ] **OHP-30** Constraint-bewussten Dry-run-Planer implementieren.

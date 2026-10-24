@@ -1,0 +1,314 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Smart Premises Interoperable Neutral-Message Exchange (SPINE)
+    Version 1.3.0 (final)
+    2023-08-31
+    Copyright (c) 2023 EEBus Initiative e.V.  All Rights Reserved.
+    Source: https://www.eebus.org/en/specifications/
+-->
+<xs:schema xmlns:ns_p="http://docs.eebus.org/spine/xsd/v1" xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://docs.eebus.org/spine/xsd/v1" version="1.3.0"
+    blockDefault="#all" elementFormDefault="qualified">
+    <xs:annotation>
+        <xs:documentation>EEBus SPINE Specification schema. Copyright 2023 EEBus Initiative e.V.  All rights reserved.</xs:documentation>
+    </xs:annotation>
+    <xs:include schemaLocation="EEBus_SPINE_TS_CommonDataTypes.xsd"/>
+    <xs:simpleType name="NetworkManagementNativeSetupType">
+        <xs:restriction base="xs:string"/>
+    </xs:simpleType>
+    <xs:simpleType name="NetworkManagementScanSetupType">
+        <xs:restriction base="xs:string"/>
+    </xs:simpleType>
+    <xs:simpleType name="NetworkManagementSetupType">
+        <xs:restriction base="xs:string"/>
+    </xs:simpleType>
+    <xs:simpleType name="NetworkManagementCandidateSetupType">
+        <xs:restriction base="xs:string"/>
+    </xs:simpleType>
+    <xs:simpleType name="NetworkManagementTechnologyAddressType">
+        <xs:restriction base="xs:string"/>
+    </xs:simpleType>
+    <xs:simpleType name="NetworkManagementCommunicationsTechnologyInformationType">
+        <xs:restriction base="xs:string"/>
+    </xs:simpleType>
+    <xs:simpleType name="NetworkManagementMinimumTrustLevelType">
+        <xs:restriction base="xs:string"/>
+    </xs:simpleType>
+    <xs:simpleType name="NetworkManagementProcessTimeoutType">
+        <xs:restriction base="xs:duration"/>
+    </xs:simpleType>
+    <xs:simpleType name="NetworkManagementFeatureSetType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="gateway"/>
+            <xs:enumeration value="router"/>
+            <xs:enumeration value="smart"/>
+            <xs:enumeration value="simple"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="NetworkManagementProcessStateStateType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="succeeded"/>
+            <xs:enumeration value="failed"/>
+            <xs:enumeration value="aborted"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="NetworkManagementStateChangeType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="added"/>
+            <xs:enumeration value="removed"/>
+            <xs:enumeration value="modified"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:complexType name="NetworkManagementAddNodeCallType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="nodeAddress" type="ns_p:FeatureAddressType"/>
+            <xs:element minOccurs="0" name="nativeSetup" type="ns_p:NetworkManagementNativeSetupType"/>
+            <xs:element minOccurs="0" name="timeout" type="ns_p:NetworkManagementProcessTimeoutType"/>
+            <xs:element minOccurs="0" name="label" type="ns_p:LabelType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:DescriptionType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="networkManagementAddNodeCall" type="ns_p:NetworkManagementAddNodeCallType"/>
+    <xs:complexType name="NetworkManagementAddNodeCallElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="nodeAddress" type="ns_p:FeatureAddressElementsType"/>
+            <xs:element minOccurs="0" name="nativeSetup" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="timeout" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="label" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="networkManagementAddNodeCallElements" type="ns_p:NetworkManagementAddNodeCallElementsType"/>
+    <xs:complexType name="NetworkManagementRemoveNodeCallType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="nodeAddress" type="ns_p:FeatureAddressType"/>
+            <xs:element minOccurs="0" name="timeout" type="ns_p:NetworkManagementProcessTimeoutType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="networkManagementRemoveNodeCall" type="ns_p:NetworkManagementRemoveNodeCallType"/>
+    <xs:complexType name="NetworkManagementRemoveNodeCallElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="nodeAddress" type="ns_p:FeatureAddressElementsType"/>
+            <xs:element minOccurs="0" name="timeout" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="networkManagementRemoveNodeCallElements" type="ns_p:NetworkManagementRemoveNodeCallElementsType"/>
+    <xs:complexType name="NetworkManagementModifyNodeCallType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="nodeAddress" type="ns_p:FeatureAddressType"/>
+            <xs:element minOccurs="0" name="nativeSetup" type="ns_p:NetworkManagementNativeSetupType"/>
+            <xs:element minOccurs="0" name="timeout" type="ns_p:NetworkManagementProcessTimeoutType"/>
+            <xs:element minOccurs="0" name="label" type="ns_p:LabelType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:DescriptionType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="networkManagementModifyNodeCall" type="ns_p:NetworkManagementModifyNodeCallType"/>
+    <xs:complexType name="NetworkManagementModifyNodeCallElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="nodeAddress" type="ns_p:FeatureAddressElementsType"/>
+            <xs:element minOccurs="0" name="nativeSetup" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="timeout" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="label" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="networkManagementModifyNodeCallElements" type="ns_p:NetworkManagementModifyNodeCallElementsType"/>
+    <xs:complexType name="NetworkManagementScanNetworkCallType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="scanSetup" type="ns_p:NetworkManagementScanSetupType"/>
+            <xs:element minOccurs="0" name="timeout" type="ns_p:NetworkManagementProcessTimeoutType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="networkManagementScanNetworkCall" type="ns_p:NetworkManagementScanNetworkCallType"/>
+    <xs:complexType name="NetworkManagementScanNetworkCallElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="scanSetup" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="timeout" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="networkManagementScanNetworkCallElements" type="ns_p:NetworkManagementScanNetworkCallElementsType"/>
+    <xs:complexType name="NetworkManagementDiscoverCallType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="discoverAddress" type="ns_p:FeatureAddressType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="networkManagementDiscoverCall" type="ns_p:NetworkManagementDiscoverCallType"/>
+    <xs:complexType name="NetworkManagementDiscoverCallElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="discoverAddress" type="ns_p:FeatureAddressElementsType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="networkManagementDiscoverCallElements" type="ns_p:NetworkManagementDiscoverCallElementsType"/>
+    <xs:complexType name="NetworkManagementAbortCallType"/>
+    <xs:element name="networkManagementAbortCall" type="ns_p:NetworkManagementAbortCallType"/>
+    <xs:complexType name="NetworkManagementAbortCallElementsType"/>
+    <xs:element name="networkManagementAbortCallElements" type="ns_p:NetworkManagementAbortCallElementsType"/>
+    <xs:complexType name="NetworkManagementProcessStateDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="state" type="ns_p:NetworkManagementProcessStateStateType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:DescriptionType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="networkManagementProcessStateData" type="ns_p:NetworkManagementProcessStateDataType"/>
+    <xs:complexType name="NetworkManagementProcessStateDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="state" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="networkManagementProcessStateDataElements" type="ns_p:NetworkManagementProcessStateDataElementsType"/>
+    <xs:complexType name="NetworkManagementJoiningModeDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="setup" type="ns_p:NetworkManagementSetupType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="networkManagementJoiningModeData" type="ns_p:NetworkManagementJoiningModeDataType"/>
+    <xs:complexType name="NetworkManagementJoiningModeDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="setup" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="networkManagementJoiningModeDataElements" type="ns_p:NetworkManagementJoiningModeDataElementsType"/>
+    <xs:complexType name="NetworkManagementReportCandidateDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="candidateSetup" type="ns_p:NetworkManagementCandidateSetupType"/>
+            <xs:element minOccurs="0" name="setupUsableForAdd" type="xs:boolean"/>
+            <xs:element minOccurs="0" name="label" type="ns_p:LabelType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:DescriptionType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="networkManagementReportCandidateData" type="ns_p:NetworkManagementReportCandidateDataType"/>
+    <xs:complexType name="NetworkManagementReportCandidateDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="candidateSetup" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="setupUsableForAdd" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="label" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="networkManagementReportCandidateDataElements" type="ns_p:NetworkManagementReportCandidateDataElementsType"/>
+    <xs:complexType name="NetworkManagementDeviceDescriptionDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="deviceAddress" type="ns_p:DeviceAddressType"/>
+            <xs:element minOccurs="0" name="deviceType" type="ns_p:DeviceTypeType"/>
+            <xs:element minOccurs="0" name="networkManagementResponsibleAddress" type="ns_p:FeatureAddressType"/>
+            <xs:element minOccurs="0" name="nativeSetup" type="ns_p:NetworkManagementNativeSetupType"/>
+            <xs:element minOccurs="0" name="technologyAddress" type="ns_p:NetworkManagementTechnologyAddressType"/>
+            <xs:element minOccurs="0" name="communicationsTechnologyInformation" type="ns_p:NetworkManagementCommunicationsTechnologyInformationType"/>
+            <xs:element minOccurs="0" name="networkFeatureSet" type="ns_p:NetworkManagementFeatureSetType"/>
+            <xs:element minOccurs="0" name="lastStateChange" type="ns_p:NetworkManagementStateChangeType"/>
+            <xs:element minOccurs="0" name="minimumTrustLevel" type="ns_p:NetworkManagementMinimumTrustLevelType"/>
+            <xs:element minOccurs="0" name="label" type="ns_p:LabelType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:DescriptionType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="networkManagementDeviceDescriptionData" type="ns_p:NetworkManagementDeviceDescriptionDataType"/>
+    <xs:complexType name="NetworkManagementDeviceDescriptionDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="deviceAddress" type="ns_p:DeviceAddressElementsType"/>
+            <xs:element minOccurs="0" name="deviceType" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="networkManagementResponsibleAddress" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="nativeSetup" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="technologyAddress" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="communicationsTechnologyInformation" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="networkFeatureSet" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="lastStateChange" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="minimumTrustLevel" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="label" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="networkManagementDeviceDescriptionDataElements" type="ns_p:NetworkManagementDeviceDescriptionDataElementsType"/>
+    <xs:complexType name="NetworkManagementDeviceDescriptionListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:networkManagementDeviceDescriptionData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="networkManagementDeviceDescriptionListData" type="ns_p:NetworkManagementDeviceDescriptionListDataType"/>
+    <xs:complexType name="NetworkManagementDeviceDescriptionListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="deviceAddress" type="ns_p:DeviceAddressType"/>
+            <xs:element minOccurs="0" name="deviceType" type="ns_p:DeviceTypeType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="networkManagementDeviceDescriptionListDataSelectors" type="ns_p:NetworkManagementDeviceDescriptionListDataSelectorsType"/>
+    <xs:complexType name="NetworkManagementEntityDescriptionDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="entityAddress" type="ns_p:EntityAddressType"/>
+            <xs:element minOccurs="0" name="entityType" type="ns_p:EntityTypeType"/>
+            <xs:element minOccurs="0" name="lastStateChange" type="ns_p:NetworkManagementStateChangeType"/>
+            <xs:element minOccurs="0" name="minimumTrustLevel" type="ns_p:NetworkManagementMinimumTrustLevelType"/>
+            <xs:element minOccurs="0" name="label" type="ns_p:LabelType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:DescriptionType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="networkManagementEntityDescriptionData" type="ns_p:NetworkManagementEntityDescriptionDataType"/>
+    <xs:complexType name="NetworkManagementEntityDescriptionDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="entityAddress" type="ns_p:EntityAddressElementsType"/>
+            <xs:element minOccurs="0" name="entityType" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="lastStateChange" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="minimumTrustLevel" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="label" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="networkManagementEntityDescriptionDataElements" type="ns_p:NetworkManagementEntityDescriptionDataElementsType"/>
+    <xs:complexType name="NetworkManagementEntityDescriptionListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:networkManagementEntityDescriptionData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="networkManagementEntityDescriptionListData" type="ns_p:NetworkManagementEntityDescriptionListDataType"/>
+    <xs:complexType name="NetworkManagementEntityDescriptionListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="entityAddress" type="ns_p:EntityAddressType"/>
+            <xs:element minOccurs="0" name="entityType" type="ns_p:EntityTypeType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="networkManagementEntityDescriptionListDataSelectors" type="ns_p:NetworkManagementEntityDescriptionListDataSelectorsType"/>
+    <xs:complexType name="NetworkManagementFeatureDescriptionDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="featureAddress" type="ns_p:FeatureAddressType"/>
+            <xs:element minOccurs="0" name="featureType" type="ns_p:FeatureTypeType"/>
+            <xs:element maxOccurs="unbounded" minOccurs="0" name="specificUsage" type="ns_p:FeatureSpecificUsageType"/>
+            <xs:element minOccurs="0" name="featureGroup" type="ns_p:FeatureGroupType"/>
+            <xs:element minOccurs="0" name="role" type="ns_p:RoleType"/>
+            <xs:element maxOccurs="unbounded" minOccurs="0" name="supportedFunction" type="ns_p:FunctionPropertyType"/>
+            <xs:element minOccurs="0" name="lastStateChange" type="ns_p:NetworkManagementStateChangeType"/>
+            <xs:element minOccurs="0" name="minimumTrustLevel" type="ns_p:NetworkManagementMinimumTrustLevelType"/>
+            <xs:element minOccurs="0" name="label" type="ns_p:LabelType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:DescriptionType"/>
+            <xs:element minOccurs="0" name="maxResponseDelay" type="ns_p:MaxResponseDelayType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="networkManagementFeatureDescriptionData" type="ns_p:NetworkManagementFeatureDescriptionDataType"/>
+    <xs:complexType name="NetworkManagementFeatureDescriptionDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="featureAddress" type="ns_p:FeatureAddressElementsType"/>
+            <xs:element minOccurs="0" name="featureType" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="specificUsage" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="featureGroup" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="role" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="supportedFunction" type="ns_p:FunctionPropertyElementsType"/>
+            <xs:element minOccurs="0" name="lastStateChange" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="minimumTrustLevel" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="label" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="maxResponseDelay" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="networkManagementFeatureDescriptionDataElements" type="ns_p:NetworkManagementFeatureDescriptionDataElementsType"/>
+    <xs:complexType name="NetworkManagementFeatureDescriptionListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:networkManagementFeatureDescriptionData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="networkManagementFeatureDescriptionListData" type="ns_p:NetworkManagementFeatureDescriptionListDataType"/>
+    <xs:complexType name="NetworkManagementFeatureDescriptionListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="featureAddress" type="ns_p:FeatureAddressType"/>
+            <xs:element minOccurs="0" name="featureType" type="ns_p:FeatureTypeType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="networkManagementFeatureDescriptionListDataSelectors" type="ns_p:NetworkManagementFeatureDescriptionListDataSelectorsType"/>
+</xs:schema>

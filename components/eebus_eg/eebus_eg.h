@@ -25,6 +25,7 @@
 #include <atomic>
 #include <string>
 #include <vector>
+#include "semp_diagnostics.h"
 
 #include "esphome/core/component.h"
 #include "esphome/core/automation.h"
@@ -108,6 +109,10 @@ class EebusEgComponent : public Component {
   void clear_limit() { set_limit(0.0f); }
   void request_semp_read();
   const char* semp_read_status() const;
+  const char* semp_binding_status() const;
+  bool should_log_semp_line(const std::string& line, bool merged) {
+    return (merged ? semp_merged_node_log_ : semp_raw_node_log_).should_log(line, semp_gate_.generation());
+  }
 
   /* Minimum active limit in W. Limits below this are raised to it — needed for
    * devices that silently ignore lower values (WP: 4200 W). Set to 0 for devices
@@ -144,7 +149,6 @@ class EebusEgComponent : public Component {
   bool        mpc_connected()      const { return mpc_connected_; }
   float       current_power_w()    const { return current_power_w_; }
   float       active_limit_w()     const { return active_limit_w_; }
-  bool        is_limit_ack_pending() const { return pending_limit_w_ >= 0.0f; }
   std::string remote_ski()         const { return remote_ski_; }
   std::string remote_spine_addr()  const { return remote_spine_addr_; }
   std::string local_ski()          const { return local_ski_; }
@@ -160,6 +164,9 @@ class EebusEgComponent : public Component {
     std::string r;
     if (connected_)     r += " | CS/LPC";
     if (mpc_connected_) r += " | MU/MPC";
+    if (connected_ && semp_gate_.available() &&
+        semp_subscription_.status.load() == SempRegistrationStatus::CONFIRMED)
+      r += " | OSSHPCF (lesend)";
     return r.empty() ? std::string("(keine)") : r.substr(3);
   }
   void on_remote_use_case(int actor, int uc_name_id, const char* uc_str, const char* actor_str, bool add);
@@ -195,9 +202,30 @@ class EebusEgComponent : public Component {
   bool start_eebus_service_(const uint8_t* cert, size_t cl,
                              const uint8_t* key,  size_t kl);
   void subscribe_semp_();
+  void clear_semp_registrations_();
+  void verify_semp_registrations_(DeviceRemoteObject* remote, FeatureRemoteObject* server);
 
-  enum class SempReadStatus { IDLE, QUEUED, PENDING, RECEIVED, EMPTY, TIMEOUT, FAILED, DISCONNECTED };
+  enum class SempRegistrationStatus { UNKNOWN, PENDING, CONFIRMED, ABSENT, FAILED, DISCONNECTED };
+  static const char* registration_status_name_(SempRegistrationStatus status);
+  struct SempRegistrationCheck {
+    FunctionType function;
+    std::atomic<SempRegistrationStatus> status{SempRegistrationStatus::UNKNOWN};
+    EebusEgComponent* owner{nullptr};
+    DeviceRemoteObject* remote{nullptr};
+    FeatureRemoteObject* server{nullptr};
+    uint32_t generation{0};
+  };
+  SempRegistrationCheck semp_subscription_{kFunctionTypeNodeManagementSubscriptionData};
+  SempRegistrationCheck semp_binding_{kFunctionTypeNodeManagementBindingData};
+  SempUseCaseGate semp_gate_;
+  SempRegistrationRetry semp_registration_retry_;
+  SempNodeLogFilter semp_raw_node_log_;
+  SempNodeLogFilter semp_merged_node_log_;
+  std::atomic<bool> semp_cleanup_pending_{false};
+
+  enum class SempReadStatus { IDLE, QUEUED, PENDING, RECEIVED, EMPTY, TIMEOUT, FAILED, DISCONNECTED, UNAVAILABLE };
   std::atomic<SempReadStatus> semp_read_status_{SempReadStatus::IDLE};
+  uint32_t semp_read_generation_{0};
 
   /* Config */
   uint16_t    ship_port_          {4713};
@@ -320,7 +348,7 @@ static void MpcL_OnMeasurementReceive(
   float v = (float)val->value * powf(10.0f, (float)val->scale);
   const char* name = MuMpcMeasurementGetName(name_id);
   /* Log raw ScaledValue (value * 10^scale) so diagnostics survive float truncation */
-  ESP_LOGI("eebus_eg", "MPC measurement [id=%d]: %s = %lld * 10^%d = %.3f W (from: %s)",
+  ESP_LOGV("eebus_eg", "MPC measurement [id=%d]: %s = %lld * 10^%d = %.3f W (from: %s)",
            (int)name_id,
            name ? name : "unknown",
            (long long)val->value, (int)val->scale,

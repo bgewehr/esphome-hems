@@ -111,6 +111,15 @@ not physical operation or acceptance on other hardware.
 
 ## Overview
 
+Text status entities publish their initial value (including an empty value) and
+then only changes. Equality filters compare with the last published state;
+polling intervals and control logic remain unchanged. This avoids repeated API
+state messages (`[S][text_sensor]`) for connection, SKI, use-case, binding, storage,
+budget and other status displays. Existing change guards remain in place.
+Timestamped events and numeric measurement series are not deduplicated. New API
+clients still receive the current state when connecting. At VERBOSE, raw
+text-sensor input diagnostics can still show each poll before filtering.
+
 ```
 VNB gateway (CLS Steuerbox)
         │ EEBus LPC  (CS role, port 4712)
@@ -125,7 +134,7 @@ The controller combines:
 
 - **EEBus CS receiver** (`eebus_cs`): receives §14a limits from the VNB's CLS Steuerbox
 - **EEBus EG sender** (`eebus_eg`): sends limits to EEBus-capable devices (heat pump, wallbox)
-- **OSSHPCF/SEMP**: read-only monitoring and diagnostic reads of compressor flexibility
+- **OSSHPCF/SEMP**: monitoring and diagnostic reads, with automatic subscription/binding when the remote device offers HPCF; no scheduling commands
 - **MPC**: reads current power consumption of devices via EEBus
 - **Xemex CSMB Modbus RTU** server emulation
 - **Fronius Gen24** Modbus TCP monitoring and battery discharge limiting
@@ -217,6 +226,9 @@ credentials or remove sensitive data from earlier commits.
 
 # Clean build + upload:
 .\compile.ps1 --clean --upload --device 192.168.x.x
+
+# Official Linux container, clean build + upload:
+.\compile.ps1 --docker --clean --upload --device 192.168.x.x
 ```
 
 The script resolves ESPHome from `PATH` or its standard Windows install locations
@@ -225,14 +237,25 @@ Do **not** use `esphome run` directly; compile and upload stay separate so OTA
 can use the artifact that was just validated. Do not overlap builds in the
 same build directory, and verify the live Build Time after deployment.
 
+The explicit `--docker` mode uses `ghcr.io/esphome/esphome:2026.5.3` and does
+not require the native Windows ESPHome launcher. Docker Desktop must be running
+with Linux containers. Named volumes `hems-firmware-build`, `hems-firmware-data`
+and `hems-firmware-cache` keep build artifacts and dependencies on Linux storage.
+The project mount is writable because the EEBus generator creates local source
+wrappers. The container uses `TZ=Europe/Berlin` for this reference installation;
+adjust that setting for a different site. It can reach the target's LAN IP for
+OTA without host networking. Do not mix native and Docker `--upload-only`
+commands: they use different build artifacts. No Windows security policy is
+changed and no automatic fallback is attempted after a native launcher failure.
+
 On Linux, use the ESPHome CLI with the same pinned version as CI. The reference
-YAML contains a Windows-specific `build_path`; change it to a relative path such
-as `build/esphome-hems` first (resolved under ESPHome's data directory). Compile
-and upload separately:
+YAML defaults to a Windows-specific build path; override `firmware_build_path`
+consistently for both compilation and upload. Relative paths are resolved under
+ESPHome's data directory:
 
 ```bash
-esphome compile esphome-hems.yaml
-esphome upload esphome-hems.yaml --device <device-address>
+esphome -s firmware_build_path build/esphome-hems compile esphome-hems.yaml
+esphome -s firmware_build_path build/esphome-hems upload esphome-hems.yaml --device <device-address>
 ```
 
 ### Build troubleshooting
@@ -244,6 +267,22 @@ esphome upload esphome-hems.yaml --device <device-address>
 | Undefined references after changing library sources | Clean the selected configuration with `esphome clean <configuration.yaml>`, then compile again. Cached CMake source discovery can miss newly generated source wrappers. |
 | YAML validates but compilation fails | Validation checks configuration schemas, not whether all C/C++ dependencies compile and link. Read the first compiler error. |
 | Errors with a different ESPHome release | Reproduce with ESPHome 2026.5.3 before investigating version compatibility. Include the version, board, configuration and first compiler error in a report; remove credentials. |
+| Windows application-control error / WinError 4551 | `Get-Command esphome.exe` may resolve correctly while Windows blocks the unsigned launcher. Check Code Integrity events and Smart App Control with the administrator. PATH edits and PowerShell `RemoteSigned` do not resolve that policy decision. The explicit Docker workflow uses the official Linux image independently of the Windows launcher. |
+
+### Web log formatting
+
+The full configuration uses `web_log_format` with ESPHome 2026.5.3's local
+web server v3. Its build hook adds the `/0.js` script reference to the generated
+compressed page, because `local: true` otherwise ignores the `js_include`
+reference in the generated page shell. Only generated build files are patched.
+The script removes embedded ANSI style codes from displayed log tags and
+messages; severity colors, thread names, and firmware log output are preserved.
+An unexpected upstream header format fails the build instead of silently
+omitting the correction. Recheck this integration when upgrading ESPHome.
+
+Run `node tests/web_log_format_test.cjs` for the formatting regression test.
+Append the generated source directory (for example `C:/temp/esphome-hems/src`)
+to also verify the embedded page and JavaScript resource after a build.
 
 ### Local validation tasks
 
@@ -420,11 +459,13 @@ the implementation and unresolved hardware-compliance limits.
 | MonitoringOfPowerConsumption | MPC | StVE→HEMS | Power feedback |
 | OptimizationOfSelfConsumptionByHPCF | OSSHPCF | StVE→HEMS | Compressor flexibility (PV) |
 
-**OSSHPCF/SEMP** is detected automatically when the heat pump announces its compressor entity. The controller then subscribes to the remote `SmartEnergyManagementPs` server and observes `smartEnergyManagementPsData` plus the related configuration and price functions — the basis for future PV self-consumption optimisation.
+**OSSHPCF/SEMP** activates subscription and binding automatically when the paired EG device advertises the Compressor/HPCF use case. It verifies matching entries in the remote registration tables and distinguishes notifications from read replies. Without the use case, manual reads are blocked; withdrawal schedules best-effort unsubscription/unbinding.
 
-The current implementation is deliberately read-only: the exact sequence,
-slot and constraint data exposed by the Bosch gateway still needs to be
-captured and documented before control requests are enabled. See
+Binding prepares permission only: no full CEM actor is advertised and no
+start, pause, resume, stop or sequence-selection commands are sent. The exact
+sequence, slot and constraint data exposed by Bosch still needs to be
+captured before scheduling is enabled. The new registration diagnostics are
+build-tested, not yet verified by OTA/live hardware. See
 [Bosch heat pump OSSHPCF / SEMP](docs/oss-hpcf-bosch.md) for the known SPINE
 contract, open Bosch-specific questions and the staged implementation plan.
 

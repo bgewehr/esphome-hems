@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Smart Premises Interoperable Neutral-Message Exchange (SPINE)
+    Version 1.3.0 (final)
+    2023-08-31
+    Copyright (c) 2023 EEBus Initiative e.V.  All Rights Reserved.
+    Source: https://www.eebus.org/en/specifications/
+-->
+<xs:schema xmlns:ns_p="http://docs.eebus.org/spine/xsd/v1" xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://docs.eebus.org/spine/xsd/v1" version="1.3.0"
+    blockDefault="#all" elementFormDefault="qualified">
+    <xs:annotation>
+        <xs:documentation>EEBus SPINE Specification schema. Copyright 2023 EEBus Initiative e.V.  All rights reserved.</xs:documentation>
+    </xs:annotation>
+    <xs:include schemaLocation="EEBus_SPINE_TS_TariffInformation.xsd"/>
+    <xs:group name="group_tariff">
+        <xs:sequence>
+            <xs:group ref="ns_p:tariffOverallConstraints"/>
+            <xs:group ref="ns_p:tariff"/>
+            <xs:group ref="ns_p:tariffBoundaryRelation"/>
+            <xs:group ref="ns_p:tariffTierRelation"/>
+            <xs:group ref="ns_p:tariffDescription"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="group_tierBoundary">
+        <xs:sequence>
+            <xs:group ref="ns_p:tierBoundary"/>
+            <xs:group ref="ns_p:tierBoundaryDescription"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="group_commodity">
+        <xs:sequence>
+            <xs:group ref="ns_p:commodity"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="group_tier">
+        <xs:sequence>
+            <xs:group ref="ns_p:tier"/>
+            <xs:group ref="ns_p:tierIncentiveRelation"/>
+            <xs:group ref="ns_p:tierDescription"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="group_incentive">
+        <xs:sequence>
+            <xs:group ref="ns_p:incentive"/>
+            <xs:group ref="ns_p:incentiveDescription"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="tariffOverallConstraints">
+        <xs:sequence>
+            <xs:element ref="ns_p:tariffOverallConstraintsData"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="tariff">
+        <xs:sequence>
+            <xs:element ref="ns_p:tariffListData"/>
+            <xs:element ref="ns_p:tariffListDataSelectors"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="tariffBoundaryRelation">
+        <xs:sequence>
+            <xs:element ref="ns_p:tariffBoundaryRelationListData"/>
+            <xs:element ref="ns_p:tariffBoundaryRelationListDataSelectors"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="tariffTierRelation">
+        <xs:sequence>
+            <xs:element ref="ns_p:tariffTierRelationListData"/>
+            <xs:element ref="ns_p:tariffTierRelationListDataSelectors"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="tariffDescription">
+        <xs:sequence>
+            <xs:element ref="ns_p:tariffDescriptionListData"/>
+            <xs:element ref="ns_p:tariffDescriptionListDataSelectors"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="tierBoundary">
+        <xs:sequence>
+            <xs:element ref="ns_p:tierBoundaryListData"/>
+            <xs:element ref="ns_p:tierBoundaryListDataSelectors"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="tierBoundaryDescription">
+        <xs:sequence>
+            <xs:element ref="ns_p:tierBoundaryDescriptionListData"/>
+            <xs:element ref="ns_p:tierBoundaryDescriptionListDataSelectors"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="commodity">
+        <xs:sequence>
+            <xs:element ref="ns_p:commodityListData"/>
+            <xs:element ref="ns_p:commodityListDataSelectors"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="tier">
+        <xs:sequence>
+            <xs:element ref="ns_p:tierListData"/>
+            <xs:element ref="ns_p:tierListDataSelectors"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="tierIncentiveRelation">
+        <xs:sequence>
+            <xs:element ref="ns_p:tierIncentiveRelationListData"/>
+            <xs:element ref="ns_p:tierIncentiveRelationListDataSelectors"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="tierDescription">
+        <xs:sequence>
+            <xs:element ref="ns_p:tierDescriptionListData"/>
+            <xs:element ref="ns_p:tierDescriptionListDataSelectors"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="incentive">
+        <xs:sequence>
+            <xs:element ref="ns_p:incentiveListData"/>
+            <xs:element ref="ns_p:incentiveListDataSelectors"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="incentiveDescription">
+        <xs:sequence>
+            <xs:element ref="ns_p:incentiveDescriptionListData"/>
+            <xs:element ref="ns_p:incentiveDescriptionListDataSelectors"/>
+        </xs:sequence>
+    </xs:group>
+</xs:schema>

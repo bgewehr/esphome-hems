@@ -185,7 +185,7 @@ Berechnung und vorlaeufige Annahmen:
    darf natuerliche Batterieladung fuer den EV-Start verdraengt werden;
    sie bleibt trotzdem in der diagnostizierten Budgetreservierung enthalten.
    Diese Reservierung ist `max(Istladung, Ladeziel)`, nicht deren Summe.
-- Einheitliche Schwelle auf Betreiberwunsch: Beide Modi bewerten die
+- Bisheriger Firmwarestand vor der Restprognose-Umstellung: Beide Modi bewerten die
    verfuegbare EV-PV-Unterstuetzung, nicht die gesamte PV-Erzeugung.
    PV-Freigabe: ueber 500 W fuer 60 s; Pause: unter 500 W fuer 120 s.
    Low Solar: unter 500 W fuer 10 min; Rueckkehr: ueber 500 W fuer 5 min.
@@ -196,6 +196,42 @@ Berechnung und vorlaeufige Annahmen:
    Low Solar hebt allein eine PV-Pause auf, keinen
    manuellen Stopp. Netzbezug ist erlaubt, nicht als einzige Energiequelle
    vorgeschrieben; bestehende Batterie-Entladeberechtigungen bleiben relevant.
+- Modbus-Skalierung vom 2026-10-24: Alle Fronius-SunSpec-Messwerte verwenden
+   ausschliesslich bestaetigte Skalierungsfaktoren. Gueltige Faktoren duerfen
+   gecacht werden; nach Neustart sind sie unbekannt. Ein ungueltiger SF macht
+   den jeweiligen Cache wieder ungueltig. Ohne gueltigen Faktor oder bei
+   SunSpec-Fehlwerten unterdrueckt der Sensorfilter die Veroeffentlichung und
+   aktualisiert weder Messwertzustand noch Folgeverarbeitung. Batterie-SOC
+   wird zusaetzlich auf 0 bis 100 Prozent geprueft, nicht auf diese Grenzen
+   geklemmt. Host-Test und ESPHome-Konfigurationspruefung bestanden; noch
+   nicht auf das Geraet geladen.
+- Restprognose-Umstellung vom 2026-10-24: Policy-Kern und Host-Tests sind
+   vorbereitet, aber die Fronius-Datenanbindung fehlt; nicht geflasht.
+   Die Netzfreigabe soll bei eingeschaltetem Low-Solar-Schalter sofort gelten,
+   wenn die gueltige Erzeugungsprognose fuer den restlichen lokalen Tag unter
+   0,5 kWh liegt. Keine zehnminuetige Wartezeit und keine Ableitung aus
+   voruebergehend geringer PV-Leistung. Fehlende, abgelaufene oder ungueltige
+   Prognosen erlauben keinen Netz-Fallback. PV-Freigabe und Schutzsperren
+   bleiben davon getrennt; nur eine gueltige Low-Solar-Freigabe hebt das
+   feste Solar-Leistungslimit auf.
+   HEMS darf dafuer nicht von Home Assistant abhaengen. Die voruebergehende
+   HA-Prognoseanbindung und ihr Template-Helfer wurden entfernt.
+   Die lokale GEN24 Solar API lieferte beim lesenden Check keine Prognose.
+   Verifiziert ist der Cloud-Endpunkt
+   `GET https://api.solarweb.com/swqapi/pvsystems/{pvSystemId}/weather/energyforecast`
+   mit `EnergyExpected` in Wh je 15-Minuten-Intervall. Die
+   [Solar.web Query API](https://api.solarweb.com/swqapi/)
+   verlangt `AccessKeyId` und `AccessKeyValue`; Zugriff fuer diese Anlage
+   und Prognoseberechtigung sind noch nicht nachgewiesen.
+   Ein direkter Abruf durch HEMS waere HA-unabhaengig, aber nicht
+   internetunabhaengig. Diese Abhaengigkeit muss vor Umsetzung geklaert werden.
+   Aktuell bleiben die Prognoseeingaben im Firmwareadapter ungueltig;
+   diesen Zwischenstand nicht als fertige Prognosefunktion ausrollen.
+   In HA steht die Box `Solar Charging Optimization` direkt unter
+   `Wallbox & Škoda Enyaq` mit den vier vorhandenen Optimierungsschaltern.
+   Der Anzeigename nutzt jetzt `grid` statt `net`; die bestehende HA-Entity-ID
+   wurde beibehalten. Die Entity-Identitaet nach Firmware-Umbenennung ist
+   vor einer OTA noch zu pruefen.
 - Quellen muessen endlich, plausibel und maximal 10 s alt sein. Zeitstempel
    werden nicht durch zyklisches Wiederholen eines Wertes erneuert.
    Fehlende oder null-PV-Felder der Solar API gelten nicht als 0 W; dann kann
@@ -278,6 +314,18 @@ verriegeln den Schreiber. Solar-Pause liegt vor dem Xemex-Schutzautomaten;
 Nutzerwunsch, DI1, Simulation und Schutzsperren bleiben massgeblich.
 Bei §14a wird Ladung einmal vor der PV-Gutschrift reserviert; nicht durch
 Erzeugung gedeckte Ladung reduziert zusaetzlich das verfuegbare Netzbudget.
+
+Quellcode-Korrektur 2026-10-23 (noch nicht geflasht): Die Schutzpause versucht
+nach 30 s automatisch einen vollstaendigen Schreib-/Pruefzyklus. Weitere
+Fehlschlaege verlaengern die Wartezeit auf 60, 120, 240 und maximal 300 s;
+die Versuche werden ohne Neustart fortgesetzt. Alte Transaktionen werden
+invalidiert. Die EV-Speichersperre bleibt waehrend des Wiederanlaufs aktiv und
+wird erst nach gemeinsam bestaetigtem Modus, Sollwert und 15-s-Rueckfallzeit
+aufgehoben. Erfolgreiche Bestaetigung setzt die Wartezeit zurueck, die letzte
+Fehlerursache bleibt gespeichert. Nutzerlimit, Solar- und andere Schutzgates
+werden nicht uebergangen. Hosttests fuer Backoff, Zeitueberlauf und EV-Sperre
+bestanden; ESPHome-Konfigurationspruefung, Firmware-Build und OTA sind durch
+Windows-Anwendungssteuerung blockiert. Hardware-Wiederanlauf noch ungeprueft.
 
 Live-Fehler und Korrekturen am 2026-10-07:
 

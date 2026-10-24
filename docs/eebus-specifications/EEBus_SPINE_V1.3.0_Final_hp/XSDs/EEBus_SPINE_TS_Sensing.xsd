@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Smart Premises Interoperable Neutral-Message Exchange (SPINE)
+    Version 1.3.0 (final)
+    2023-08-31
+    Copyright (c) 2023 EEBus Initiative e.V.  All Rights Reserved.
+    Source: https://www.eebus.org/en/specifications/
+-->
+<xs:schema xmlns:ns_p="http://docs.eebus.org/spine/xsd/v1" xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://docs.eebus.org/spine/xsd/v1" version="1.3.0"
+    blockDefault="#all" elementFormDefault="qualified">
+    <xs:annotation>
+        <xs:documentation>EEBus SPINE Specification schema. Copyright 2023 EEBus Initiative e.V.  All rights reserved.</xs:documentation>
+    </xs:annotation>
+    <xs:include schemaLocation="EEBus_SPINE_TS_CommonDataTypes.xsd"/>
+    <xs:simpleType name="SensingStateType">
+        <xs:union memberTypes="ns_p:SensingStateEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="SensingStateEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="on"/>
+            <xs:enumeration value="off"/>
+            <xs:enumeration value="toggle"/>
+            <xs:enumeration value="level"/>
+            <xs:enumeration value="levelUp"/>
+            <xs:enumeration value="levelDown"/>
+            <xs:enumeration value="levelStart"/>
+            <xs:enumeration value="levelStop"/>
+            <xs:enumeration value="levelAbsolute"/>
+            <xs:enumeration value="levelRelative"/>
+            <xs:enumeration value="levelPercentageAbsolute"/>
+            <xs:enumeration value="levelPercentageRelative"/>
+            <xs:enumeration value="pressed"/>
+            <xs:enumeration value="longPressed"/>
+            <xs:enumeration value="released"/>
+            <xs:enumeration value="changed"/>
+            <xs:enumeration value="started"/>
+            <xs:enumeration value="stopped"/>
+            <xs:enumeration value="paused"/>
+            <xs:enumeration value="middle"/>
+            <xs:enumeration value="up"/>
+            <xs:enumeration value="down"/>
+            <xs:enumeration value="forward"/>
+            <xs:enumeration value="backwards"/>
+            <xs:enumeration value="open"/>
+            <xs:enumeration value="closed"/>
+            <xs:enumeration value="opening"/>
+            <xs:enumeration value="closing"/>
+            <xs:enumeration value="high"/>
+            <xs:enumeration value="low"/>
+            <xs:enumeration value="day"/>
+            <xs:enumeration value="night"/>
+            <xs:enumeration value="detected"/>
+            <xs:enumeration value="notDetected"/>
+            <xs:enumeration value="alarmed"/>
+            <xs:enumeration value="notAlarmed"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="SensingTypeType">
+        <xs:union memberTypes="ns_p:SensingTypeEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="SensingTypeEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="switch"/>
+            <xs:enumeration value="button"/>
+            <xs:enumeration value="level"/>
+            <xs:enumeration value="levelSwitch"/>
+            <xs:enumeration value="windowHandle"/>
+            <xs:enumeration value="contactSensor"/>
+            <xs:enumeration value="occupancySensor"/>
+            <xs:enumeration value="motionDetector"/>
+            <xs:enumeration value="fireDetector"/>
+            <xs:enumeration value="smokeDetector"/>
+            <xs:enumeration value="heatDetector"/>
+            <xs:enumeration value="waterDetector"/>
+            <xs:enumeration value="gasDetector"/>
+            <xs:enumeration value="alarmSensor"/>
+            <xs:enumeration value="powerAlarmSensor"/>
+            <xs:enumeration value="dayNightIndicator"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:complexType name="SensingDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="timestamp" type="ns_p:AbsoluteOrRelativeTimeType"/>
+            <xs:element minOccurs="0" name="state" type="ns_p:SensingStateType"/>
+            <xs:element minOccurs="0" name="value" type="ns_p:ScaledNumberType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="sensingData" type="ns_p:SensingDataType"/>
+    <xs:complexType name="SensingDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="timestamp" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="state" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="value" type="ns_p:ScaledNumberElementsType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="sensingDataElements" type="ns_p:SensingDataElementsType"/>
+    <xs:complexType name="SensingListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:sensingData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="sensingListData" type="ns_p:SensingListDataType"/>
+    <xs:complexType name="SensingListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="timestampInterval" type="ns_p:TimestampIntervalType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="sensingListDataSelectors" type="ns_p:SensingListDataSelectorsType"/>
+    <xs:complexType name="SensingDescriptionDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sensingType" type="ns_p:SensingTypeType"/>
+            <xs:element minOccurs="0" name="unit" type="ns_p:UnitOfMeasurementType"/>
+            <xs:element minOccurs="0" name="scopeType" type="ns_p:ScopeTypeType"/>
+            <xs:element minOccurs="0" name="label" type="ns_p:LabelType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:DescriptionType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="sensingDescriptionData" type="ns_p:SensingDescriptionDataType"/>
+    <xs:complexType name="SensingDescriptionDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sensingType" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="unit" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="scopeType" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="label" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="sensingDescriptionDataElements" type="ns_p:SensingDescriptionDataElementsType"/>
+</xs:schema>

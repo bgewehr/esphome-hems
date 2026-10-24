@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<datagram xmlns="http://docs.eebus.org/spine/xsd/v1"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://docs.eebus.org/spine/xsd/v1 file:../../XSDs/EEBus_SPINE_TS_Datagram.xsd">
+    <header>
+        <specificationVersion>1.3.0</specificationVersion>
+        <addressSource>
+            <device>d:_i:46925_TestDevice-C</device>
+            <entity>1</entity>
+            <feature>2</feature>
+        </addressSource>
+        <addressDestination>
+            <device>d:_i:46925_TestDevice-S</device>
+            <entity>1</entity>
+            <feature>2</feature>
+        </addressDestination>
+        <msgCounter>36</msgCounter>
+        <cmdClassifier>read</cmdClassifier>
+        <timestamp>2016-03-16T18:34:00.0Z</timestamp>
+    </header>
+    <payload>
+        <cmd>
+            <function>setpointListData</function>
+			<filter>
+				<cmdControl>
+					<partial/>
+				</cmdControl>
+                <setpointListDataSelectors>
+                    <setpointId>1</setpointId>
+                </setpointListDataSelectors>
+            </filter>
+            <setpointListData/>
+        </cmd>
+    </payload>
+</datagram>

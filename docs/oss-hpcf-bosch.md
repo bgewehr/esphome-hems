@@ -1,6 +1,6 @@
 # Bosch-Waermepumpe: OSSHPCF / SEMP
 
-Stand: 2026-10-17. Laufende Messungen sind keine abgeschlossene Hardwareabnahme.
+Stand: 2026-10-19. Lokaler Build ersetzt keine Hardwareabnahme.
 
 ## Ziel und Status
 
@@ -14,13 +14,134 @@ gesetzlichen Leistungsbegrenzung LPC zu trennen:
 3. Komfort-, Frostschutz- und geraeteseitige Betriebsgrenzen bleiben bei der
    Waermepumpe.
 
-Der aktuelle Stand ist **read-only Beobachtung**. `eebus_eg` erkennt den vom
-Bosch-Geraet angekuendigten Use Case, erzeugt ein lokales
-`SmartEnergyManagementPs`-Client-Feature und abonniert das entsprechende
-Server-Feature der Waermepumpe. Nach dem Subscription-Aufbau liest es einmalig
-den aktuellen `SmartEnergyManagementPsData`-Zustand und dekodiert eingehende
-SEMP-Daten begrenzt und null-sicher. Es werden keine OSSHPCF-Steuerbefehle
-gesendet.
+Der lokale Stand ist **Beobachtung mit automatischer Subscription und
+Binding, ohne Heizungs-Steuerbefehle**. Das vorbereitete lokale
+`SmartEnergyManagementPs`-Client-Feature wird fuer diese Operationen erst
+aktiv, wenn das gekoppelte EG-Geraet `Compressor / OSSHPCF` anbietet.
+Ein separater Binding-Schalter ist nicht erforderlich. Ohne Angebot wird
+auch ein manueller Read abgewiesen. Unveraenderte Ankuendigungen starten
+keinen erneuten Aufbau. Ruecknahme sperrt Reads und veranlasst bestmoegliches
+Unsubscribe/Unbind; Disconnect und vergessenes Pairing setzen die Erkennung
+zurueck. Verspaetete Antworten aus einer alten Aktivierung werden verworfen.
+
+`Aktive UC` zeigt `OSSHPCF (lesend)`, sobald bei bestehender Verbindung und
+HPCF-Angebot die Subscription in der Geraetetabelle bestaetigt ist.
+Ein Flexibilitaetsangebot, eine erfolgreiche Datenabfrage oder ein Binding
+sind fuer diesen Eintrag nicht erforderlich. Ohne bestaetigte Subscription,
+bei Disconnect oder Ruecknahme des UC fehlt der Eintrag. Ein separates
+Subscription-Status-Item entfaellt; interne Pruefung und Logs bleiben erhalten.
+`Binding Status` bleibt vorerst separat. Erst wenn Lesen und Steuern
+betriebsbereit sind, einschliesslich bestaetigtem Binding, darf der Zusatz
+`(lesend)` entfallen und der Binding-Status in der UC-Anzeige aufgehen.
+Bei verlorenem Binding darf diese dann keine volle Steuerbereitschaft anzeigen.
+
+Subscription und Binding werden anhand der jeweiligen
+NodeManagement-Tabellen des Geraets geprueft. `result=sent` ist nur lokaler
+Versanderfolg; erst `verified: present=true` bestaetigt einen Eintrag mit
+passender Client- und Serveradresse. Eine ausgelassene Geraeteadresse wird
+gegen das Geraet der korrelierten Tabellenantwort aufgeloest. Explizite
+Geraeteadressen, vollstaendige Entity-Pfade und Feature-IDs muessen passen;
+fehlende Entity-/Feature-Felder werden nicht ergaenzt. Fehlende
+Tabellenantwort ist keine bestaetigte Ablehnung.
+OpenEEBus verarbeitet fuer diese Tabellen nun auch Read/Reply mit
+Message-Counter-Korrelation.
+
+Die Logs unterscheiden `cmd=notify` und `cmd=reply`. Neben den begrenzt
+dekodierten Rohdaten zeigt `OSSHPCF merged:` den zusammengefuehrten Zustand
+des Remote-Features, wenn sich die dekodierten Ausgaben unterscheiden oder
+eine davon gekuerzt wurde. Gleiche ungekuerzte Ausgaben werden nicht doppelt
+ausgegeben. Node-Eigenschaften erscheinen je Roh-/Merge-Kanal beim ersten
+Auftreten, bei Aenderungen und nach einer neuen HPCF-Aktivierung erneut.
+Das beruecksichtigt die Erkenntnis aus PR #77 zu Teilmeldungen.
+Normale Requests, Tabellenbestaetigungen und Datenantworten stehen auf INFO;
+Fehler und fehlende Registrierung auf WARN. Fuer vollstaendige Captures muss
+der Laufzeit-Loglevel mindestens INFO fuer `eebus_eg` zulassen.
+`feature_type` stammt aus dem Feature-Objekt (remote: Discovery), niemals aus
+einer angenommenen Bedeutung der Feature-ID; unbekannte Typen bleiben `unknown`.
+Die generische `SPINE data change`-Ausgabe liegt grundsaetzlich auf VERBOSE,
+auch fuer Heartbeats (`fn=18`) und Messwertmeldungen (`fn=51`). Eigene
+Messwert-, Status- und Fehlerlogs sowie die Verarbeitung bleiben unveraendert.
+VERBOSE wird mitkompiliert und steht in `Log Level` und `Boot Log Level` zur
+Auswahl. `Boot Log Level` bleibt die beim Start eingefrorene Session-Obergrenze:
+Zum Freigeben von VERBOSE zuerst dort VERBOSE waehlen, neu starten und danach
+`Log Level` auf VERBOSE setzen. Der aktive Log-Filter wird bei Levelwechseln
+erneut angewendet. Vor dem Wiederherstellen der Auswahl startet der Logger
+weiterhin mit DEBUG; die Standardauswahl beider Dropdowns bleibt WARN.
+Der Capture zaehlt Requests, Tabellenbestaetigungen, Replies und Notifications
+getrennt. Alte `subscribe_err=0`-Zeilen sind keine Bestaetigungen.
+
+### Registrierungsdiagnose im Log
+
+Die Diagnose protokolliert ereignisbezogen:
+
+- `SPINE registration tx` (weiterhin WARN): Subscription/Binding, lokale und entfernte
+  Geraeteadresse, `msg_cnt`, angeforderte Quittierung und lokaler `send_err`.
+- `SPINE registration result` (weiterhin WARN): NodeManagement-Antwort mit Adressen,
+  `msg_ref_present`, `msg_ref`, `error_present` und numerischem SPINE-Fehler.
+  Nur bei vorhandener Referenz und Fehlernummer kann eine Antwort zugeordnet
+  werden. `error=0` bedeutet Erfolg, `6` CommandNotSupported, `7`
+  CommandRejected, `9` BindingIsNecessaryForThisCommand. Andere Codes bleiben
+  numerisch sichtbar. Die Zeile kann auch andere NodeManagement-Calls
+  betreffen; Zuordnung immer ueber Geraetepaar und Message-Counter.
+- `OSSHPCF ... verified`: eine Ergebniszeile mit Eintragszahl, `msg_ref`,
+  Feature-Typ und passendem Client-/Serverpaar auf INFO. Bei fehlendem Treffer
+  stehen stattdessen erwartete Adressen und Array-Verfuegbarkeit auf WARN.
+- `OSSHPCF ... entry[...]`: vollstaendige Tabellenvergleiche auf DEBUG,
+  einschliesslich anderer LPC-/MPC-Eintraege mit `comparison=...`.
+  `missing-device` unterscheidet eine relative/unvollstaendige Adresse von
+  `different-device`, `different-feature` oder `different-entity`.
+
+Tabellen mit null Eintraegen sind damit von vorhandenen, nicht zuordenbaren
+Eintraegen unterscheidbar. `match-relative-device` kennzeichnet den Vergleich
+nach Aufloesung einer ausgelassenen Geraeteadresse gegen den Tabellenbesitzer.
+Dies gilt auch fuer Client-Adressen: ein relativer Client wird nicht implizit
+dem HEMS zugeordnet. Explizit andere Geraete werden niemals ueberschrieben.
+Im Log erscheint die aufgeloeste Geraeteadresse mit `(relative)`; ohne Kontext
+steht `<relative-unresolved>`, bei explizit leerer Adresse `<empty>`.
+Eine Quittierung allein wird weiterhin nicht als Tabellenbestaetigung gezaehlt;
+ein fehlendes Result-Log beweist keinen Timeout. Es wird kein zusaetzlicher
+Quittierungs-Timer oder Dauerpoll eingerichtet. Je Tabelle werden maximal
+16 Eintraege ausgegeben; Adressausgaben sind begrenzt und markieren ihre
+Kuerzung. Der Vergleich prueft weiterhin alle Eintraege.
+
+Der automatische Aufbau hat maximal drei Versuche pro HPCF-Aktivierung mit
+mindestens fuenf Sekunden Abstand. Laufende Reads und Tabellenantworten
+werden abgewartet; bei beiden bestaetigten Eintraegen endet die Wiederholung.
+Disconnect bzw. Capability-Wechsel entwerten alte Wiederholungen. Der
+manuelle Leseknopf kann weiterhin fehlende Registrierungen erneut anfordern
+und liest danach Tabellen und SEMP-Daten; er sendet keine Heizungsbefehle.
+
+Die Anzeige `Aktive UC` fuehrt `OSSHPCF (lesend)`, sobald bei bestehender
+Verbindung und angebotenem HPCF die Subscription in der Geraetetabelle
+bestaetigt ist. Binding, eine Datenantwort oder vorhandene Alternativen
+sind dafuer keine Voraussetzung. Ohne bestaetigte Subscription, bei
+Disconnect oder Ruecknahme des HPCF-Angebots entfaellt der Eintrag.
+Der Zusatz `(lesend)` bezeichnet die aktuelle Implementierungsgrenze;
+er kann erst mit implementierter und freigegebener Schreibfunktion entfallen.
+
+Der Capture behaelt auch die Transportzeilen. Die Adressen koennen private
+Geraeteidentifikatoren enthalten: Logs bleiben unter `private/captures` und
+muessen vor Veroeffentlichung anonymisiert werden. Die erweiterte Diagnose
+wurde am 2026-10-18 per OTA installiert. Die Korrektur relativer Adressen
+und der begrenzte Wiederanlauf sind im Live-Build `Oct 18 2026 22:52:10`
+bestaetigt. Im Mittags-Build `Oct 18 2026 11:58:59` war die erweiterte
+Diagnose noch nicht enthalten.
+
+Es wird weiterhin kein vollstaendiger CEM-OHPCF-Use-Case angekuendigt und
+keine Sequenz ausgewaehlt oder Start/Pause/Resume/Stop gesendet. Binding
+bereitet die Berechtigung vor, ist aber kein Steuerbefehl. 835 OpenEEBus-
+und drei HEMS-Hosttests, 16 Capture-Tests sowie Firmware-Build bestanden.
+Hardware-Nachweis am 2026-10-18, passiver Mitschnitt 22:53:00 bis 22:54:30:
+Die erste Subscription-Tabelle enthielt nur einen anderen Eintrag, Binding
+war leer; diese Antworten kamen vor den HPCF-Quittungen. Automatischer
+Versuch 2/3 um 22:53:38 erhielt fuer beide Registrierungen `error=0` und
+anschliessend `verified: present=true` (Subscription 7, Binding 3 Eintraege).
+Das passende Paar war jeweils Client Entity `[1]` / Feature `7` und Server
+Entity `[1,1]` / Feature `19`, serverseitig `match-relative-device`.
+Beide UI-Status blieben bis Mitschnittende bestaetigt; kein Tastendruck oder
+dritter Versuch. SEMP lieferte zwei leere Replies, keine Notification.
+Damit sind Registrierung und Anlauf nachgewiesen, nicht ein vorhandenes
+Flexibilitaetsangebot oder die Zustellung zukuenftiger Aenderungsmeldungen.
 
 ### Manueller Read mit Antwortnachweis
 
@@ -29,7 +150,7 @@ ohne Neustart erneut anfordern. `EG1 OSSHPCF Read Status` unterscheidet:
 
 - noch nicht angefordert, vorgemerkt und Warten auf Antwort,
 - korrelierte Antwort mit oder ohne Alternativen,
-- Timeout, lokalen Read-Fehler und getrennte Verbindung.
+- Timeout, lokalen Read-Fehler, getrennte Verbindung und fehlendes HPCF-Angebot.
 
 Der initiale Read nach der Use-Case-Anmeldung verwendet denselben Callback.
 OpenEEBus ordnet die Antwort ueber den Message-Counter zu und meldet den
@@ -116,10 +237,16 @@ oder ein nicht lesebereiter Status ueberspringt den Termin; keine nachtraegliche
 Abfragebursts. Ein HTTP-Erfolg ist kein Beleg fuer eine Bosch-Antwort:
 Ausloeser, Reihennummer, Versuch und korrelierte Antwort getrennt auswerten.
 
-Die neue 24h-Messung startete am 2026-10-17 um 10:49 lokal und soll am
-2026-10-18 um 10:49 enden. Sie ist noch nicht ausgewertet. Sieben Offline-Tests
-und ein achtsekundiger Live-Test von Logzugang und automatischem Ende bestanden;
-der Kurztest loeste bei bereits laufender Anlage keinen Read aus.
+Die Messung vom 2026-10-17 10:49 bis 2026-10-18 10:49 lokal ist abgeschlossen:
+elf Startreihen mit je zehn Reads, 110 eindeutig korrelierte Antworten,
+alle ohne Alternativen, Sequenzen, Slots oder Werte und `truncated=false`.
+85 Reads erfolgten bei mehr als 500 W Anlagenleistung, maximal 2494 W bei
+einem Read. Keine uebersprungenen/fehlgeschlagenen Reads, Read-Timeouts,
+API-Abbrueche oder Logger-Neustarts; groesste Messluecke 2,663 Sekunden.
+Damit ist die fruehere Luecke im Leistungsbetrieb geschlossen, nicht jedoch
+die gesamte Betriebsartenmatrix. Das alte Log unterschied Notify/Reply
+nicht und zaehlte 110 lokale Subscription-Pruefzeilen als Subscriptions;
+das beweist keine angenommene Subscription und keinen Push-Betrieb.
 
 ### Vorhandene OHPCF-Aktoren und Upstream-PRs
 
@@ -255,7 +382,8 @@ und Zustandswechsel, um folgende Eigenschaften zu belegen:
 - Verhalten bei gleichzeitig aktivem LPC-Limit, Disconnect oder Neustart.
 
 Diese Werte duerfen nicht aus Modellnamen oder anderen Herstellern abgeleitet
-werden. Bis sie am realen Geraet nachgewiesen sind, bleibt OSSHPCF read-only.
+werden. Bis sie am realen Geraet nachgewiesen sind, bleibt die Auswahl und
+Steuerung von OSSHPCF-Sequenzen deaktiviert.
 
 ## Capture-Matrix
 
@@ -295,7 +423,7 @@ anonymisiert nicht automatisch.
 | 2026-07-13 | Idle/Standby, MPC 25 W, externer Zaehler ca. 16 W | Kontrollierter Neustart, 90 Sekunden Beobachtung mit Decoder-Build `14:59:31` | `Comp/OSSHPCF` angekuendigt, SEMP-Subscription auf Entity 2 mit `err=0`; ohne expliziten Read keine initiale Nachricht, daher kein belastbarer SEMP-Zustandsbefund |
 | 2026-07-14 | Warmwasserbereitung laeuft, Bosch-MPC 2461-2569 W, externer HP-Zaehler 2505-2566 W | Reconnect mit einmaligem read-only `SmartEnergyManagementPsData`-Read | Subscription und Read `err=0`; Snapshot mit `remote=true`, `single_slot_only=true`, `sequences_max=1`, aber ohne Alternativen, Sequenzen, Slots oder Werte |
 | 2026-10-07/08 | 24h mit Betriebsphasen bis 2937 W; Snapshots nur bei 16-23 W | Elf leere Snapshots, zehn API-Unterbrechungen | Kein Flexibilitaetsangebot; kein Read-Nachweis waehrend der hohen Leistungsaufnahme |
-| 2026-10-17/18 | Startflanke >50 W, zehn Read-Versuche im 60-s-Abstand | Neue 24h-Aufzeichnung ab 10:49 lokal | Laufend; Ergebnis noch offen |
+| 2026-10-17/18 | Elf Startflanken >50 W, je zehn Reads im 60-s-Abstand | 110 korrelierte leere Antworten, davon 85 bei >500 W; keine API-Abbrueche oder Read-Timeouts | Kein Flexibilitaetsangebot beobachtet; Subscription-Annahme und Push damit nicht nachgewiesen |
 
 Der Rohmitschnitt liegt ausschliesslich im ignorierten Verzeichnis
 `private/captures/`. Die Matrix enthaelt keine SKI, Seriennummer oder sonstige

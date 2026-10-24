@@ -57,11 +57,6 @@ eebus_eg:
           ESP_LOGI("eebus", "EEBus EG2 (%s) disconnected — relay fallback available",
                    id(eg2_device_type).current_option().c_str());
 
-    on_power_reading:
-      - lambda: |-
-          ESP_LOGI("eebus", "EG2 (%s) power reading: %.0f W",
-                   id(eg2_device_type).current_option().c_str(), x);
-
 sensor:
   # --- EG2 (sg_eebus_eg2, weights 1-2) ---
   - platform: template
@@ -98,7 +93,6 @@ binary_sensor:
     web_server:
       sorting_group_id: sg_eebus_eg2
       sorting_weight: 2.5
-    lambda: "return id(hems_eg2).is_connected() && !id(hems_eg2).is_heartbeat_alarm();"
 
 interval:
   - interval: 5s
@@ -111,6 +105,9 @@ text_sensor:
   # --- EG2 (sg_eebus_eg2, weights 3-8) ---
   - platform: template
     name: "${device_name} EG2 Verbindungsstatus"
+    id: eg2_connection_status
+    filters:
+      - lambda: 'if (id(eg2_connection_status).has_state() && id(eg2_connection_status).state == x) return {}; return x;'
     icon: "mdi:lan-connect"
     web_server:
       sorting_group_id: sg_eebus_eg2
@@ -126,6 +123,9 @@ text_sensor:
 
   - platform: template
     name: "${device_name} EG2 Gerät"
+    id: eg2_device_label
+    filters:
+      - lambda: 'if (id(eg2_device_label).has_state() && id(eg2_device_label).state == x) return {}; return x;'
     icon: "mdi:heat-pump-outline"
     web_server:
       sorting_group_id: sg_eebus_eg2
@@ -137,6 +137,9 @@ text_sensor:
 
   - platform: template
     name: "${device_name} EG2 Remote-SKI"
+    id: eg2_remote_ski
+    filters:
+      - lambda: 'if (id(eg2_remote_ski).has_state() && id(eg2_remote_ski).state == x) return {}; return x;'
     icon: "mdi:key-chain"
     web_server:
       sorting_group_id: sg_eebus_eg2
@@ -150,6 +153,9 @@ text_sensor:
 
   - platform: template
     name: "${device_name} EG2 Eigene SKI (Port 4714)"
+    id: eg2_local_ski
+    filters:
+      - lambda: 'if (id(eg2_local_ski).has_state() && id(eg2_local_ski).state == x) return {}; return x;'
     icon: "mdi:key"
     web_server:
       sorting_group_id: sg_eebus_eg2
@@ -160,6 +166,9 @@ text_sensor:
 
   - platform: template
     name: "${device_name} EG2 Aktive UC"
+    id: eg2_active_use_cases
+    filters:
+      - lambda: 'if (id(eg2_active_use_cases).has_state() && id(eg2_active_use_cases).state == x) return {}; return x;'
     icon: "mdi:format-list-checks"
     web_server:
       sorting_group_id: sg_eebus_eg2
@@ -171,6 +180,8 @@ text_sensor:
   - platform: template
     name: "${device_name} EG2 Unterstützte UC"
     id: eg2_supported_use_cases
+    filters:
+      - lambda: 'if (id(eg2_supported_use_cases).has_state() && id(eg2_supported_use_cases).state == x) return {}; return x;'
     icon: "mdi:format-list-bulleted"
     web_server:
       sorting_group_id: sg_eebus_eg2

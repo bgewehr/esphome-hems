@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Smart Premises Interoperable Neutral-Message Exchange (SPINE)
+    Version 1.3.0 (final)
+    2023-08-31
+    Copyright (c) 2023 EEBus Initiative e.V.  All Rights Reserved.
+    Source: https://www.eebus.org/en/specifications/
+-->
+<xs:schema xmlns:ns_p="http://docs.eebus.org/spine/xsd/v1" xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://docs.eebus.org/spine/xsd/v1" version="1.3.0"
+    blockDefault="#all" elementFormDefault="qualified">
+    <xs:annotation>
+        <xs:documentation>EEBus SPINE Specification schema. Copyright 2023 EEBus Initiative e.V.  All rights reserved.</xs:documentation>
+    </xs:annotation>
+    <xs:include schemaLocation="EEBus_SPINE_TS_NodeManagement.xsd"/>
+    <xs:group name="group_nodeManagement">
+        <xs:sequence>
+            <xs:group ref="ns_p:nodeManagementDetailedDiscovery"/>
+            <xs:group ref="ns_p:nodeManagementBinding"/>
+            <xs:group ref="ns_p:nodeManagementSubscription"/>
+            <xs:group ref="ns_p:nodeManagementDestination"/>
+            <xs:group ref="ns_p:nodeManagementUseCase"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="group_nodeManagementCall">
+        <xs:sequence>
+            <xs:group ref="ns_p:nodeManagementBindingRequestCall"/>
+            <xs:group ref="ns_p:nodeManagementBindingDeleteCall"/>
+            <xs:group ref="ns_p:nodeManagementSubscriptionRequestCall"/>
+            <xs:group ref="ns_p:nodeManagementSubscriptionDeleteCall"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="nodeManagementDetailedDiscovery">
+        <xs:sequence>
+            <xs:element ref="ns_p:nodeManagementDetailedDiscoveryData"/>
+            <xs:element ref="ns_p:nodeManagementDetailedDiscoveryDataSelectors"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="nodeManagementBinding">
+        <xs:sequence>
+            <xs:element ref="ns_p:nodeManagementBindingData"/>
+            <xs:element ref="ns_p:nodeManagementBindingDataSelectors"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="nodeManagementBindingRequestCall">
+        <xs:sequence>
+            <xs:element ref="ns_p:nodeManagementBindingRequestCall"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="nodeManagementBindingDeleteCall">
+        <xs:sequence>
+            <xs:element ref="ns_p:nodeManagementBindingDeleteCall"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="nodeManagementSubscription">
+        <xs:sequence>
+            <xs:element ref="ns_p:nodeManagementSubscriptionData"/>
+            <xs:element ref="ns_p:nodeManagementSubscriptionDataSelectors"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="nodeManagementSubscriptionRequestCall">
+        <xs:sequence>
+            <xs:element ref="ns_p:nodeManagementSubscriptionRequestCall"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="nodeManagementSubscriptionDeleteCall">
+        <xs:sequence>
+            <xs:element ref="ns_p:nodeManagementSubscriptionDeleteCall"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="nodeManagementDestination">
+        <xs:sequence>
+            <xs:element ref="ns_p:nodeManagementDestinationListData"/>
+            <xs:element ref="ns_p:nodeManagementDestinationListDataSelectors"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="nodeManagementUseCase">
+        <xs:sequence>
+            <xs:element ref="ns_p:nodeManagementUseCaseData"/>
+            <xs:element ref="ns_p:nodeManagementUseCaseDataSelectors"/>
+        </xs:sequence>
+    </xs:group>
+</xs:schema>

@@ -1,4 +1,4 @@
-# Usage: .\compile.ps1 [--clean] [--upload] [--clean-only] [--upload-only] [--device <ip>]
+# Usage: .\compile.ps1 [--docker] [--clean] [--upload] [--clean-only] [--upload-only] [--device <ip>]
 # Cleans, compiles, and optionally uploads to the device.
 # The target IP is read from secrets.yaml (hems_ip key) unless --device is given.
 
@@ -15,9 +15,11 @@ $Clean = $false
 $Upload = $false
 $CleanOnly = $false
 $UploadOnly = $false
+$UseDocker = $false
 $Device = ""
 for ($i = 0; $i -lt $args.Count; $i++) {
     switch ($args[$i]) {
+        { $_ -in '-docker', '--docker' } { $UseDocker = $true }
         { $_ -in '-clean', '--clean' } { $Clean = $true }
         { $_ -in '-upload', '--upload' } { $Upload = $true }
         { $_ -in '-clean-only', '--clean-only' } { $CleanOnly = $true }
@@ -63,11 +65,38 @@ function Invoke-Stage {
     Write-Host ("=== {0} completed successfully in {1:c} (exit 0) ===" -f $Name, $elapsed) -ForegroundColor Green
 }
 
-$esphome = Resolve-RequiredCommand -Name "esphome.exe" -Candidates @(
-    "%LOCALAPPDATA%\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\Scripts\esphome.exe",
-    "%APPDATA%\Python\Python313\Scripts\esphome.exe"
-)
-Write-Host "ESPHome executable: $esphome"
+if ($UseDocker) {
+    $docker = Resolve-RequiredCommand -Name "docker.exe" -Candidates @(
+        "%ProgramFiles%\Docker\Docker\resources\bin\docker.exe"
+    )
+    $image = "ghcr.io/esphome/esphome:2026.5.3"
+    $dockerArgs = @(
+        "run", "--rm", "--name", "esphome-hems-firmware",
+        "-e", "TZ=Europe/Berlin",
+        "-v", "${PSScriptRoot}:/config",
+        "-v", "hems-firmware-data:/config/.esphome",
+        "-v", "hems-firmware-build:/build",
+        "-v", "hems-firmware-cache:/cache",
+        $image, "-s", "firmware_build_path", "/build"
+    )
+    Write-Host "ESPHome Docker image: $image (TZ=Europe/Berlin)"
+} else {
+    $esphome = Resolve-RequiredCommand -Name "esphome.exe" -Candidates @(
+        "%LOCALAPPDATA%\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\Scripts\esphome.exe",
+        "%APPDATA%\Python\Python313\Scripts\esphome.exe"
+    )
+    Write-Host "ESPHome executable: $esphome"
+}
+
+function Invoke-ESPHome {
+    param([string[]]$EsphomeArgs)
+
+    if ($UseDocker) {
+        & $docker @dockerArgs @EsphomeArgs
+    } else {
+        & $esphome @EsphomeArgs
+    }
+}
 
 if (($Upload -or $UploadOnly) -and $Device -eq "") {
     $secrets = Get-Content "secrets.yaml" -ErrorAction Stop | Where-Object { $_ -match "^hems_ip:" }
@@ -81,15 +110,15 @@ if (($Upload -or $UploadOnly) -and $Device -eq "") {
 }
 
 if ($Clean -or $CleanOnly) {
-    Invoke-Stage -Name "ESPHome clean" -Action { & $esphome clean esphome-hems.yaml }
+    Invoke-Stage -Name "ESPHome clean" -Action { Invoke-ESPHome @("clean", "esphome-hems.yaml") }
 }
 
 if (-not $CleanOnly -and -not $UploadOnly) {
-    Invoke-Stage -Name "ESPHome compile" -Action { & $esphome compile esphome-hems.yaml }
+    Invoke-Stage -Name "ESPHome compile" -Action { Invoke-ESPHome @("compile", "esphome-hems.yaml") }
 }
 
 if ($Upload -or $UploadOnly) {
     Invoke-Stage -Name "ESPHome OTA upload to $Device" -Action {
-        & $esphome upload esphome-hems.yaml --device $Device
+        Invoke-ESPHome @("upload", "esphome-hems.yaml", "--device", $Device)
     }
 }

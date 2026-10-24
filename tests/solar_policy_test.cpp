@@ -1,5 +1,6 @@
 #include "components/power_distribution/solar_policy.h"
 #include "components/modbus_server/xemex_control.h"
+#include "components/modbustcp/sunspec.h"
 
 #include <cstdlib>
 #include <iostream>
@@ -29,6 +30,61 @@ SolarDecision advance(SolarPolicy &policy, SolarOptions options, uint32_t start,
 }
 
 void allocation() {
+  using esphome::modbustcp::sunspec_scale_factor;
+  using esphome::modbustcp::sunspec_scaled_value;
+  int scale = esphome::modbustcp::SUNSPEC_SCALE_UNKNOWN;
+  require(std::isnan(sunspec_scaled_value(197, scale, false, 0, 100)),
+          "no SOC publication before a valid scale factor");
+  scale = sunspec_scale_factor(-1);
+  require(std::abs(sunspec_scaled_value(197, scale, false, 0, 100) - 19.7f) < 0.001f,
+          "SOC uses the confirmed cached scale factor");
+  require(sunspec_scaled_value(1000, scale, false, 0, 100) == 100.0f &&
+              sunspec_scaled_value(0, scale, false, 0, 100) == 0.0f,
+          "SOC accepts both physical boundaries");
+  require(std::isnan(sunspec_scaled_value(1001, scale, false, 0, 100)) &&
+              std::isnan(sunspec_scaled_value(197, 0, false, 0, 100)),
+          "SOC never publishes values above 100 percent");
+  for (float invalid : {NAN, INFINITY, -32768.0f, 11.0f, -11.0f, -0.5f}) {
+    scale = sunspec_scale_factor(invalid);
+    require(std::isnan(sunspec_scaled_value(197, scale, false)),
+            "invalid scale factor invalidates the cache");
+  }
+  scale = sunspec_scale_factor(-1);
+  require(sunspec_scaled_value(-1234, scale, true) == -123.4f,
+          "signed power resumes after a valid scale factor");
+  require(std::isnan(sunspec_scaled_value(-32768, scale, true)) &&
+              std::isnan(sunspec_scaled_value(65535, scale, false)) &&
+              std::isnan(sunspec_scaled_value(NAN, scale, false)),
+          "SunSpec unavailable raw values are rejected");
+  require(std::abs(sunspec_scaled_value(12345, -5, true) - 0.12345f) < 0.00001f,
+          "EV current accepts its observed minus-five scale");
+        require(SolarForecast{0.49f, 8200}.low(1000), "low remaining forecast qualifies immediately");
+        require(!SolarForecast{0.5f, 8200}.low(1000), "half a kWh is not below the forecast threshold");
+        require(!SolarForecast{7.056f, 8200}.low(1000), "dark morning with useful forecast is not low solar");
+        require(!SolarForecast{0, 1000}.low(1000), "expired or midnight-invalidated forecast cannot permit charging");
+        require(!SolarForecast{0, 8201}.low(1000), "forecast validity cannot exceed two hours");
+        require(!SolarForecast{0, 8200}.low(0), "forecast permission requires a valid clock");
+        require(!SolarForecast{NAN, 8200}.low(1000) && !SolarForecast{-1, 8200}.low(1000),
+                                        "missing and negative forecasts cannot permit charging");
+  StorageWriterRetry retry;
+  require(!retry.ready(100000), "no retry without a storage fault");
+  uint32_t failed_at = 1000;
+  for (uint32_t delay : {30000u, 60000u, 120000u, 240000u, 300000u, 300000u}) {
+    retry.failed(failed_at);
+    require(!retry.ready(failed_at + delay - 1), "storage retry respects backoff");
+    require(retry.ready(failed_at + delay), "storage retry eventually resumes without reboot");
+    require(storage_ev_limit(11500, false, true, failed_at + delay, failed_at + delay) == 0,
+            "retry eligibility does not release the EV fault gate");
+    failed_at += delay + 10000;
+  }
+  retry.verified();
+  require(!retry.ready(failed_at), "verified recovery ends retry mode");
+  retry.failed(failed_at);
+  require(!retry.ready(failed_at + 29999) && retry.ready(failed_at + 30000),
+          "successful readback resets backoff for a future independent fault");
+  retry.verified();
+  retry.failed(UINT32_MAX - 9999);
+  require(!retry.ready(19999) && retry.ready(20000), "retry delay survives millis wraparound");
         require(!solar_blocked_load_active({0, 1000}, false, 1000), "idle forbidden EV needs no forced battery charge");
         require(!solar_blocked_load_active({6, 1000}, false, 1000), "wallbox standby needs no forced battery charge");
         require(!solar_blocked_load_active({30, 1000}, false, 1000), "30 W boundary does not enforce charging");
@@ -102,7 +158,7 @@ void allocation() {
 
 void timing() {
   SolarPolicy policy;
-  const SolarOptions options{false, true, true};
+        const SolarOptions options{false, true, false};
   require(!advance(policy, options, 1000, 59000, 1600).ev_permitted, "start requires 60 seconds");
   require(policy.step(readings(61000, 1600), options, 61000).ev_permitted,
           "500 W support is not the EV minimum charging power");
@@ -110,28 +166,28 @@ void timing() {
           "support below 500 W retains charging for less than 120 seconds");
   require(!policy.step(readings(182000, 1499), options, 182000).ev_permitted,
           "support below 500 W pauses after 120 seconds");
-  require(!advance(policy, options, 183000, 478000, 1499).ev_permitted,
-          "low solar requires 10 minutes of low residual support");
-  auto result = policy.step(readings(662000, 1499), options, 662000);
+  SolarPolicy forecast_policy;
+  auto forecast_inputs = readings(1000, 0);
+  forecast_inputs.forecast = {7.056f, 8200};
+  forecast_inputs.now_epoch = 1000;
+  require(!forecast_policy.step(forecast_inputs, {true, true, true}, 1000).ev_permitted,
+          "dark morning with useful remaining forecast does not release grid charging");
+  forecast_inputs = readings(2000, 0);
+  forecast_inputs.forecast = {0.49f, 8200};
+  forecast_inputs.now_epoch = 1001;
+  auto result = forecast_policy.step(forecast_inputs, {true, true, true}, 2000);
   require(result.ev_permitted && result.reason == SolarReason::LOW_SOLAR,
-          "499 W support permits grid charging even with high total generation");
+          "low remaining forecast permits grid charging immediately with battery priority");
   require(solar_charge_limit(11500, true, true, esphome::modbus_server::XEMEX_MIN_CHARGE_POWER,
                             result.reason == SolarReason::LOW_SOLAR) == 11500,
-          "qualified grid decision releases normal requested power");
-  require(advance(policy, options, 663000, 300000, 1499).reason == SolarReason::LOW_SOLAR,
-          "total generation above 500 W cannot revoke low-support permission");
-  result = advance(policy, options, 964000, 300000, 1501);
-  require(result.reason == SolarReason::PV_SUPPORT,
-          "support above 500 W restores PV mode");
-  require(solar_charge_limit(11500, true, true, esphome::modbus_server::XEMEX_MIN_CHARGE_POWER,
-                            result.reason == SolarReason::LOW_SOLAR) == esphome::modbus_server::XEMEX_MIN_CHARGE_POWER,
-          "PV mode restores solar cap after grid permission");
-  require(!advance(policy, options, 1265000, 120000, 1499).ev_permitted,
-          "five minutes of PV support cleared the previous grid exception");
-
-  SolarPolicy priority;
-  require(advance(priority, {true, true, true}, 1000, 600000, 6000).reason == SolarReason::LOW_SOLAR,
-          "battery priority can leave low residual support and permit grid charging");
+          "forecast grid permission bypasses only the solar cap");
+  forecast_inputs.now_epoch = 8200;
+  require(!forecast_policy.step(forecast_inputs, {true, true, true}, 3000).ev_permitted,
+          "forecast expiry revokes grid permission without waiting");
+  forecast_inputs.now_epoch = 1002;
+  forecast_inputs.forecast.remaining_kwh = 2.0f;
+  require(!forecast_policy.step(forecast_inputs, {true, true, true}, 4000).ev_permitted,
+          "improved forecast revokes the low-solar exception");
   SolarPolicy boundary;
   require(!advance(boundary, options, 1000, 601000, 1500).ev_permitted,
           "exactly 500 W qualifies neither PV start nor low solar");
@@ -147,12 +203,43 @@ void timing() {
         for (uint32_t now = 1000; now <= 602000; now += 1000) {
                 auto inputs = readings(now, 0);
                 inputs.pv_generation.watts = 6000;
-                require(converted.step(inputs, options, now).ev_permitted == (now >= 601000),
-                                                "low residual AC support controls grid qualification");
+                require(!converted.step(inputs, {false, true, true}, now).ev_permitted,
+                        "low residual AC support alone never qualifies forecast grid charging");
         }
 }
 
 void faults_and_precedence() {
+  for (uint8_t evaluated = 0; evaluated < 8; ++evaluated) {
+    require(solar_options_match(evaluated ^ 4, evaluated, false),
+            "CSMB preserves PV permission while only grid fallback changes");
+    require(!solar_options_match(evaluated ^ 1, evaluated, false),
+            "battery priority changes require a new policy decision");
+    require(!solar_options_match(evaluated ^ 2, evaluated, false),
+            "solar-only changes require a new policy decision");
+    require(!solar_options_match(evaluated ^ 4, evaluated, true),
+            "changed grid switch cannot reuse an old grid-only permission");
+    require(solar_options_match(evaluated, evaluated, true) == bool(evaluated & 4),
+            "grid-only permission requires an enabled grid switch");
+  }
+  SolarPolicy switching;
+  require(advance(switching, {false, true, false}, 1000, 60000, 6000).ev_permitted,
+          "solar charging is established before toggling the grid exception");
+  auto switched = switching.step(readings(62000), {false, true, true}, 62000);
+  require(switched.ev_permitted && switched.reason == SolarReason::PV_SUPPORT,
+          "enabling grid fallback must not interrupt established solar charging");
+  switched = switching.step(readings(63000), {false, true, false}, 63000);
+  require(switched.ev_permitted && switched.reason == SolarReason::PV_SUPPORT,
+          "disabling grid fallback must not interrupt established solar charging");
+  SolarPolicy waiting;
+  auto forecast = readings(1000, 0);
+  forecast.forecast = {0.1f, 8200};
+  forecast.now_epoch = 1000;
+  require(!waiting.step(forecast, {false, true, false}, 1000).ev_permitted,
+          "disabled grid exception cannot qualify itself");
+  require(waiting.step(forecast, {false, true, true}, 2000).ev_permitted,
+          "enabling grid fallback immediately uses a valid low forecast");
+  require(!waiting.step(forecast, {false, true, false}, 3000).ev_permitted,
+          "disabling grid fallback immediately revokes grid-only charging");
   SolarPolicy policy;
   const SolarOptions options{false, true, false};
   require(advance(policy, options, 1000, 60000, 6000).ev_permitted, "initial PV permission");

@@ -1,0 +1,254 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Smart Premises Interoperable Neutral-Message Exchange (SPINE)
+    Version 1.3.0 (final)
+    2023-08-31
+    Copyright (c) 2023 EEBus Initiative e.V.  All Rights Reserved.
+    Source: https://www.eebus.org/en/specifications/
+-->
+<xs:schema xmlns:ns_p="http://docs.eebus.org/spine/xsd/v1" xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://docs.eebus.org/spine/xsd/v1" version="1.3.0"
+    blockDefault="#all" elementFormDefault="qualified">
+    <xs:annotation>
+        <xs:documentation>EEBus SPINE Specification schema. Copyright 2023 EEBus Initiative e.V.  All rights reserved.</xs:documentation>
+    </xs:annotation>
+    <xs:include schemaLocation="EEBus_SPINE_TS_CommonDataTypes.xsd"/>
+    <xs:include schemaLocation="EEBus_SPINE_TS_Measurement.xsd"/>
+    <xs:simpleType name="LoadControlEventIdType">
+        <xs:restriction base="xs:unsignedInt"/>
+    </xs:simpleType>
+    <xs:simpleType name="LoadControlEventActionType">
+        <xs:union memberTypes="ns_p:LoadControlEventActionEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="LoadControlEventActionEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="pause"/>
+            <xs:enumeration value="resume"/>
+            <xs:enumeration value="reduce"/>
+            <xs:enumeration value="increase"/>
+            <xs:enumeration value="emergency"/>
+            <xs:enumeration value="normal"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="LoadControlEventStateType">
+        <xs:union memberTypes="ns_p:LoadControlEventStateEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="LoadControlEventStateEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="eventAccepted"/>
+            <xs:enumeration value="eventStarted"/>
+            <xs:enumeration value="eventStopped"/>
+            <xs:enumeration value="eventRejected"/>
+            <xs:enumeration value="eventCancelled"/>
+            <xs:enumeration value="eventError"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="LoadControlLimitIdType">
+        <xs:restriction base="xs:unsignedInt"/>
+    </xs:simpleType>
+    <xs:simpleType name="LoadControlLimitTypeType">
+        <xs:union memberTypes="ns_p:LoadControlLimitTypeEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="LoadControlLimitTypeEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="minValueLimit"/>
+            <xs:enumeration value="maxValueLimit"/>
+            <xs:enumeration value="signDependentAbsValueLimit"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="LoadControlCategoryType">
+        <xs:union memberTypes="ns_p:LoadControlCategoryEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="LoadControlCategoryEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="obligation"/>
+            <xs:enumeration value="recommendation"/>
+            <xs:enumeration value="optimization"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:complexType name="LoadControlNodeDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="isNodeRemoteControllable" type="xs:boolean"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="loadControlNodeData" type="ns_p:LoadControlNodeDataType"/>
+    <xs:complexType name="LoadControlNodeDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="isNodeRemoteControllable" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="loadControlNodeDataElements" type="ns_p:LoadControlNodeDataElementsType"/>
+    <xs:complexType name="LoadControlEventDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="timestamp" type="ns_p:AbsoluteOrRelativeTimeType"/>
+            <xs:element minOccurs="0" name="eventId" type="ns_p:LoadControlEventIdType"/>
+            <xs:element minOccurs="0" name="eventActionConsume" type="ns_p:LoadControlEventActionType"/>
+            <xs:element minOccurs="0" name="eventActionProduce" type="ns_p:LoadControlEventActionType"/>
+            <xs:element minOccurs="0" name="timePeriod" type="ns_p:TimePeriodType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="loadControlEventData" type="ns_p:LoadControlEventDataType"/>
+    <xs:complexType name="LoadControlEventDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="timestamp" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="eventId" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="eventActionConsume" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="eventActionProduce" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="timePeriod" type="ns_p:TimePeriodElementsType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="loadControlEventDataElements" type="ns_p:LoadControlEventDataElementsType"/>
+    <xs:complexType name="LoadControlEventListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:loadControlEventData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="loadControlEventListData" type="ns_p:LoadControlEventListDataType"/>
+    <xs:complexType name="LoadControlEventListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="timestampInterval" type="ns_p:TimestampIntervalType"/>
+            <xs:element minOccurs="0" name="eventId" type="ns_p:LoadControlEventIdType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="loadControlEventListDataSelectors" type="ns_p:LoadControlEventListDataSelectorsType"/>
+    <xs:complexType name="LoadControlStateDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="timestamp" type="ns_p:AbsoluteOrRelativeTimeType"/>
+            <xs:element minOccurs="0" name="eventId" type="ns_p:LoadControlEventIdType"/>
+            <xs:element minOccurs="0" name="eventStateConsume" type="ns_p:LoadControlEventStateType"/>
+            <xs:element minOccurs="0" name="appliedEventActionConsume" type="ns_p:LoadControlEventActionType"/>
+            <xs:element minOccurs="0" name="eventStateProduce" type="ns_p:LoadControlEventStateType"/>
+            <xs:element minOccurs="0" name="appliedEventActionProduce" type="ns_p:LoadControlEventActionType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="loadControlStateData" type="ns_p:LoadControlStateDataType"/>
+    <xs:complexType name="LoadControlStateDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="timestamp" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="eventId" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="eventStateConsume" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="appliedEventActionConsume" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="eventStateProduce" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="appliedEventActionProduce" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="loadControlStateDataElements" type="ns_p:LoadControlStateDataElementsType"/>
+    <xs:complexType name="LoadControlStateListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:loadControlStateData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="loadControlStateListData" type="ns_p:LoadControlStateListDataType"/>
+    <xs:complexType name="LoadControlStateListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="timestampInterval" type="ns_p:TimestampIntervalType"/>
+            <xs:element minOccurs="0" name="eventId" type="ns_p:LoadControlEventIdType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="loadControlStateListDataSelectors" type="ns_p:LoadControlStateListDataSelectorsType"/>
+    <xs:complexType name="LoadControlLimitDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="limitId" type="ns_p:LoadControlLimitIdType"/>
+            <xs:element name="isLimitChangeable" minOccurs="0" type="xs:boolean"/>
+            <xs:element name="isLimitActive" minOccurs="0" type="xs:boolean"/>
+            <xs:element minOccurs="0" name="timePeriod" type="ns_p:TimePeriodType"/>
+            <xs:element minOccurs="0" name="value" type="ns_p:ScaledNumberType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="loadControlLimitData" type="ns_p:LoadControlLimitDataType"/>
+    <xs:complexType name="LoadControlLimitDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="limitId" type="ns_p:ElementTagType"/>
+            <xs:element name="isLimitChangeable" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element name="isLimitActive" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="timePeriod" type="ns_p:TimePeriodElementsType"/>
+            <xs:element minOccurs="0" name="value" type="ns_p:ScaledNumberElementsType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="loadControlLimitDataElements" type="ns_p:LoadControlLimitDataElementsType"/>
+    <xs:complexType name="LoadControlLimitListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:loadControlLimitData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="loadControlLimitListData" type="ns_p:LoadControlLimitListDataType"/>
+    <xs:complexType name="LoadControlLimitListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="limitId" type="ns_p:LoadControlLimitIdType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="loadControlLimitListDataSelectors" type="ns_p:LoadControlLimitListDataSelectorsType"/>
+    <xs:complexType name="LoadControlLimitConstraintsDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="limitId" type="ns_p:LoadControlLimitIdType"/>
+            <xs:element minOccurs="0" name="valueRangeMin" type="ns_p:ScaledNumberType"/>
+            <xs:element minOccurs="0" name="valueRangeMax" type="ns_p:ScaledNumberType"/>
+            <xs:element minOccurs="0" name="valueStepSize" type="ns_p:ScaledNumberType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="loadControlLimitConstraintsData" type="ns_p:LoadControlLimitConstraintsDataType"/>
+    <xs:complexType name="LoadControlLimitConstraintsDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="limitId" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="valueRangeMin" type="ns_p:ScaledNumberElementsType"/>
+            <xs:element minOccurs="0" name="valueRangeMax" type="ns_p:ScaledNumberElementsType"/>
+            <xs:element minOccurs="0" name="valueStepSize" type="ns_p:ScaledNumberElementsType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="loadControlLimitConstraintsDataElements" type="ns_p:LoadControlLimitConstraintsDataElementsType"/>
+    <xs:complexType name="LoadControlLimitConstraintsListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:loadControlLimitConstraintsData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="loadControlLimitConstraintsListData" type="ns_p:LoadControlLimitConstraintsListDataType"/>
+    <xs:complexType name="LoadControlLimitConstraintsListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="limitId" type="ns_p:LoadControlLimitIdType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="loadControlLimitConstraintsListDataSelectors" type="ns_p:LoadControlLimitConstraintsListDataSelectorsType"/>
+    <xs:complexType name="LoadControlLimitDescriptionDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="limitId" type="ns_p:LoadControlLimitIdType"/>
+            <xs:element minOccurs="0" name="limitType" type="ns_p:LoadControlLimitTypeType"/>
+            <xs:element minOccurs="0" name="limitCategory" type="ns_p:LoadControlCategoryType"/>
+            <xs:element minOccurs="0" name="limitDirection" type="ns_p:EnergyDirectionType"/>
+            <xs:element minOccurs="0" name="measurementId" type="ns_p:MeasurementIdType"/>
+            <xs:element minOccurs="0" name="unit" type="ns_p:UnitOfMeasurementType"/>
+            <xs:element minOccurs="0" name="scopeType" type="ns_p:ScopeTypeType"/>
+            <xs:element minOccurs="0" name="label" type="ns_p:LabelType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:DescriptionType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="loadControlLimitDescriptionData" type="ns_p:LoadControlLimitDescriptionDataType"/>
+    <xs:complexType name="LoadControlLimitDescriptionDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="limitId" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="limitType" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="limitCategory" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="limitDirection" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="measurementId" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="unit" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="scopeType" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="label" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="loadControlLimitDescriptionDataElements" type="ns_p:LoadControlLimitDescriptionDataElementsType"/>
+    <xs:complexType name="LoadControlLimitDescriptionListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:loadControlLimitDescriptionData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="loadControlLimitDescriptionListData" type="ns_p:LoadControlLimitDescriptionListDataType"/>
+    <xs:complexType name="LoadControlLimitDescriptionListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="limitId" type="ns_p:LoadControlLimitIdType"/>
+            <xs:element minOccurs="0" name="limitType" type="ns_p:LoadControlLimitTypeType"/>
+            <xs:element minOccurs="0" name="limitDirection" type="ns_p:EnergyDirectionType"/>
+            <xs:element minOccurs="0" name="measurementId" type="ns_p:MeasurementIdType"/>
+            <xs:element minOccurs="0" name="scopeType" type="ns_p:ScopeTypeType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="loadControlLimitDescriptionListDataSelectors" type="ns_p:LoadControlLimitDescriptionListDataSelectorsType"/>
+</xs:schema>

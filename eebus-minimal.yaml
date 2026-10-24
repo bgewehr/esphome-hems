@@ -68,30 +68,51 @@ eebus_eg:
 text_sensor:
   - platform: template
     name: CS Status
+    id: cs_connection_status
+    filters:
+      - lambda: 'if (id(cs_connection_status).has_state() && id(cs_connection_status).state == x) return {}; return x;'
     update_interval: 5s
     lambda: return id(hems_cs).pairing_state();
   - platform: template
     name: CS Local SKI
+    id: cs_local_ski
+    filters:
+      - lambda: 'if (id(cs_local_ski).has_state() && id(cs_local_ski).state == x) return {}; return x;'
     update_interval: 10s
     lambda: return id(hems_cs).local_ski();
   - platform: template
     name: CS Pending SKI
+    id: cs_pending_ski
+    filters:
+      - lambda: 'if (id(cs_pending_ski).has_state() && id(cs_pending_ski).state == x) return {}; return x;'
     update_interval: 5s
     lambda: return id(hems_cs).pending_remote_ski();
   - platform: template
     name: CS Paired SKI
+    id: cs_paired_ski
+    filters:
+      - lambda: 'if (id(cs_paired_ski).has_state() && id(cs_paired_ski).state == x) return {}; return x;'
     update_interval: 5s
     lambda: return id(hems_cs).paired_remote_ski();
   - platform: template
     name: EG1 Status
+    id: eg1_connection_status
+    filters:
+      - lambda: 'if (id(eg1_connection_status).has_state() && id(eg1_connection_status).state == x) return {}; return x;'
     update_interval: 5s
     lambda: return id(hems_eg).pairing_state();
   - platform: template
     name: EG1 Local SKI
+    id: eg1_local_ski
+    filters:
+      - lambda: 'if (id(eg1_local_ski).has_state() && id(eg1_local_ski).state == x) return {}; return x;'
     update_interval: 10s
     lambda: return id(hems_eg).local_ski();
   - platform: template
     name: EG1 Remote SKI
+    id: eg1_remote_ski
+    filters:
+      - lambda: 'if (id(eg1_remote_ski).has_state() && id(eg1_remote_ski).state == x) return {}; return x;'
     update_interval: 5s
     lambda: return id(hems_eg).remote_ski();
 

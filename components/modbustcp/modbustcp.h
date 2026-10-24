@@ -1,6 +1,7 @@
 #pragma once
 
 #include "esphome/core/component.h"
+#include "sunspec.h"
 
 #include <cstring>
 #include <memory>

@@ -375,7 +375,8 @@ script:
               (id(charge_ev_grid_low_solar).state ? 4 : 0);
             const float solar_requested = esphome::power_distribution::solar_ev_limit(
               requested, id(charge_ev_solar_support_only).state,
-              id(solar_ev_permitted) && options == id(solar_policy_options),
+              id(solar_ev_permitted) && esphome::power_distribution::solar_options_match(
+                options, id(solar_policy_options), id(solar_low_grid_permitted)),
               id(solar_policy_updated_ms), now);
           id(xemex_guard).latched = id(xemex_latched);
             const float solar_limited = esphome::power_distribution::solar_charge_limit(
@@ -390,7 +391,7 @@ script:
           id(xemex_effective_w).publish_state(std::isfinite(watts) ? watts : 0.0f);
           std::string status = id(xemex_guard).status;
           if (watts > 0.0f && solar_limited < solar_requested) status += " (Solar limit)";
-          if (protected_request == 0.0f && solar_requested > 0.0f) status += " (Storage protection unavailable)";
+          if (protected_request == 0.0f && solar_requested > 0.0f) status += " (Speicherfreigabe fehlt)";
           if (solar_requested == 0.0f && requested > 0.0f) status += " (PV pause)";
           if (id(grid_provider_switch).state) status += " (DI1)";
           if (id(manual_enwg_test).state) status += " (Simulation)";
@@ -427,6 +428,9 @@ text_sensor:
       sorting_weight: 14
   - platform: template
     name: "${device_name} CSMB Letzte Stromantwort"
+    id: xemex_last_current_response
+    filters:
+      - lambda: 'if (id(xemex_last_current_response).has_state() && id(xemex_last_current_response).state == x) return {}; return x;'
     entity_category: diagnostic
     update_interval: 5s
     web_server:

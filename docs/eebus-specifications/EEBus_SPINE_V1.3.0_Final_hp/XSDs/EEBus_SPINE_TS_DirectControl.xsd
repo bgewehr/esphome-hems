@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Smart Premises Interoperable Neutral-Message Exchange (SPINE)
+    Version 1.3.0 (final)
+    2023-08-31
+    Copyright (c) 2023 EEBus Initiative e.V.  All Rights Reserved.
+    Source: https://www.eebus.org/en/specifications/
+-->
+<xs:schema xmlns:ns_p="http://docs.eebus.org/spine/xsd/v1" xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://docs.eebus.org/spine/xsd/v1" version="1.3.0"
+    blockDefault="#all" elementFormDefault="qualified">
+    <xs:annotation>
+        <xs:documentation>EEBus SPINE Specification schema. Copyright 2023 EEBus Initiative e.V.  All rights reserved.</xs:documentation>
+    </xs:annotation>
+    <xs:include schemaLocation="EEBus_SPINE_TS_CommonDataTypes.xsd"/>
+    <xs:include schemaLocation="EEBus_SPINE_TS_PowerSequences.xsd"/>
+    <xs:simpleType name="DirectControlActivityStateType">
+        <xs:union memberTypes="ns_p:DirectControlActivityStateEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="DirectControlActivityStateEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="running"/>
+            <xs:enumeration value="paused"/>
+            <xs:enumeration value="inactive"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:complexType name="DirectControlActivityDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="timestamp" type="ns_p:AbsoluteOrRelativeTimeType"/>
+            <xs:element minOccurs="0" name="activityState" type="ns_p:DirectControlActivityStateType"/>
+            <xs:element minOccurs="0" name="isActivityStateChangeable" type="xs:boolean"/>
+            <xs:element minOccurs="0" name="energyMode" type="ns_p:EnergyModeType"/>
+            <xs:element minOccurs="0" name="isEnergyModeChangeable" type="xs:boolean"/>
+            <xs:element name="power" type="ns_p:ScaledNumberType" minOccurs="0"/>
+            <xs:element minOccurs="0" name="isPowerChangeable" type="xs:boolean"/>
+            <xs:element name="energy" type="ns_p:ScaledNumberType" minOccurs="0"/>
+            <xs:element minOccurs="0" name="isEnergyChangeable" type="xs:boolean"/>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:PowerSequenceIdType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="directControlActivityData" type="ns_p:DirectControlActivityDataType"/>
+    <xs:complexType name="DirectControlActivityDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="timestamp" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="activityState" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="isActivityStateChangeable" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="energyMode" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="isEnergyModeChangeable" type="ns_p:ElementTagType"/>
+            <xs:element name="power" minOccurs="0" type="ns_p:ScaledNumberElementsType"/>
+            <xs:element minOccurs="0" name="isPowerChangeable" type="ns_p:ElementTagType"/>
+            <xs:element name="energy" minOccurs="0" type="ns_p:ScaledNumberElementsType"/>
+            <xs:element minOccurs="0" name="isEnergyChangeable" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="directControlActivityDataElements" type="ns_p:DirectControlActivityDataElementsType"/>
+    <xs:complexType name="DirectControlActivityListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:directControlActivityData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="directControlActivityListData" type="ns_p:DirectControlActivityListDataType"/>
+    <xs:complexType name="DirectControlActivityListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="timestampInterval" type="ns_p:TimestampIntervalType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="directControlActivityListDataSelectors" type="ns_p:DirectControlActivityListDataSelectorsType"/>
+    <xs:complexType name="DirectControlDescriptionDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="positiveEnergyDirection" type="ns_p:EnergyDirectionType"/>
+            <xs:element minOccurs="0" name="powerUnit" type="ns_p:UnitOfMeasurementType"/>
+            <xs:element minOccurs="0" name="energyUnit" type="ns_p:UnitOfMeasurementType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="directControlDescriptionData" type="ns_p:DirectControlDescriptionDataType"/>
+    <xs:complexType name="DirectControlDescriptionDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="positiveEnergyDirection" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="powerUnit" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="energyUnit" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="directControlDescriptionDataElements" type="ns_p:DirectControlDescriptionDataElementsType"/>
+</xs:schema>

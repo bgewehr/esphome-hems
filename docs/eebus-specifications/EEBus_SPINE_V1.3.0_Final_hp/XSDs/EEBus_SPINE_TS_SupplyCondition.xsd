@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Smart Premises Interoperable Neutral-Message Exchange (SPINE)
+    Version 1.3.0 (final)
+    2023-08-31
+    Copyright (c) 2023 EEBus Initiative e.V.  All Rights Reserved.
+    Source: https://www.eebus.org/en/specifications/
+-->
+<xs:schema xmlns:ns_p="http://docs.eebus.org/spine/xsd/v1" xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://docs.eebus.org/spine/xsd/v1" version="1.3.0"
+    blockDefault="#all" elementFormDefault="qualified">
+    <xs:annotation>
+        <xs:documentation>EEBus SPINE Specification schema. Copyright 2023 EEBus Initiative e.V.  All rights reserved.</xs:documentation>
+    </xs:annotation>
+    <xs:include schemaLocation="EEBus_SPINE_TS_CommonDataTypes.xsd"/>
+    <xs:include schemaLocation="EEBus_SPINE_TS_Threshold.xsd"/>
+    <xs:simpleType name="ConditionIdType">
+        <xs:restriction base="xs:unsignedInt"/>
+    </xs:simpleType>
+    <xs:simpleType name="SupplyConditionEventTypeType">
+        <xs:union memberTypes="ns_p:SupplyConditionEventTypeEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="SupplyConditionEventTypeEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="thesholdExceeded"/>
+            <xs:enumeration value="fallenBelowThreshold"/>
+            <xs:enumeration value="supplyInterrupt"/>
+            <xs:enumeration value="releaseOfLimitations"/>
+            <xs:enumeration value="otherProblem"/>
+            <xs:enumeration value="gridConditionUpdate"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="SupplyConditionOriginatorType">
+        <xs:union memberTypes="ns_p:SupplyConditionOriginatorEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="SupplyConditionOriginatorEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="externDSO"/>
+            <xs:enumeration value="externSupplier"/>
+            <xs:enumeration value="internalLimit"/>
+            <xs:enumeration value="internalService"/>
+            <xs:enumeration value="internalUser"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="GridConditionType">
+        <xs:union memberTypes="ns_p:GridConditionEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="GridConditionEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="consumptionRed"/>
+            <xs:enumeration value="consumptionYellow"/>
+            <xs:enumeration value="good"/>
+            <xs:enumeration value="productionYellow"/>
+            <xs:enumeration value="productionRed"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:complexType name="SupplyConditionDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="conditionId" type="ns_p:ConditionIdType"/>
+            <xs:element minOccurs="0" name="timestamp" type="ns_p:AbsoluteOrRelativeTimeType"/>
+            <xs:element minOccurs="0" name="eventType" type="ns_p:SupplyConditionEventTypeType"/>
+            <xs:element minOccurs="0" name="originator" type="ns_p:SupplyConditionOriginatorType"/>
+            <xs:element minOccurs="0" name="thresholdId" type="ns_p:ThresholdIdType"/>
+            <xs:element minOccurs="0" name="thresholdPercentage" type="ns_p:ScaledNumberType"/>
+            <xs:element minOccurs="0" name="relevantPeriod" type="ns_p:TimePeriodType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:DescriptionType"/>
+            <xs:element minOccurs="0" name="gridCondition" type="ns_p:GridConditionType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="supplyConditionData" type="ns_p:SupplyConditionDataType"/>
+    <xs:complexType name="SupplyConditionDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="conditionId" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="timestamp" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="eventType" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="originator" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="thresholdId" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="thresholdPercentage" type="ns_p:ScaledNumberElementsType"/>
+            <xs:element minOccurs="0" name="relevantPeriod" type="ns_p:TimePeriodElementsType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="gridCondition" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="supplyConditionDataElements" type="ns_p:SupplyConditionDataElementsType"/>
+    <xs:complexType name="SupplyConditionListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:supplyConditionData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="supplyConditionListData" type="ns_p:SupplyConditionListDataType"/>
+    <xs:complexType name="SupplyConditionListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="conditionId" type="ns_p:ConditionIdType"/>
+            <xs:element minOccurs="0" name="timestampInterval" type="ns_p:TimestampIntervalType"/>
+            <xs:element minOccurs="0" name="eventType" type="ns_p:SupplyConditionEventTypeType"/>
+            <xs:element minOccurs="0" name="originator" type="ns_p:SupplyConditionOriginatorType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="supplyConditionListDataSelectors" type="ns_p:SupplyConditionListDataSelectorsType"/>
+    <xs:complexType name="SupplyConditionDescriptionDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="conditionId" type="ns_p:ConditionIdType"/>
+            <xs:element minOccurs="0" name="commodityType" type="ns_p:CommodityTypeType"/>
+            <xs:element minOccurs="0" name="positiveEnergyDirection" type="ns_p:EnergyDirectionType"/>
+            <xs:element minOccurs="0" name="label" type="ns_p:LabelType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:DescriptionType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="supplyConditionDescriptionData" type="ns_p:SupplyConditionDescriptionDataType"/>
+    <xs:complexType name="SupplyConditionDescriptionDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="conditionId" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="commodityType" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="positiveEnergyDirection" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="label" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="supplyConditionDescriptionDataElements" type="ns_p:SupplyConditionDescriptionDataElementsType"/>
+    <xs:complexType name="SupplyConditionDescriptionListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:supplyConditionDescriptionData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="supplyConditionDescriptionListData" type="ns_p:SupplyConditionDescriptionListDataType"/>
+    <xs:complexType name="SupplyConditionDescriptionListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="conditionId" type="ns_p:ConditionIdType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="supplyConditionDescriptionListDataSelectors" type="ns_p:SupplyConditionDescriptionListDataSelectorsType"/>
+    <xs:complexType name="SupplyConditionThresholdRelationDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="conditionId" type="ns_p:ConditionIdType"/>
+            <xs:element maxOccurs="unbounded" minOccurs="0" name="thresholdId" type="ns_p:ThresholdIdType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="supplyConditionThresholdRelationData" type="ns_p:SupplyConditionThresholdRelationDataType"/>
+    <xs:complexType name="SupplyConditionThresholdRelationDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="conditionId" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="thresholdId" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="supplyConditionThresholdRelationDataElements" type="ns_p:SupplyConditionThresholdRelationDataElementsType"/>
+    <xs:complexType name="SupplyConditionThresholdRelationListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:supplyConditionThresholdRelationData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="supplyConditionThresholdRelationListData" type="ns_p:SupplyConditionThresholdRelationListDataType"/>
+    <xs:complexType name="SupplyConditionThresholdRelationListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="conditionId" type="ns_p:ConditionIdType"/>
+            <xs:element minOccurs="0" name="thresholdId" type="ns_p:ThresholdIdType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="supplyConditionThresholdRelationListDataSelectors" type="ns_p:SupplyConditionThresholdRelationListDataSelectorsType"/>
+</xs:schema>

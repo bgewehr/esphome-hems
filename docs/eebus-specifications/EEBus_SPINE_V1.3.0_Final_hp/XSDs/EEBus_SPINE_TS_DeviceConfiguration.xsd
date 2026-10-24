@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Smart Premises Interoperable Neutral-Message Exchange (SPINE)
+    Version 1.3.0 (final)
+    2023-08-31
+    Copyright (c) 2023 EEBus Initiative e.V.  All Rights Reserved.
+    Source: https://www.eebus.org/en/specifications/
+-->
+<xs:schema xmlns:ns_p="http://docs.eebus.org/spine/xsd/v1" xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://docs.eebus.org/spine/xsd/v1" version="1.3.0"
+    blockDefault="#all" elementFormDefault="qualified">
+    <xs:annotation>
+        <xs:documentation>EEBus SPINE Specification schema. Copyright 2023 EEBus Initiative e.V.  All rights reserved.</xs:documentation>
+    </xs:annotation>
+    <xs:include schemaLocation="EEBus_SPINE_TS_CommonDataTypes.xsd"/>
+    <xs:simpleType name="DeviceConfigurationKeyIdType">
+        <xs:restriction base="xs:unsignedInt"/>
+    </xs:simpleType>
+    <xs:simpleType name="DeviceConfigurationKeyValueStringType">
+        <xs:restriction base="xs:string"/>
+    </xs:simpleType>
+    <xs:simpleType name="DeviceConfigurationKeyNameType">
+        <xs:union memberTypes="ns_p:DeviceConfigurationKeyNameEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="DeviceConfigurationKeyNameEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="peakPowerOfPvSystem"/>
+            <xs:enumeration value="pvCurtailmentLimitFactor"/>
+            <xs:enumeration value="asymmetricChargingSupported"/>
+            <xs:enumeration value="communicationsStandard"/>
+            <xs:enumeration value="inverterGridCode"/>
+            <xs:enumeration value="pvStringAvailabilityStatus"/>
+            <xs:enumeration value="batteryAvailabilityStatus"/>
+            <xs:enumeration value="gridConnectionStatus"/>
+            <xs:enumeration value="timeToAcChargePowerMax"/>
+            <xs:enumeration value="timeToAcDischargePowerMax"/>
+            <xs:enumeration value="tilt"/>
+            <xs:enumeration value="azimuth"/>
+            <xs:enumeration value="batteryType"/>
+            <xs:enumeration value="maxCycleCountPerDay"/>
+            <xs:enumeration value="failsafeConsumptionActivePowerLimit"/>
+            <xs:enumeration value="failsafeProductionActivePowerLimit"/>
+            <xs:enumeration value="failsafePositiveReactivePowerLimit"/>
+            <xs:enumeration value="failsafeNegativeReactivePowerLimit"/>
+            <xs:enumeration value="failsafePositiveCosPhiLimit"/>
+            <xs:enumeration value="failsafeNegativeCosPhiLimit"/>
+            <xs:enumeration value="maxAcChargePower"/>
+            <xs:enumeration value="maxAcDischargePower"/>
+            <xs:enumeration value="maxDcChargePower"/>
+            <xs:enumeration value="maxDcDischargePower"/>
+            <xs:enumeration value="batteryActiveControlMode"/>
+            <xs:enumeration value="defaultAcPower"/>
+            <xs:enumeration value="defaultDcPower"/>
+            <xs:enumeration value="defaultPccPower"/>
+            <xs:enumeration value="failsafeAcPowerSetpoint"/>
+            <xs:enumeration value="failsafeDcPowerSetpoint"/>
+            <xs:enumeration value="failsafePccPowerSetpoint"/>
+            <xs:enumeration value="failsafeDurationMinimum"/>
+            <xs:enumeration value="dischargingBelowTargetEnergyRequestPermitted"/>
+            <xs:enumeration value="incentivesSimulationCyclesMax"/>
+            <xs:enumeration value="incentivesSimulationConcurrent"/>
+            <xs:enumeration value="incentivesTimeoutIncentiveRequest"/>
+            <xs:enumeration value="incentivesWaitIncentiveWriteable"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="DeviceConfigurationKeyValueTypeType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="boolean"/>
+            <xs:enumeration value="date"/>
+            <xs:enumeration value="dateTime"/>
+            <xs:enumeration value="duration"/>
+            <xs:enumeration value="string"/>
+            <xs:enumeration value="time"/>
+            <xs:enumeration value="scaledNumber"/>
+            <xs:enumeration value="integer"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:complexType name="DeviceConfigurationKeyValueValueType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="boolean" type="xs:boolean"/>
+            <xs:element minOccurs="0" name="date" type="xs:date"/>
+            <xs:element minOccurs="0" name="dateTime" type="xs:dateTime"/>
+            <xs:element minOccurs="0" name="duration" type="xs:duration"/>
+            <xs:element minOccurs="0" name="string" type="ns_p:DeviceConfigurationKeyValueStringType"/>
+            <xs:element minOccurs="0" name="time" type="xs:time"/>
+            <xs:element minOccurs="0" name="scaledNumber" type="ns_p:ScaledNumberType"/>
+            <xs:element minOccurs="0" name="integer" type="xs:long"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="DeviceConfigurationKeyValueValueElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="boolean" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="date" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="dateTime" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="duration" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="string" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="time" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="scaledNumber" type="ns_p:ScaledNumberElementsType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="DeviceConfigurationKeyValueDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="keyId" type="ns_p:DeviceConfigurationKeyIdType"/>
+            <xs:element minOccurs="0" name="value" type="ns_p:DeviceConfigurationKeyValueValueType"/>
+            <xs:element minOccurs="0" name="isValueChangeable" type="xs:boolean"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="deviceConfigurationKeyValueData" type="ns_p:DeviceConfigurationKeyValueDataType"/>
+    <xs:complexType name="DeviceConfigurationKeyValueDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="keyId" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="value" type="ns_p:DeviceConfigurationKeyValueValueElementsType"/>
+            <xs:element minOccurs="0" name="isValueChangeable" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="deviceConfigurationKeyValueDataElements" type="ns_p:DeviceConfigurationKeyValueDataElementsType"/>
+    <xs:complexType name="DeviceConfigurationKeyValueListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:deviceConfigurationKeyValueData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="deviceConfigurationKeyValueListData" type="ns_p:DeviceConfigurationKeyValueListDataType"/>
+    <xs:complexType name="DeviceConfigurationKeyValueListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="keyId" type="ns_p:DeviceConfigurationKeyIdType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="deviceConfigurationKeyValueListDataSelectors" type="ns_p:DeviceConfigurationKeyValueListDataSelectorsType"/>
+    <xs:complexType name="DeviceConfigurationKeyValueDescriptionDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="keyId" type="ns_p:DeviceConfigurationKeyIdType"/>
+            <xs:element minOccurs="0" name="keyName" type="ns_p:DeviceConfigurationKeyNameType"/>
+            <xs:element minOccurs="0" name="valueType" type="ns_p:DeviceConfigurationKeyValueTypeType"/>
+            <xs:element minOccurs="0" name="unit" type="ns_p:UnitOfMeasurementType"/>
+            <xs:element minOccurs="0" name="label" type="ns_p:LabelType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:DescriptionType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="deviceConfigurationKeyValueDescriptionData" type="ns_p:DeviceConfigurationKeyValueDescriptionDataType"/>
+    <xs:complexType name="DeviceConfigurationKeyValueDescriptionDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="keyId" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="keyName" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="valueType" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="unit" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="label" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="deviceConfigurationKeyValueDescriptionDataElements" type="ns_p:DeviceConfigurationKeyValueDescriptionDataElementsType"/>
+    <xs:complexType name="DeviceConfigurationKeyValueDescriptionListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:deviceConfigurationKeyValueDescriptionData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="deviceConfigurationKeyValueDescriptionListData" type="ns_p:DeviceConfigurationKeyValueDescriptionListDataType"/>
+    <xs:complexType name="DeviceConfigurationKeyValueDescriptionListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="keyId" type="ns_p:DeviceConfigurationKeyIdType"/>
+            <xs:element minOccurs="0" name="keyName" type="ns_p:DeviceConfigurationKeyNameType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="deviceConfigurationKeyValueDescriptionListDataSelectors" type="ns_p:DeviceConfigurationKeyValueDescriptionListDataSelectorsType"/>
+    <xs:complexType name="DeviceConfigurationKeyValueConstraintsDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="keyId" type="ns_p:DeviceConfigurationKeyIdType"/>
+            <xs:element minOccurs="0" name="valueRangeMin" type="ns_p:DeviceConfigurationKeyValueValueType"/>
+            <xs:element minOccurs="0" name="valueRangeMax" type="ns_p:DeviceConfigurationKeyValueValueType"/>
+            <xs:element minOccurs="0" name="valueStepSize" type="ns_p:DeviceConfigurationKeyValueValueType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="deviceConfigurationKeyValueConstraintsData" type="ns_p:DeviceConfigurationKeyValueConstraintsDataType"/>
+    <xs:complexType name="DeviceConfigurationKeyValueConstraintsDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="keyId" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="valueRangeMin" type="ns_p:DeviceConfigurationKeyValueValueElementsType"/>
+            <xs:element minOccurs="0" name="valueRangeMax" type="ns_p:DeviceConfigurationKeyValueValueElementsType"/>
+            <xs:element minOccurs="0" name="valueStepSize" type="ns_p:DeviceConfigurationKeyValueValueElementsType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="deviceConfigurationKeyValueConstraintsDataElements" type="ns_p:DeviceConfigurationKeyValueConstraintsDataElementsType"/>
+    <xs:complexType name="DeviceConfigurationKeyValueConstraintsListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:deviceConfigurationKeyValueConstraintsData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="deviceConfigurationKeyValueConstraintsListData" type="ns_p:DeviceConfigurationKeyValueConstraintsListDataType"/>
+    <xs:complexType name="DeviceConfigurationKeyValueConstraintsListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="keyId" type="ns_p:DeviceConfigurationKeyIdType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="deviceConfigurationKeyValueConstraintsListDataSelectors" type="ns_p:DeviceConfigurationKeyValueConstraintsListDataSelectorsType"/>
+</xs:schema>

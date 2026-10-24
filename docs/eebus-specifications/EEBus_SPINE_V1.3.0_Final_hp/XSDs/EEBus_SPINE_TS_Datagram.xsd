@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Smart Premises Interoperable Neutral-Message Exchange (SPINE)
+    Version 1.3.0 (final)
+    2023-08-31
+    Copyright (c) 2023 EEBus Initiative e.V.  All Rights Reserved.
+    Source: https://www.eebus.org/en/specifications/
+-->
+<xs:schema xmlns:ns_p="http://docs.eebus.org/spine/xsd/v1" xmlns:xs="http://www.w3.org/2001/XMLSchema"
+    targetNamespace="http://docs.eebus.org/spine/xsd/v1" version="1.3.0" blockDefault="#all" elementFormDefault="qualified">
+    <xs:annotation>
+        <xs:documentation>EEBus SPINE Specification schema. Copyright 2023 EEBus Initiative e.V.  All rights reserved.</xs:documentation>
+    </xs:annotation>
+    <xs:include schemaLocation="EEBus_SPINE_TS_CommandFrame.xsd"/>
+    <xs:complexType name="HeaderType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="specificationVersion" type="ns_p:SpecificationVersionType"/>
+            <xs:element minOccurs="0" name="addressSource" type="ns_p:FeatureAddressType"/>
+            <xs:element minOccurs="0" name="addressDestination" type="ns_p:FeatureAddressType"/>
+            <xs:element minOccurs="0" name="addressOriginator" type="ns_p:FeatureAddressType"/>
+            <xs:element minOccurs="0" name="msgCounter" type="ns_p:MsgCounterType"/>
+            <xs:element minOccurs="0" name="msgCounterReference" type="ns_p:MsgCounterType"/>
+            <xs:element minOccurs="0" name="cmdClassifier" type="ns_p:CmdClassifierType"/>
+            <xs:element minOccurs="0" name="ackRequest" type="xs:boolean"/>
+            <xs:element minOccurs="0" name="timestamp" type="ns_p:AbsoluteOrRelativeTimeType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="header" type="ns_p:HeaderType"/>
+    <xs:complexType name="PayloadType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" name="cmd" type="ns_p:CmdType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="payload" type="ns_p:PayloadType"/>
+    <xs:complexType name="DatagramType">
+        <xs:sequence>
+            <xs:element ref="ns_p:header"/>
+            <xs:element ref="ns_p:payload"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="datagram" type="ns_p:DatagramType"/>
+</xs:schema>

@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Smart Premises Interoperable Neutral-Message Exchange (SPINE)
+    Version 1.3.0 (final)
+    2023-08-31
+    Copyright (c) 2023 EEBus Initiative e.V.  All Rights Reserved.
+    Source: https://www.eebus.org/en/specifications/
+-->
+<xs:schema xmlns:ns_p="http://docs.eebus.org/spine/xsd/v1" xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://docs.eebus.org/spine/xsd/v1" version="1.3.0"
+    blockDefault="#all" elementFormDefault="qualified">
+    <xs:annotation>
+        <xs:documentation>EEBus SPINE Specification schema. Copyright 2023 EEBus Initiative e.V.  All rights reserved.</xs:documentation>
+    </xs:annotation>
+    <xs:include schemaLocation="EEBus_SPINE_TS_PowerSequences.xsd"/>
+    <xs:complexType name="OperatingConstraintsInterruptDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:PowerSequenceIdType"/>
+            <xs:element name="isPausable" type="xs:boolean" minOccurs="0"/>
+            <xs:element name="isStoppable" type="xs:boolean" minOccurs="0"/>
+            <xs:element name="notInterruptibleAtHighPower" type="xs:boolean" minOccurs="0"/>
+            <xs:element name="maxCyclesPerDay" type="xs:unsignedInt" minOccurs="0"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="operatingConstraintsInterruptData" type="ns_p:OperatingConstraintsInterruptDataType"/>
+    <xs:complexType name="OperatingConstraintsInterruptDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:ElementTagType"/>
+            <xs:element name="isPausable" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element name="isStoppable" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element name="notInterruptibleAtHighPower" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element name="maxCyclesPerDay" minOccurs="0" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="operatingConstraintsInterruptDataElements" type="ns_p:OperatingConstraintsInterruptDataElementsType"/>
+    <xs:complexType name="OperatingConstraintsInterruptListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:operatingConstraintsInterruptData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="operatingConstraintsInterruptListData" type="ns_p:OperatingConstraintsInterruptListDataType"/>
+    <xs:complexType name="OperatingConstraintsInterruptListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:PowerSequenceIdType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="operatingConstraintsInterruptListDataSelectors" type="ns_p:OperatingConstraintsInterruptListDataSelectorsType"/>
+    <xs:complexType name="OperatingConstraintsDurationDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:PowerSequenceIdType"/>
+            <xs:element name="activeDurationMin" type="xs:duration" minOccurs="0"/>
+            <xs:element name="activeDurationMax" type="xs:duration" minOccurs="0"/>
+            <xs:element name="pauseDurationMin" type="xs:duration" minOccurs="0"/>
+            <xs:element name="pauseDurationMax" type="xs:duration" minOccurs="0"/>
+            <xs:element name="activeDurationSumMin" type="xs:duration" minOccurs="0"/>
+            <xs:element name="activeDurationSumMax" type="xs:duration" minOccurs="0"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="operatingConstraintsDurationData" type="ns_p:OperatingConstraintsDurationDataType"/>
+    <xs:complexType name="OperatingConstraintsDurationDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:ElementTagType"/>
+            <xs:element name="activeDurationMin" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element name="activeDurationMax" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element name="pauseDurationMin" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element name="pauseDurationMax" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element name="activeDurationSumMin" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element name="activeDurationSumMax" minOccurs="0" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="operatingConstraintsDurationDataElements" type="ns_p:OperatingConstraintsDurationDataElementsType"/>
+    <xs:complexType name="OperatingConstraintsDurationListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:operatingConstraintsDurationData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="operatingConstraintsDurationListData" type="ns_p:OperatingConstraintsDurationListDataType"/>
+    <xs:complexType name="OperatingConstraintsDurationListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:PowerSequenceIdType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="operatingConstraintsDurationListDataSelectors" type="ns_p:OperatingConstraintsDurationListDataSelectorsType"/>
+    <xs:complexType name="OperatingConstraintsPowerDescriptionDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:PowerSequenceIdType"/>
+            <xs:element minOccurs="0" name="positiveEnergyDirection" type="ns_p:EnergyDirectionType"/>
+            <xs:element minOccurs="0" name="powerUnit" type="ns_p:UnitOfMeasurementType"/>
+            <xs:element minOccurs="0" name="energyUnit" type="ns_p:UnitOfMeasurementType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:DescriptionType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="operatingConstraintsPowerDescriptionData" type="ns_p:OperatingConstraintsPowerDescriptionDataType"/>
+    <xs:complexType name="OperatingConstraintsPowerDescriptionDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="positiveEnergyDirection" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="powerUnit" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="energyUnit" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="operatingConstraintsPowerDescriptionDataElements" type="ns_p:OperatingConstraintsPowerDescriptionDataElementsType"/>
+    <xs:complexType name="OperatingConstraintsPowerDescriptionListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:operatingConstraintsPowerDescriptionData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="operatingConstraintsPowerDescriptionListData" type="ns_p:OperatingConstraintsPowerDescriptionListDataType"/>
+    <xs:complexType name="OperatingConstraintsPowerDescriptionListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:PowerSequenceIdType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="operatingConstraintsPowerDescriptionListDataSelectors" type="ns_p:OperatingConstraintsPowerDescriptionListDataSelectorsType"/>
+    <xs:complexType name="OperatingConstraintsPowerRangeDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:PowerSequenceIdType"/>
+            <xs:element name="powerMin" type="ns_p:ScaledNumberType" minOccurs="0"/>
+            <xs:element name="powerMax" type="ns_p:ScaledNumberType" minOccurs="0"/>
+            <xs:element name="energyMin" type="ns_p:ScaledNumberType" minOccurs="0"/>
+            <xs:element name="energyMax" type="ns_p:ScaledNumberType" minOccurs="0"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="operatingConstraintsPowerRangeData" type="ns_p:OperatingConstraintsPowerRangeDataType"/>
+    <xs:complexType name="OperatingConstraintsPowerRangeDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:ElementTagType"/>
+            <xs:element name="powerMin" minOccurs="0" type="ns_p:ScaledNumberElementsType"/>
+            <xs:element name="powerMax" minOccurs="0" type="ns_p:ScaledNumberElementsType"/>
+            <xs:element name="energyMin" minOccurs="0" type="ns_p:ScaledNumberElementsType"/>
+            <xs:element name="energyMax" minOccurs="0" type="ns_p:ScaledNumberElementsType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="operatingConstraintsPowerRangeDataElements" type="ns_p:OperatingConstraintsPowerRangeDataElementsType"/>
+    <xs:complexType name="OperatingConstraintsPowerRangeListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:operatingConstraintsPowerRangeData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="operatingConstraintsPowerRangeListData" type="ns_p:OperatingConstraintsPowerRangeListDataType"/>
+    <xs:complexType name="OperatingConstraintsPowerRangeListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:PowerSequenceIdType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="operatingConstraintsPowerRangeListDataSelectors" type="ns_p:OperatingConstraintsPowerRangeListDataSelectorsType"/>
+    <xs:complexType name="OperatingConstraintsPowerLevelDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:PowerSequenceIdType"/>
+            <xs:element name="power" type="ns_p:ScaledNumberType" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="operatingConstraintsPowerLevelData" type="ns_p:OperatingConstraintsPowerLevelDataType"/>
+    <xs:complexType name="OperatingConstraintsPowerLevelDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:ElementTagType"/>
+            <xs:element name="power" minOccurs="0" type="ns_p:ScaledNumberElementsType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="operatingConstraintsPowerLevelDataElements" type="ns_p:OperatingConstraintsPowerLevelDataElementsType"/>
+    <xs:complexType name="OperatingConstraintsPowerLevelListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:operatingConstraintsPowerLevelData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="operatingConstraintsPowerLevelListData" type="ns_p:OperatingConstraintsPowerLevelListDataType"/>
+    <xs:complexType name="OperatingConstraintsPowerLevelListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:PowerSequenceIdType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="operatingConstraintsPowerLevelListDataSelectors" type="ns_p:OperatingConstraintsPowerLevelListDataSelectorsType"/>
+    <xs:complexType name="OperatingConstraintsResumeImplicationDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:PowerSequenceIdType"/>
+            <xs:element name="resumeEnergyEstimated" type="ns_p:ScaledNumberType" minOccurs="0"/>
+            <xs:element name="energyUnit" minOccurs="0" type="ns_p:UnitOfMeasurementType"/>
+            <xs:element name="resumeCostEstimated" type="ns_p:ScaledNumberType" minOccurs="0"/>
+            <xs:element minOccurs="0" name="currency" type="ns_p:CurrencyType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="operatingConstraintsResumeImplicationData" type="ns_p:OperatingConstraintsResumeImplicationDataType"/>
+    <xs:complexType name="OperatingConstraintsResumeImplicationDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:ElementTagType"/>
+            <xs:element name="resumeEnergyEstimated" minOccurs="0" type="ns_p:ScaledNumberElementsType"/>
+            <xs:element name="energyUnit" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element name="resumeCostEstimated" minOccurs="0" type="ns_p:ScaledNumberElementsType"/>
+            <xs:element minOccurs="0" name="currency" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="operatingConstraintsResumeImplicationDataElements" type="ns_p:OperatingConstraintsResumeImplicationDataElementsType"/>
+    <xs:complexType name="OperatingConstraintsResumeImplicationListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:operatingConstraintsResumeImplicationData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="operatingConstraintsResumeImplicationListData" type="ns_p:OperatingConstraintsResumeImplicationListDataType"/>
+    <xs:complexType name="OperatingConstraintsResumeImplicationListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="sequenceId" type="ns_p:PowerSequenceIdType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="operatingConstraintsResumeImplicationListDataSelectors" type="ns_p:OperatingConstraintsResumeImplicationListDataSelectorsType"/>
+</xs:schema>

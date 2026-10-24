@@ -63,7 +63,7 @@ switch:
       sorting_group_id: sg_fronius
       sorting_weight: 17.15
   - platform: template
-    name: "${device_name} Charge EV from net at low solar"
+    name: "${device_name} Charge EV from grid at low solar"
     id: charge_ev_grid_low_solar
     optimistic: true
     restore_mode: RESTORE_DEFAULT_OFF
@@ -102,9 +102,8 @@ sensor:
       - lambda: 'id(storage_reference_sf_updated_ms) = millis();'
   - platform: modbustcp_controller
     modbustcp_controller_id: fronius_inverter
-    name: "${device_name} Storage Charge Status Raw"
     id: storage_charge_status
-    entity_category: diagnostic
+    internal: true
     register_type: holding
     address: 40354
     value_type: U_WORD
@@ -122,14 +121,6 @@ sensor:
     accuracy_decimals: 0
     filters:
       - lambda: 'return x == 65535.0f ? NAN : x;'
-  - platform: modbustcp_controller
-    modbustcp_controller_id: fronius_inverter
-    name: "${device_name} Storage Grid Charge Permission Raw"
-    entity_category: diagnostic
-    register_type: holding
-    address: 40360
-    value_type: U_WORD
-    accuracy_decimals: 0
   - platform: modbustcp_controller
     modbustcp_controller_id: fronius_inverter
     id: storage_rate_sf
@@ -252,6 +243,10 @@ interval:
           id(solar_budget_reservation).publish_state(decision.budget_charge_reservation_ac_w);
           std::string status = "Active: ";
           status += solar_reason_text(decision.reason);
+          if (options.low_solar_grid && (inputs.now_epoch == 0 ||
+              inputs.forecast.valid_until_epoch <= inputs.now_epoch ||
+              !std::isfinite(inputs.forecast.remaining_kwh)))
+            status += "; forecast unavailable or expired";
           if (options.battery_first) status += full ? "; battery full" : "; charge capacity unverified";
           if (options.battery_first && !std::isfinite(outwrte)) status += "; normal discharge policy";
           if (id(solar_policy_status).state != status) {

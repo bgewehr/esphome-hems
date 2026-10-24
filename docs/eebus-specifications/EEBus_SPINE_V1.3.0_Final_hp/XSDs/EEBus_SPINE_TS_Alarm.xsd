@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Smart Premises Interoperable Neutral-Message Exchange (SPINE)
+    Version 1.3.0 (final)
+    2023-08-31
+    Copyright (c) 2023 EEBus Initiative e.V.  All Rights Reserved.
+    Source: https://www.eebus.org/en/specifications/
+-->
+<xs:schema xmlns:ns_p="http://docs.eebus.org/spine/xsd/v1" xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://docs.eebus.org/spine/xsd/v1" version="1.3.0"
+    blockDefault="#all" elementFormDefault="qualified">
+    <xs:annotation>
+        <xs:documentation>EEBus SPINE Specification schema. Copyright 2023 EEBus Initiative e.V.  All rights reserved.</xs:documentation>
+    </xs:annotation>
+    <xs:include schemaLocation="EEBus_SPINE_TS_CommonDataTypes.xsd"/>
+    <xs:include schemaLocation="EEBus_SPINE_TS_Threshold.xsd"/>
+    <xs:simpleType name="AlarmIdType">
+        <xs:restriction base="xs:unsignedInt"/>
+    </xs:simpleType>
+    <xs:simpleType name="AlarmTypeType">
+        <xs:union memberTypes="ns_p:AlarmTypeEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="AlarmTypeEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="alarmCancelled"/>
+            <xs:enumeration value="underThreshold"/>
+            <xs:enumeration value="overThreshold"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:complexType name="AlarmDataType">
+        <xs:sequence>
+            <xs:element name="alarmId" minOccurs="0" type="ns_p:AlarmIdType"/>
+            <xs:element minOccurs="0" name="thresholdId" type="ns_p:ThresholdIdType"/>
+            <xs:element minOccurs="0" name="timestamp" type="ns_p:AbsoluteOrRelativeTimeType"/>
+            <xs:element name="alarmType" minOccurs="0" type="ns_p:AlarmTypeType"/>
+            <xs:element minOccurs="0" name="measuredValue" type="ns_p:ScaledNumberType"/>
+            <xs:element minOccurs="0" name="evaluationPeriod" type="ns_p:TimePeriodType"/>
+            <xs:element minOccurs="0" name="scopeType" type="ns_p:ScopeTypeType"/>
+            <xs:element minOccurs="0" name="label" type="ns_p:LabelType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:DescriptionType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="alarmData" type="ns_p:AlarmDataType"/>
+    <xs:complexType name="AlarmDataElementsType">
+        <xs:sequence>
+            <xs:element name="alarmId" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="thresholdId" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="timestamp" type="ns_p:ElementTagType"/>
+            <xs:element name="alarmType" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="measuredValue" type="ns_p:ScaledNumberElementsType"/>
+            <xs:element minOccurs="0" name="evaluationPeriod" type="ns_p:TimePeriodElementsType"/>
+            <xs:element minOccurs="0" name="scopeType" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="label" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="alarmDataElements" type="ns_p:AlarmDataElementsType"/>
+    <xs:complexType name="AlarmListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:alarmData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="alarmListData" type="ns_p:AlarmListDataType"/>
+    <xs:complexType name="AlarmListDataSelectorsType">
+        <xs:sequence>
+            <xs:element name="alarmId" minOccurs="0" type="ns_p:AlarmIdType"/>
+            <xs:element minOccurs="0" name="scopeType" type="ns_p:ScopeTypeType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="alarmListDataSelectors" type="ns_p:AlarmListDataSelectorsType"/>
+</xs:schema>

@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Smart Premises Interoperable Neutral-Message Exchange (SPINE)
+    Version 1.3.0 (final)
+    2023-08-31
+    Copyright (c) 2023 EEBus Initiative e.V.  All Rights Reserved.
+    Source: https://www.eebus.org/en/specifications/
+-->
+<xs:schema xmlns:ns_p="http://docs.eebus.org/spine/xsd/v1" xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://docs.eebus.org/spine/xsd/v1" version="1.3.0"
+    blockDefault="#all" elementFormDefault="qualified">
+    <xs:annotation>
+        <xs:documentation>EEBus SPINE Specification schema. Copyright 2023 EEBus Initiative e.V.  All rights reserved.</xs:documentation>
+    </xs:annotation>
+    <xs:include schemaLocation="EEBus_SPINE_TS_CommonDataTypes.xsd"/>
+    <xs:simpleType name="BindingIdType">
+        <xs:restriction base="xs:unsignedInt"/>
+    </xs:simpleType>
+    <xs:complexType name="BindingManagementEntryDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="bindingId" type="ns_p:BindingIdType"/>
+            <xs:element minOccurs="0" name="clientAddress" type="ns_p:FeatureAddressType"/>
+            <xs:element minOccurs="0" name="serverAddress" type="ns_p:FeatureAddressType"/>
+            <xs:element minOccurs="0" name="label" type="ns_p:LabelType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:DescriptionType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="bindingManagementEntryData" type="ns_p:BindingManagementEntryDataType"/>
+    <xs:complexType name="BindingManagementEntryDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="bindingId" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="clientAddress" type="ns_p:FeatureAddressElementsType"/>
+            <xs:element minOccurs="0" name="serverAddress" type="ns_p:FeatureAddressElementsType"/>
+            <xs:element minOccurs="0" name="label" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="bindingManagementEntryDataElements" type="ns_p:BindingManagementEntryDataElementsType"/>
+    <xs:complexType name="BindingManagementEntryListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:bindingManagementEntryData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="bindingManagementEntryListData" type="ns_p:BindingManagementEntryListDataType"/>
+    <xs:complexType name="BindingManagementEntryListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="bindingId" type="ns_p:BindingIdType"/>
+            <xs:element minOccurs="0" name="clientAddress" type="ns_p:FeatureAddressType"/>
+            <xs:element minOccurs="0" name="serverAddress" type="ns_p:FeatureAddressType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="bindingManagementEntryListDataSelectors" type="ns_p:BindingManagementEntryListDataSelectorsType"/>
+    <xs:complexType name="BindingManagementRequestCallType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="clientAddress" type="ns_p:FeatureAddressType"/>
+            <xs:element minOccurs="0" name="serverAddress" type="ns_p:FeatureAddressType"/>
+            <xs:element minOccurs="0" name="serverFeatureType" type="ns_p:FeatureTypeType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="bindingManagementRequestCall" type="ns_p:BindingManagementRequestCallType"/>
+    <xs:complexType name="BindingManagementRequestCallElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="clientAddress" type="ns_p:FeatureAddressElementsType"/>
+            <xs:element minOccurs="0" name="serverAddress" type="ns_p:FeatureAddressElementsType"/>
+            <xs:element minOccurs="0" name="serverFeatureType" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="bindingManagementRequestCallElements" type="ns_p:BindingManagementRequestCallElementsType"/>
+    <xs:complexType name="BindingManagementDeleteCallType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="bindingId" type="ns_p:BindingIdType"/>
+            <xs:element minOccurs="0" name="clientAddress" type="ns_p:FeatureAddressType"/>
+            <xs:element minOccurs="0" name="serverAddress" type="ns_p:FeatureAddressType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="bindingManagementDeleteCall" type="ns_p:BindingManagementDeleteCallType"/>
+    <xs:complexType name="BindingManagementDeleteCallElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="bindingId" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="clientAddress" type="ns_p:FeatureAddressElementsType"/>
+            <xs:element minOccurs="0" name="serverAddress" type="ns_p:FeatureAddressElementsType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="bindingManagementDeleteCallElements" type="ns_p:BindingManagementDeleteCallElementsType"/>
+</xs:schema>

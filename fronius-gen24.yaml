@@ -28,6 +28,11 @@ globals:
   - id: fronius_storage_fault
     type: bool
     initial_value: 'false'
+  - id: fronius_storage_last_error
+    type: std::string
+    restore_value: true
+    max_restore_data_length: 254
+    initial_value: '""'
   - id: fronius_storage_test_active
     type: bool
     initial_value: 'false'
@@ -96,34 +101,34 @@ globals:
   # Scale factors — read from device every 5 s; no NVS restore needed
   - id: sf_ac_power
     type: int
-    initial_value: "-1"
+    initial_value: "100"
   - id: sf_solar_power
     type: int
-    initial_value: "-1"
+    initial_value: "100"
   - id: sf_grid_power
     type: int
-    initial_value: "-1"
+    initial_value: "100"
   - id: sf_ev_power
     type: int
-    initial_value: "-1"
+    initial_value: "100"
   - id: sf_hp_power
     type: int
-    initial_value: "-1"
+    initial_value: "100"
   - id: sf_grid_current
     type: int
-    initial_value: "-1"
+    initial_value: "100"
   - id: sf_ev_current
     type: int
     initial_value: "100"
   - id: sf_battery_power
     type: int
-    initial_value: "-1"
+    initial_value: "100"
   - id: sf_battery_soc
     type: int
-    initial_value: "-1"
+    initial_value: "100"
   - id: sf_outwrte
     type: int
-    initial_value: "-2"
+    initial_value: "100"
 
 http_request:
   useragent: "ESPHome"
@@ -185,9 +190,9 @@ sensor:
     accuracy_decimals: 0
     filters:
       - lambda: |-
-          return x * pow(10, id(sf_ac_power));
-      # Ausreisser verwerfen: Wert/SF-Paarung kann um einen Poll-Zyklus versetzt
-      # sein (Faktor 10); Median glaettet Einzel-Fehlpaarungen und Lesefehler
+            const float value = esphome::modbustcp::sunspec_scaled_value(x, id(sf_ac_power), true);
+            if (!std::isfinite(value)) return {};
+            return value;
       - lambda: 'return (fabsf(x) > 30000.0f) ? NAN : x;'
       - filter_out: nan
       - median:
@@ -210,7 +215,7 @@ sensor:
     internal: true
     on_value:
       then:
-        - lambda: 'if ((int)x >= -4 && (int)x <= 4) id(sf_ac_power) = (int)x;'
+        - lambda: 'id(sf_ac_power) = esphome::modbustcp::sunspec_scale_factor(x);'
 
   # ── Wechselrichter: DC/Solar-Leistung (MPPT1 + MPPT2) ──────────────────────
   # Register 40274 = MPPT1_DCW, Register 40294 = MPPT2_DCW, SF at 40257
@@ -223,7 +228,9 @@ sensor:
     internal: true
     filters:
       - lambda: |-
-          return x * pow(10, id(sf_solar_power));
+          const float value = esphome::modbustcp::sunspec_scaled_value(x, id(sf_solar_power), false);
+          if (!std::isfinite(value)) return {};
+          return value;
     on_value:
       then:
         - globals.set:
@@ -239,7 +246,9 @@ sensor:
     internal: true
     filters:
       - lambda: |-
-          return x * pow(10, id(sf_solar_power));
+          const float value = esphome::modbustcp::sunspec_scaled_value(x, id(sf_solar_power), false);
+          if (!std::isfinite(value)) return {};
+          return value;
     on_value:
       then:
         - globals.set:
@@ -292,7 +301,7 @@ sensor:
     internal: true
     on_value:
       then:
-        - lambda: 'if ((int)x >= -4 && (int)x <= 4) id(sf_solar_power) = (int)x;'
+        - lambda: 'id(sf_solar_power) = esphome::modbustcp::sunspec_scale_factor(x);'
 
   # ── Smart Meter Grid (Unit 240): Gesamtleistung ─────────────────────────────
   # Register 40087 = W (Total Real Power), 40091 = W_SF (Scale Factor)
@@ -313,9 +322,9 @@ sensor:
     accuracy_decimals: 0
     filters:
       - lambda: |-
-          return x * pow(10, id(sf_grid_power));
-      # Ausreisser verwerfen: Wert/SF-Paarung kann um einen Poll-Zyklus versetzt
-      # sein (Faktor 10); Median glaettet Einzel-Fehlpaarungen und Lesefehler
+            const float value = esphome::modbustcp::sunspec_scaled_value(x, id(sf_grid_power), true);
+            if (!std::isfinite(value)) return {};
+            return value;
       - lambda: 'return (fabsf(x) > 30000.0f) ? NAN : x;'
       - filter_out: nan
       - median:
@@ -338,7 +347,7 @@ sensor:
     internal: true
     on_value:
       then:
-        - lambda: 'if ((int)x >= -4 && (int)x <= 4) id(sf_grid_power) = (int)x;'
+        - lambda: 'id(sf_grid_power) = esphome::modbustcp::sunspec_scale_factor(x);'
 
   # ── Smart Meter Grid: Phasenleistungen (SunSpec Model 203, Unit 240) ────────
   # Register 40088-40090 = WphA/B/C (signed), SF = 40091 (= sf_grid_power)
@@ -352,7 +361,9 @@ sensor:
     internal: true
     filters:
       - lambda: |-
-          return x * pow(10, id(sf_grid_power));
+          const float value = esphome::modbustcp::sunspec_scaled_value(x, id(sf_grid_power), true);
+          if (!std::isfinite(value)) return {};
+          return value;
 
   - platform: modbustcp_controller
     modbustcp_controller_id: fronius_meter_grid
@@ -363,7 +374,9 @@ sensor:
     internal: true
     filters:
       - lambda: |-
-          return x * pow(10, id(sf_grid_power));
+          const float value = esphome::modbustcp::sunspec_scaled_value(x, id(sf_grid_power), true);
+          if (!std::isfinite(value)) return {};
+          return value;
 
   - platform: modbustcp_controller
     modbustcp_controller_id: fronius_meter_grid
@@ -374,7 +387,9 @@ sensor:
     internal: true
     filters:
       - lambda: |-
-          return x * pow(10, id(sf_grid_power));
+          const float value = esphome::modbustcp::sunspec_scaled_value(x, id(sf_grid_power), true);
+          if (!std::isfinite(value)) return {};
+          return value;
 
   # ── Smart Meter Grid: Phasenströme (SunSpec Model 201, Unit 240) ────────────
   # Register 40072-40074 = AphA/B/C (unsigned!), 40075 = A_SF
@@ -397,7 +412,8 @@ sensor:
     accuracy_decimals: 1
     filters:
       - lambda: |-
-          float current = x * pow(10, id(sf_grid_current));
+          float current = esphome::modbustcp::sunspec_scaled_value(x, id(sf_grid_current), true);
+          if (!std::isfinite(current)) return {};
           float power = id(fronius_grid_power_a).state;
           if (!std::isnan(power) && power < 0) current = -current;
           return current;
@@ -420,7 +436,8 @@ sensor:
     accuracy_decimals: 1
     filters:
       - lambda: |-
-          float current = x * pow(10, id(sf_grid_current));
+          float current = esphome::modbustcp::sunspec_scaled_value(x, id(sf_grid_current), true);
+          if (!std::isfinite(current)) return {};
           float power = id(fronius_grid_power_b).state;
           if (!std::isnan(power) && power < 0) current = -current;
           return current;
@@ -443,7 +460,8 @@ sensor:
     accuracy_decimals: 1
     filters:
       - lambda: |-
-          float current = x * pow(10, id(sf_grid_current));
+          float current = esphome::modbustcp::sunspec_scaled_value(x, id(sf_grid_current), true);
+          if (!std::isfinite(current)) return {};
           float power = id(fronius_grid_power_c).state;
           if (!std::isnan(power) && power < 0) current = -current;
           return current;
@@ -458,7 +476,7 @@ sensor:
     internal: true
     on_value:
       then:
-        - lambda: 'if ((int)x >= -4 && (int)x <= 4) id(sf_grid_current) = (int)x;'
+        - lambda: 'id(sf_grid_current) = esphome::modbustcp::sunspec_scale_factor(x);'
 
   # ── Smart Meter EV/Wallbox (Unit 241): Leistung ─────────────────────────────
   # Gleiche Register wie Grid Meter, aber andere Unit-ID
@@ -479,9 +497,9 @@ sensor:
     accuracy_decimals: 0
     filters:
       - lambda: |-
-          return -x * pow(10, id(sf_ev_power));
-      # Ausreisser verwerfen: Wert/SF-Paarung kann um einen Poll-Zyklus versetzt
-      # sein (Faktor 10); Median glaettet Einzel-Fehlpaarungen und Lesefehler
+            const float value = esphome::modbustcp::sunspec_scaled_value(x, id(sf_ev_power), true);
+            if (!std::isfinite(value)) return {};
+            return -value;
       - lambda: 'return (fabsf(x) > 30000.0f) ? NAN : x;'
       - filter_out: nan
       - median:
@@ -506,12 +524,12 @@ sensor:
     internal: true
     on_value:
       then:
-        - lambda: 'if ((int)x >= -4 && (int)x <= 4) id(sf_ev_power) = (int)x;'
+        - lambda: 'id(sf_ev_power) = esphome::modbustcp::sunspec_scale_factor(x);'
 
   # ── Smart Meter EV/Wallbox: Phasenströme (SunSpec Model 201, Unit 241) ───────
-  # SF zuerst lesen (40075), damit sf_ev_current bekannt ist bevor die
-  # Stromregister (40072-40074) verarbeitet werden. Initial-Sentinel 100
-  # → Filter gibt NAN zurück bis SF korrekt gelesen wurde.
+  # SF (40075) wird gecacht; die Reihenfolge der Registerantworten ist egal.
+  # Stromregister (40072-40074) starten mit unbekanntem SF (Sentinel 100).
+  # → Filter unterdrueckt Messwerte bis SF korrekt gelesen wurde.
   # EV-Meter liefert SF=-5, daher SunSpec-Range -10..10 statt -4..4.
   - platform: modbustcp_controller
     modbustcp_controller_id: fronius_meter_ev
@@ -523,7 +541,7 @@ sensor:
     internal: true
     on_value:
       then:
-        - lambda: 'if ((int)x >= -10 && (int)x <= 10) id(sf_ev_current) = (int)x;'
+        - lambda: 'id(sf_ev_current) = esphome::modbustcp::sunspec_scale_factor(x);'
 
   - platform: modbustcp_controller
     disabled_by_default: true
@@ -543,8 +561,8 @@ sensor:
     accuracy_decimals: 1
     filters:
       - lambda: |-
-          if (id(sf_ev_current) > 10 || id(sf_ev_current) < -10) return NAN;
-          float current = std::abs(x * pow(10, id(sf_ev_current)));
+          float current = std::abs(esphome::modbustcp::sunspec_scaled_value(x, id(sf_ev_current), true));
+          if (!std::isfinite(current)) return {};
           if (current > 32.0f) return NAN;
           float power = std::abs(id(fronius_ev_power).state);
           if (!std::isnan(power) && power > 1000.0f) {
@@ -577,8 +595,8 @@ sensor:
     accuracy_decimals: 1
     filters:
       - lambda: |-
-          if (id(sf_ev_current) > 10 || id(sf_ev_current) < -10) return NAN;
-          float current = std::abs(x * pow(10, id(sf_ev_current)));
+          float current = std::abs(esphome::modbustcp::sunspec_scaled_value(x, id(sf_ev_current), true));
+          if (!std::isfinite(current)) return {};
           if (current > 32.0f) return NAN;
           float power = std::abs(id(fronius_ev_power).state);
           if (!std::isnan(power) && power > 1000.0f) {
@@ -611,8 +629,8 @@ sensor:
     accuracy_decimals: 1
     filters:
       - lambda: |-
-          if (id(sf_ev_current) > 10 || id(sf_ev_current) < -10) return NAN;
-          float current = std::abs(x * pow(10, id(sf_ev_current)));
+          float current = std::abs(esphome::modbustcp::sunspec_scaled_value(x, id(sf_ev_current), true));
+          if (!std::isfinite(current)) return {};
           if (current > 32.0f) return NAN;
           float power = std::abs(id(fronius_ev_power).state);
           if (!std::isnan(power) && power > 1000.0f) {
@@ -646,9 +664,9 @@ sensor:
     accuracy_decimals: 0
     filters:
       - lambda: |-
-          return -x * pow(10, id(sf_hp_power));
-      # Ausreisser verwerfen: Wert/SF-Paarung kann um einen Poll-Zyklus versetzt
-      # sein (Faktor 10); Median glaettet Einzel-Fehlpaarungen und Lesefehler
+            const float value = esphome::modbustcp::sunspec_scaled_value(x, id(sf_hp_power), true);
+            if (!std::isfinite(value)) return {};
+            return -value;
       - lambda: 'return (fabsf(x) > 30000.0f) ? NAN : x;'
       - filter_out: nan
       - median:
@@ -671,7 +689,7 @@ sensor:
     internal: true
     on_value:
       then:
-        - lambda: 'if ((int)x >= -4 && (int)x <= 4) id(sf_hp_power) = (int)x;'
+        - lambda: 'id(sf_hp_power) = esphome::modbustcp::sunspec_scale_factor(x);'
 
   # ── Template: Haus-Leistung (Verbrauch ohne EV/HP/Ohmpilot) ───────────────────
   # house = ac + grid - ev - hp - ohm
@@ -852,7 +870,9 @@ sensor:
     internal: true
     filters:
       - lambda: |-
-          return x * pow(10, id(sf_battery_power));
+          const float value = esphome::modbustcp::sunspec_scaled_value(x, id(sf_battery_power), false);
+          if (!std::isfinite(value)) return {};
+          return value;
     on_value:
       then:
         - globals.set:
@@ -868,7 +888,9 @@ sensor:
     internal: true
     filters:
       - lambda: |-
-          return x * pow(10, id(sf_battery_power));
+          const float value = esphome::modbustcp::sunspec_scaled_value(x, id(sf_battery_power), false);
+          if (!std::isfinite(value)) return {};
+          return value;
     on_value:
       then:
         - globals.set:
@@ -912,7 +934,7 @@ sensor:
     internal: true
     on_value:
       then:
-        - lambda: 'if ((int)x >= -4 && (int)x <= 4) id(sf_battery_power) = (int)x;'
+        - lambda: 'id(sf_battery_power) = esphome::modbustcp::sunspec_scale_factor(x);'
 
   # ── Wechselrichter: Battery SOC (SunSpec Storage) ────────────────────────
   # Register 40351 = ChaState (%), SF at 40365
@@ -933,7 +955,9 @@ sensor:
     accuracy_decimals: 0
     filters:
       - lambda: |-
-          return x * pow(10, id(sf_battery_soc));
+          const float soc = esphome::modbustcp::sunspec_scaled_value(x, id(sf_battery_soc), false, 0.0f, 100.0f);
+          if (!std::isfinite(soc)) return {};
+          return soc;
 
   - platform: modbustcp_controller
     modbustcp_controller_id: fronius_inverter
@@ -945,7 +969,7 @@ sensor:
     internal: true
     on_value:
       then:
-        - lambda: 'if ((int)x >= -4 && (int)x <= 4) id(sf_battery_soc) = (int)x;'
+        - lambda: 'id(sf_battery_soc) = esphome::modbustcp::sunspec_scale_factor(x);'
 
   # ── InOutWRte Scale Factor (Register 40368) ───────────────────────────────
   - platform: modbustcp_controller
@@ -958,7 +982,7 @@ sensor:
     internal: true
     on_value:
       then:
-        - lambda: 'if ((int)x >= -4 && (int)x <= 4) id(sf_outwrte) = (int)x;'
+        - lambda: 'id(sf_outwrte) = esphome::modbustcp::sunspec_scale_factor(x);'
 
 # ── Storage Control: OutWRte schreiben (jede 5 Sekunden) ─────────────────
 # Verifizierte Register aus ioBroker:
@@ -987,15 +1011,36 @@ interval:
           static uint32_t transaction = 0;
           static uint32_t transaction_started = 0;
           static bool transaction_busy = false;
-          if (id(fronius_storage_fault)) return;
-          if (transaction_busy) {
-            if (millis() - transaction_started < 10000) return;
+          static const char *transaction_stage = "idle";
+          static esphome::power_distribution::StorageWriterRetry retry;
+          const auto record_fault = [](const std::string &reason) {
+            auto time = id(ha_time).now();
+            const std::string timestamp = time.is_valid() ? time.strftime("%Y-%m-%d %H:%M:%S")
+                : std::string("uptime_s=") + std::to_string(millis() / 1000);
+            id(fronius_storage_last_error) = timestamp + " " + reason;
+            id(fronius_storage_fault) = true;
+            id(storage_verified_ms) = 0;
             ++transaction;
             transaction_busy = false;
-            id(fronius_storage_fault) = true;
+            retry.failed(millis());
+            ESP_LOGE("fronius", "Storage writer paused; automatic retry pending: %s",
+                     id(fronius_storage_last_error).c_str());
+          };
+          static bool previous_error_logged = false;
+          if (!previous_error_logged) {
+            previous_error_logged = true;
+            if (!id(fronius_storage_last_error).empty())
+              ESP_LOGW("fronius", "Previous storage fault (retained, not current): %s",
+                       id(fronius_storage_last_error).c_str());
+          }
+          if (id(fronius_storage_fault) && !transaction_busy && !retry.ready(millis())) return;
+          if (transaction_busy) {
+            if (millis() - transaction_started < 10000) return;
+            record_fault(std::string("transaction expired: stage=") + transaction_stage +
+                         " token=" + std::to_string(transaction) +
+                         " age_ms=" + std::to_string(millis() - transaction_started));
             controller->queue_command(modbustcp_controller::ModbusCommandItem::create_write_multiple_command(
                 controller, 40348, 1, std::vector<uint16_t>{0}));
-            ESP_LOGE("fronius", "Storage transaction expired; writer latched off");
             return;
           }
           const uint32_t token = ++transaction;
@@ -1032,7 +1077,7 @@ interval:
           const uint16_t encoded = static_cast<uint16_t>(static_cast<int16_t>(raw));
           const uint16_t mode = pct < 100.0f ? 2 : 0;
           const auto valid = [token, pct]() {
-            if (token != transaction || id(fronius_storage_fault)) return false;
+            if (token != transaction) return false;
             const bool current = millis() - transaction_started < 10000 &&
                 !id(fronius_storage_test_active) && !id(fronius_storage_reset_pending) &&
                 esphome::power_distribution::storage_target_valid(
@@ -1042,31 +1087,43 @@ interval:
             return current;
           };
           transaction_busy = true;
-          const auto apply_rate = [controller, valid, encoded, mode]() {
+          const auto apply_rate = [controller, valid, encoded, mode, record_fault]() {
             if (!valid()) return;
+            transaction_stage = "write-rate";
             auto rate_cmd = modbustcp_controller::ModbusCommandItem::create_write_multiple_command(
                 controller, 40355, 1, std::vector<uint16_t>{encoded});
-            rate_cmd.on_data_func = [controller, valid, encoded, mode](auto, auto, const auto &) {
+            rate_cmd.on_data_func = [controller, valid, encoded, mode, record_fault](auto, auto, const auto &) {
               if (!valid()) return;
+              transaction_stage = "write-mode";
               auto mode_cmd = modbustcp_controller::ModbusCommandItem::create_write_multiple_command(
                   controller, 40348, 1, std::vector<uint16_t>{mode});
-              mode_cmd.on_data_func = [controller, valid, encoded, mode](auto, auto, const auto &) {
+              mode_cmd.on_data_func = [controller, valid, encoded, mode, record_fault](auto, auto, const auto &) {
                 if (!valid()) return;
+                transaction_stage = "verify-mode-rate-timeout";
                 auto verify = modbustcp_controller::ModbusCommandItem::create_read_command(
                     controller, modbustcp_controller::ModbusRegisterType::HOLDING, 40348, 11,
-                    [controller, valid, encoded, mode](auto, auto, const std::vector<uint8_t> &data) {
+                    [controller, valid, encoded, mode, record_fault](auto, auto, const std::vector<uint8_t> &data) {
                       if (!valid()) return;
                       transaction_busy = false;
                       const auto word = [&data](size_t offset) {
                         return (uint16_t(data[offset]) << 8) | data[offset + 1];
                       };
                       if (data.size() != 22 || word(0) != mode || word(14) != encoded || word(20) != 15) {
-                        id(fronius_storage_fault) = true;
+                        char reason[190];
+                        snprintf(reason, sizeof(reason),
+                                 "readback mismatch: token=%u age_ms=%u bytes=%zu expected=%u/%u/15 actual=%d/%d/%d (mode/rate/revert)",
+                                 (unsigned)transaction, (unsigned)(millis() - transaction_started), data.size(),
+                                 (unsigned)mode, (unsigned)encoded, data.size() >= 22 ? word(0) : -1,
+                                 data.size() >= 22 ? word(14) : -1, data.size() >= 22 ? word(20) : -1);
+                        record_fault(reason);
                         controller->queue_command(modbustcp_controller::ModbusCommandItem::create_write_multiple_command(
                             controller, 40348, 1, std::vector<uint16_t>{0}));
-                        ESP_LOGE("fronius", "Storage readback mismatch; writer latched off");
                       } else {
                         id(storage_verified_ms) = millis();
+                        if (id(fronius_storage_fault))
+                          ESP_LOGI("fronius", "Storage writer recovered: mode, rate and revert verified");
+                        id(fronius_storage_fault) = false;
+                        retry.verified();
                       }
                     });
                 controller->queue_command(verify);
@@ -1075,27 +1132,34 @@ interval:
             };
             controller->queue_command(rate_cmd);
           };
+          transaction_stage = "read-timeout";
           auto check_timeout = modbustcp_controller::ModbusCommandItem::create_read_command(
               controller, modbustcp_controller::ModbusRegisterType::HOLDING, 40357, 2,
-              [controller, valid, apply_rate](auto, auto, const std::vector<uint8_t> &data) {
+              [controller, valid, apply_rate, record_fault](auto, auto, const std::vector<uint8_t> &data) {
                 if (!valid()) return;
                 if (data.size() == 4 && data[2] == 0 && data[3] == 15) {
                   apply_rate();
                   return;
                 }
+                transaction_stage = "write-timeout";
                 auto timeout_cmd = modbustcp_controller::ModbusCommandItem::create_write_multiple_command(
                     controller, 40358, 1, std::vector<uint16_t>{15});
-                timeout_cmd.on_data_func = [controller, valid, apply_rate](auto, auto, const auto &) {
+                timeout_cmd.on_data_func = [controller, valid, apply_rate, record_fault](auto, auto, const auto &) {
                   if (!valid()) return;
+                  transaction_stage = "verify-timeout";
                   auto verify_timeout = modbustcp_controller::ModbusCommandItem::create_read_command(
                       controller, modbustcp_controller::ModbusRegisterType::HOLDING, 40357, 2,
-                      [valid, apply_rate](auto, auto, const std::vector<uint8_t> &reply) {
+                      [valid, apply_rate, record_fault](auto, auto, const std::vector<uint8_t> &reply) {
                         if (!valid()) return;
                         if (reply.size() == 4 && reply[2] == 0 && reply[3] == 15) apply_rate();
                         else {
                           transaction_busy = false;
-                          id(fronius_storage_fault) = true;
-                          ESP_LOGE("fronius", "Storage timeout not confirmed; writer latched off");
+                          char reason[160];
+                          snprintf(reason, sizeof(reason),
+                                   "timeout not confirmed: token=%u age_ms=%u bytes=%zu expected=15 actual=%d",
+                                   (unsigned)transaction, (unsigned)(millis() - transaction_started), reply.size(),
+                                   reply.size() >= 4 ? ((uint16_t(reply[2]) << 8) | reply[3]) : -1);
+                          record_fault(reason);
                         }
                       });
                   controller->queue_command(verify_timeout);
@@ -1209,10 +1273,13 @@ text_sensor:
   - platform: template
     name: "${device_name} Storage Writer Status"
     id: fronius_storage_writer_status
+    filters:
+      - lambda: 'if (id(fronius_storage_writer_status).has_state() && id(fronius_storage_writer_status).state == x) return {}; return x;'
     entity_category: diagnostic
     update_interval: 1s
     lambda: |-
-      if (id(fronius_storage_fault)) return std::string("Fault: writer stopped; restart after inspection");
+      if (id(fronius_storage_fault)) return std::string("Schutzpause (automatische Wiederpruefung): ") +
+          (id(fronius_storage_last_error).empty() ? "reason unavailable" : id(fronius_storage_last_error));
       if (id(fronius_storage_test_active)) return std::string("Test pause (max 180s)");
       if (id(fronius_storage_reset_pending)) return std::string("Reset pending");
       return std::string("Automatic");

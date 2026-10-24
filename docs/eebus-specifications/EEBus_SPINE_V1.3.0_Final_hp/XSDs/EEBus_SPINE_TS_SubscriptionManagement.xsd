@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Smart Premises Interoperable Neutral-Message Exchange (SPINE)
+    Version 1.3.0 (final)
+    2023-08-31
+    Copyright (c) 2023 EEBus Initiative e.V.  All Rights Reserved.
+    Source: https://www.eebus.org/en/specifications/
+-->
+<xs:schema xmlns:ns_p="http://docs.eebus.org/spine/xsd/v1" xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://docs.eebus.org/spine/xsd/v1" version="1.3.0"
+    blockDefault="#all" elementFormDefault="qualified">
+    <xs:annotation>
+        <xs:documentation>EEBus SPINE Specification schema. Copyright 2023 EEBus Initiative e.V.  All rights reserved.</xs:documentation>
+    </xs:annotation>
+    <xs:include schemaLocation="EEBus_SPINE_TS_CommonDataTypes.xsd"/>
+    <xs:simpleType name="SubscriptionIdType">
+        <xs:restriction base="xs:unsignedInt"/>
+    </xs:simpleType>
+    <xs:complexType name="SubscriptionManagementEntryDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="subscriptionId" type="ns_p:SubscriptionIdType"/>
+            <xs:element minOccurs="0" name="clientAddress" type="ns_p:FeatureAddressType"/>
+            <xs:element minOccurs="0" name="serverAddress" type="ns_p:FeatureAddressType"/>
+            <xs:element minOccurs="0" name="label" type="ns_p:LabelType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:DescriptionType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="subscriptionManagementEntryData" type="ns_p:SubscriptionManagementEntryDataType"/>
+    <xs:complexType name="SubscriptionManagementEntryDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="subscriptionId" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="clientAddress" type="ns_p:FeatureAddressElementsType"/>
+            <xs:element minOccurs="0" name="serverAddress" type="ns_p:FeatureAddressElementsType"/>
+            <xs:element minOccurs="0" name="label" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="subscriptionManagementEntryDataElements" type="ns_p:SubscriptionManagementEntryDataElementsType"/>
+    <xs:complexType name="SubscriptionManagementEntryListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:subscriptionManagementEntryData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="subscriptionManagementEntryListData" type="ns_p:SubscriptionManagementEntryListDataType"/>
+    <xs:complexType name="SubscriptionManagementEntryListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="subscriptionId" type="ns_p:SubscriptionIdType"/>
+            <xs:element minOccurs="0" name="clientAddress" type="ns_p:FeatureAddressType"/>
+            <xs:element minOccurs="0" name="serverAddress" type="ns_p:FeatureAddressType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="subscriptionManagementEntryListDataSelectors" type="ns_p:SubscriptionManagementEntryListDataSelectorsType"/>
+    <xs:complexType name="SubscriptionManagementRequestCallType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="clientAddress" type="ns_p:FeatureAddressType"/>
+            <xs:element minOccurs="0" name="serverAddress" type="ns_p:FeatureAddressType"/>
+            <xs:element minOccurs="0" name="serverFeatureType" type="ns_p:FeatureTypeType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="subscriptionManagementRequestCall" type="ns_p:SubscriptionManagementRequestCallType"/>
+    <xs:complexType name="SubscriptionManagementRequestCallElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="clientAddress" type="ns_p:FeatureAddressElementsType"/>
+            <xs:element minOccurs="0" name="serverAddress" type="ns_p:FeatureAddressElementsType"/>
+            <xs:element minOccurs="0" name="serverFeatureType" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="subscriptionManagementRequestCallElements" type="ns_p:SubscriptionManagementRequestCallElementsType"/>
+    <xs:complexType name="SubscriptionManagementDeleteCallType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="subscriptionId" type="ns_p:SubscriptionIdType"/>
+            <xs:element minOccurs="0" name="clientAddress" type="ns_p:FeatureAddressType"/>
+            <xs:element minOccurs="0" name="serverAddress" type="ns_p:FeatureAddressType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="subscriptionManagementDeleteCall" type="ns_p:SubscriptionManagementDeleteCallType"/>
+    <xs:complexType name="SubscriptionManagementDeleteCallElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="subscriptionId" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="clientAddress" type="ns_p:FeatureAddressElementsType"/>
+            <xs:element minOccurs="0" name="serverAddress" type="ns_p:FeatureAddressElementsType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="subscriptionManagementDeleteCallElements" type="ns_p:SubscriptionManagementDeleteCallElementsType"/>
+</xs:schema>

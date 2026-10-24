@@ -26,11 +26,6 @@ select:
     restore_value: true
     optimistic: true
 
-globals:
-  - id: eg1_low_limit_test_active
-    type: bool
-    initial_value: "false"
-
 # CS-Limits erreichen EG1 über die Budget-Verteilung (budget-distributor.yaml),
 # nicht mehr als Direktweiterleitung des vollen Limits.
 
@@ -57,11 +52,6 @@ eebus_eg:
       - lambda: |-
           ESP_LOGI("eebus", "EG1 (%s) disconnected — relay fallback available",
                    id(eg1_device_type).current_option().c_str());
-
-    on_power_reading:
-      - lambda: |-
-          ESP_LOGI("eebus", "EG1 (%s) power reading: %.0f W",
-                   id(eg1_device_type).current_option().c_str(), x);
 
 sensor:
   # --- EG1 (sg_eebus_eg1, weights 1-2) ---
@@ -99,18 +89,6 @@ binary_sensor:
     web_server:
       sorting_group_id: sg_eebus_eg1
       sorting_weight: 2.5
-    lambda: "return id(hems_eg1).is_connected() && !id(hems_eg1).is_heartbeat_alarm();"
-
-  - platform: template
-    disabled_by_default: true
-    name: "${device_name} EG1 Testlimit bestätigt"
-    id: eg1_test_limit_ack
-    icon: "mdi:check-network"
-    entity_category: diagnostic
-    web_server:
-      sorting_group_id: sg_eebus_eg1
-      sorting_weight: 2.6
-    lambda: "return id(eg1_low_limit_test_active) && !id(hems_eg1).is_limit_ack_pending();"
 
 interval:
   - interval: 5s
@@ -123,6 +101,9 @@ text_sensor:
   # --- EG1 (sg_eebus_eg1, weights 3-8) ---
   - platform: template
     name: "${device_name} EG1 Verbindungsstatus"
+    id: eg1_connection_status
+    filters:
+      - lambda: 'if (id(eg1_connection_status).has_state() && id(eg1_connection_status).state == x) return {}; return x;'
     icon: "mdi:lan-connect"
     web_server:
       sorting_group_id: sg_eebus_eg1
@@ -138,6 +119,9 @@ text_sensor:
 
   - platform: template
     name: "${device_name} EG1 Gerät"
+    id: eg1_device_label
+    filters:
+      - lambda: 'if (id(eg1_device_label).has_state() && id(eg1_device_label).state == x) return {}; return x;'
     icon: "mdi:heat-pump-outline"
     web_server:
       sorting_group_id: sg_eebus_eg1
@@ -149,6 +133,9 @@ text_sensor:
 
   - platform: template
     name: "${device_name} EG1 Remote-SKI"
+    id: eg1_remote_ski
+    filters:
+      - lambda: 'if (id(eg1_remote_ski).has_state() && id(eg1_remote_ski).state == x) return {}; return x;'
     icon: "mdi:key-chain"
     web_server:
       sorting_group_id: sg_eebus_eg1
@@ -162,6 +149,9 @@ text_sensor:
 
   - platform: template
     name: "${device_name} EG1 Eigene SKI (Port 4713)"
+    id: eg1_local_ski
+    filters:
+      - lambda: 'if (id(eg1_local_ski).has_state() && id(eg1_local_ski).state == x) return {}; return x;'
     icon: "mdi:key"
     web_server:
       sorting_group_id: sg_eebus_eg1
@@ -172,6 +162,9 @@ text_sensor:
 
   - platform: template
     name: "${device_name} EG1 Aktive UC"
+    id: eg1_active_use_cases
+    filters:
+      - lambda: 'if (id(eg1_active_use_cases).has_state() && id(eg1_active_use_cases).state == x) return {}; return x;'
     icon: "mdi:format-list-checks"
     web_server:
       sorting_group_id: sg_eebus_eg1
@@ -183,6 +176,8 @@ text_sensor:
   - platform: template
     name: "${device_name} EG1 Unterstützte UC"
     id: eg1_supported_use_cases
+    filters:
+      - lambda: 'if (id(eg1_supported_use_cases).has_state() && id(eg1_supported_use_cases).state == x) return {}; return x;'
     icon: "mdi:format-list-bulleted"
     web_server:
       sorting_group_id: sg_eebus_eg1
@@ -207,32 +202,20 @@ text_sensor:
       }
       return status;
 
-number:
-  # --- Controlled K40RF probe below the production minimum ---
   - platform: template
-    disabled_by_default: true
-    name: "${device_name} EG1 Test Leistungslimit"
-    id: eg1_test_limit_w
-    icon: "mdi:transmission-tower-export"
+    name: "${device_name} EG1 OSSHPCF Binding Status"
+    id: eg1_osshpcf_binding_status
+    filters:
+      - lambda: 'if (id(eg1_osshpcf_binding_status).has_state() && id(eg1_osshpcf_binding_status).state == x) return {}; return x;'
+    icon: "mdi:link-check"
+    entity_category: diagnostic
     web_server:
       sorting_group_id: sg_eebus_eg1
-      sorting_weight: 21
-    entity_category: diagnostic
-    unit_of_measurement: "W"
-    min_value: 0
-    max_value: 4200
-    step: 100
-    initial_value: 4200
-    restore_value: false
-    optimistic: true
-    on_value:
-      - lambda: |-
-          if (!id(eg1_low_limit_test_active)) {
-            ESP_LOGW("eebus", "EG1 Testlimit %.0f W ignoriert: Testmodus ist aus", x);
-            return;
-          }
-          id(hems_eg1).set_limit(x);
+      sorting_weight: 9.2
+    update_interval: 5s
+    lambda: "return id(hems_eg1).semp_binding_status();"
 
+number:
   # --- EG1 failsafe configuration (sg_eebus_eg1, weights 30-31) ---
   - platform: template
     disabled_by_default: true
@@ -368,39 +351,3 @@ button:
       sorting_weight: 20
     on_press:
       - lambda: "id(hems_eg1).start_heartbeat_test();"
-
-switch:
-  - platform: template
-    disabled_by_default: true
-    name: "${device_name} EG1 Untergrenzen-Testmodus"
-    id: eg1_low_limit_test_mode
-    icon: "mdi:test-tube"
-    entity_category: diagnostic
-    web_server:
-      sorting_group_id: sg_eebus_eg1
-      sorting_weight: 19
-    optimistic: true
-    restore_mode: ALWAYS_OFF
-    turn_on_action:
-      - lambda: |-
-          id(eg1_low_limit_test_active) = true;
-          id(hems_eg1).set_min_limit_w(0.0f);
-          ESP_LOGW("eebus", "EG1 Untergrenzen-Testmodus aktiv: Produktionsminimum 4200 W voruebergehend deaktiviert");
-    turn_off_action:
-      - lambda: |-
-          id(eg1_low_limit_test_active) = false;
-          id(hems_eg1).set_min_limit_w(4200.0f);
-          ESP_LOGW("eebus", "EG1 Untergrenzen-Testmodus beendet: Produktionsminimum 4200 W wieder aktiv");
-      - if:
-          condition:
-            lambda: "return id(grid_provider_switch).state || id(manual_enwg_test).state;"
-          then:
-            - lambda: "id(hems_eg1).set_limit(4200.0f);"
-          else:
-            - if:
-                condition:
-                  lambda: "return id(hems_cs).is_limit_active();"
-                then:
-                  - script.execute: distribute_budget
-                else:
-                  - lambda: "id(hems_eg1).clear_limit();"

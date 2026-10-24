@@ -2,13 +2,14 @@ substitutions:
   name: "esphome-hems"
   friendly_name: "ESPHome HEMS"
   device_name: "ESPHome HEMS"
+  firmware_build_path: "c:/temp/esphome-hems"
 
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
   comment: "EnWG §14a HEMS with EEBus, Modbus TCP/RTU, MQTT, 1-Wire and S0 meter support"
   name_add_mac_suffix: false
-  build_path: "c:/temp/esphome-hems"
+  build_path: ${firmware_build_path}
   project:
     name: "ESPHome.HEMS"
     version: "2"
@@ -26,12 +27,13 @@ esphome:
               if (o == "ERROR") return 1;
               if (o == "WARN")  return 2;
               if (o == "INFO")  return 3;
+              if (o == "VERBOSE") return 5;
               return 4;  // DEBUG
             };
             int ceiling = to_num(id(boot_log_level_select).current_option());
             id(boot_log_level_max) = ceiling;
             if (to_num(id(log_level_select).current_option()) > ceiling) {
-              const char* names[5] = {"", "ERROR", "WARN", "INFO", "DEBUG"};
+              const char* names[6] = {"", "ERROR", "WARN", "INFO", "DEBUG", "VERBOSE"};
               id(log_level_select).make_call().set_option(names[ceiling]).perform();
             }
 
@@ -65,11 +67,12 @@ globals:
   # Beim Boot aus boot_log_level_select eingefroren — Obergrenze der Session
   - id: boot_log_level_max
     type: int
-    initial_value: '4'
+    initial_value: '5'
 
 logger:
   id: app_logger
-  level: DEBUG  # Must compile at DEBUG; runtime level and tag filters set via Log Level/Log Filter selects
+  level: VERBOSE
+  initial_level: DEBUG
   runtime_tag_levels: true
 
 select:
@@ -86,6 +89,7 @@ select:
       - "WARN"
       - "INFO"
       - "DEBUG"
+      - "VERBOSE"
     initial_option: "WARN"
     optimistic: true
     restore_value: true
@@ -98,11 +102,12 @@ select:
               if (o == "ERROR") return 1;
               if (o == "WARN")  return 2;
               if (o == "INFO")  return 3;
+              if (o == "VERBOSE") return 5;
               return 4;  // DEBUG
             };
             int ceiling = id(boot_log_level_max);
             if (to_num(x) > ceiling) {
-              const char* names[5] = {"", "ERROR", "WARN", "INFO", "DEBUG"};
+              const char* names[6] = {"", "ERROR", "WARN", "INFO", "DEBUG", "VERBOSE"};
               ESP_LOGW("system", "Log Level %s > Boot-Obergrenze %s — begrenzt (Reboot mit hoeherem Boot Log Level noetig)",
                        x.c_str(), names[ceiling]);
               id(log_level_select).make_call().set_option(names[ceiling]).perform();
@@ -113,7 +118,11 @@ select:
             else if (x == "WARN") level = ESPHOME_LOG_LEVEL_WARN;
             else if (x == "INFO") level = ESPHOME_LOG_LEVEL_INFO;
             else if (x == "DEBUG") level = ESPHOME_LOG_LEVEL_DEBUG;
+            else if (x == "VERBOSE") level = ESPHOME_LOG_LEVEL_VERBOSE;
             id(app_logger).set_log_level(level);
+            if (id(log_filter_select).has_state()) {
+              id(log_filter_select).make_call().set_option(id(log_filter_select).current_option()).perform();
+            }
 
   - platform: template
     disabled_by_default: true
@@ -129,6 +138,7 @@ select:
       - "WARN"
       - "INFO"
       - "DEBUG"
+      - "VERBOSE"
     initial_option: "WARN"
     optimistic: true
     restore_value: true
@@ -162,6 +172,7 @@ select:
             else if (current == "WARN") gl = ESPHOME_LOG_LEVEL_WARN;
             else if (current == "INFO") gl = ESPHOME_LOG_LEVEL_INFO;
             else if (current == "DEBUG") gl = ESPHOME_LOG_LEVEL_DEBUG;
+            else if (current == "VERBOSE") gl = ESPHOME_LOG_LEVEL_VERBOSE;
 
             // Reset all known tags first so no previous filter state bleeds through.
             auto suppress = [&](const char* tag) { id(app_logger).set_log_level(tag, ESPHOME_LOG_LEVEL_ERROR); };
@@ -248,10 +259,13 @@ ethernet:
   #   gateway: 192.0.2.1
   #   subnet: 255.255.255.0
 
+web_log_format:
+
 web_server:
   port: 80
   local: true
   version: 3
+  js_include: tools/web/log-format.js
   sorting_groups:
     - id: sg_system
       name: "System"
@@ -292,6 +306,7 @@ external_components:
       - modbustcp
       - eebus_eg
       - eebus_cs
+      - web_log_format
   - source:
       type: git
       url: https://github.com/creepystefan/esphome_modbus_tcp.git

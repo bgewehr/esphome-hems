@@ -73,6 +73,8 @@ text_sensor:
   - platform: template
     name: "${device_name} Budget-Verteilung"
     id: budget_distribution_status
+    filters:
+      - lambda: 'if (id(budget_distribution_status).has_state() && id(budget_distribution_status).state == x) return {}; return x;'
     icon: "mdi:chart-pie"
     web_server:
       sorting_group_id: sg_netz

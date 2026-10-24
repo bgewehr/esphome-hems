@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="11.2">
+    <meta>
+        <filters directoryPatterns="" filePatterns=""
+            positiveFilePatterns="" showHiddenFiles="false"/>
+        <options>
+            <serialized version="11.2">
+                <map>
+                    <entry>
+                        <String xml:space="preserve">clear.undo.buffer.before.format.and.indent</String>
+                        <Boolean xml:space="preserve">false</Boolean>
+                    </entry>
+                    <entry>
+                        <String xml:space="preserve">editor.detect.indent.on.open</String>
+                        <Boolean xml:space="preserve">true</Boolean>
+                    </entry>
+                    <entry>
+                        <String xml:space="preserve">editor.detect.line.width.on.open</String>
+                        <Boolean xml:space="preserve">false</Boolean>
+                    </entry>
+                    <entry>
+                        <String xml:space="preserve">editor.format.on.open</String>
+                        <Boolean xml:space="preserve">false</Boolean>
+                    </entry>
+                    <entry>
+                        <String xml:space="preserve">editor.hard.line.wrap</String>
+                        <Boolean xml:space="preserve">false</Boolean>
+                    </entry>
+                    <entry>
+                        <String xml:space="preserve">editor.indent.on.enter</String>
+                        <Boolean xml:space="preserve">true</Boolean>
+                    </entry>
+                    <entry>
+                        <String xml:space="preserve">editor.indent.size.v9.2</String>
+                        <Integer xml:space="preserve">4</Integer>
+                    </entry>
+                    <entry>
+                        <String xml:space="preserve">editor.line.width</String>
+                        <Integer xml:space="preserve">200</Integer>
+                    </entry>
+                    <entry>
+                        <String xml:space="preserve">editor.use.smart.enter</String>
+                        <Boolean xml:space="preserve">true</Boolean>
+                    </entry>
+                    <entry>
+                        <String xml:space="preserve">editor.use.tabs</String>
+                        <Boolean xml:space="preserve">false</Boolean>
+                    </entry>
+                    <entry>
+                        <String xml:space="preserve">key.editor.format.option.pane.group</String>
+                        <Boolean xml:space="preserve">true</Boolean>
+                    </entry>
+                </map>
+            </serialized>
+        </options>
+    </meta>
+    <projectTree name="EEBus_SPINE_TS.xpr">
+        <file name="EEBus_SPINE_TS_ActuatorLevel_overview.xsd"/>
+        <file name="EEBus_SPINE_TS_ActuatorLevel.xsd"/>
+        <file name="EEBus_SPINE_TS_ActuatorSwitch_overview.xsd"/>
+        <file name="EEBus_SPINE_TS_ActuatorSwitch.xsd"/>
+        <file name="EEBus_SPINE_TS_Alarm_overview.xsd"/>
+        <file name="EEBus_SPINE_TS_Alarm.xsd"/>
+        <file name="EEBus_SPINE_TS_Bill_overview.xsd"/>
+        <file name="EEBus_SPINE_TS_Bill.xsd"/>
+        <file name="EEBus_SPINE_TS_BindingManagement_overview.xsd"/>
+        <file name="EEBus_SPINE_TS_BindingManagement.xsd"/>
+        <file name="EEBus_SPINE_TS_CommandCommonDefinitions.xsd"/>
+        <file name="EEBus_SPINE_TS_CommandFrame.xsd"/>
+        <file name="EEBus_SPINE_TS_CommonDataTypes.xsd"/>
+        <file name="EEBus_SPINE_TS_Datagram.xsd"/>
+        <file name="EEBus_SPINE_TS_DataTunneling_overview.xsd"/>
+        <file name="EEBus_SPINE_TS_DataTunneling.xsd"/>
+        <file name="EEBus_SPINE_TS_DeviceClassification_overview.xsd"/>
+        <file name="EEBus_SPINE_TS_DeviceClassification.xsd"/>
+        <file name="EEBus_SPINE_TS_DeviceConfiguration_overview.xsd"/>
+        <file name="EEBus_SPINE_TS_DeviceConfiguration.xsd"/>
+        <file name="EEBus_SPINE_TS_DeviceDiagnosis_overview.xsd"/>
+        <file name="EEBus_SPINE_TS_DeviceDiagnosis.xsd"/>
+        <file name="EEBus_SPINE_TS_DirectControl_overview.xsd"/>
+        <file name="EEBus_SPINE_TS_DirectControl.xsd"/>
+        <file name="EEBus_SPINE_TS_ElectricalConnection_overview.xsd"/>
+        <file name="EEBus_SPINE_TS_ElectricalConnection.xsd"/>
+        <file name="EEBus_SPINE_TS_HVAC_overview.xsd"/>
+        <file name="EEBus_SPINE_TS_HVAC.xsd"/>
+        <file name="EEBus_SPINE_TS_Identification_overview.xsd"/>
+        <file name="EEBus_SPINE_TS_Identification.xsd"/>
+        <file name="EEBus_SPINE_TS_IncentiveTable_overview.xsd"/>
+        <file name="EEBus_SPINE_TS_IncentiveTable.xsd"/>
+        <file name="EEBus_SPINE_TS_LoadControl_overview.xsd"/>
+        <file name="EEBus_SPINE_TS_LoadControl.xsd"/>
+        <file name="EEBus_SPINE_TS_Measurement_overview.xsd"/>
+        <file name="EEBus_SPINE_TS_Measurement.xsd"/>
+        <file name="EEBus_SPINE_TS_Messaging_overview.xsd"/>
+        <file name="EEBus_SPINE_TS_Messaging.xsd"/>
+        <file name="EEBus_SPINE_TS_NetworkManagement_overview.xsd"/>
+        <file name="EEBus_SPINE_TS_NetworkManagement.xsd"/>
+        <file name="EEBus_SPINE_TS_NodeManagement_overview.xsd"/>
+        <file name="EEBus_SPINE_TS_NodeManagement.xsd"/>
+        <file name="EEBus_SPINE_TS_OperatingConstraints_overview.xsd"/>
+        <file name="EEBus_SPINE_TS_OperatingConstraints.xsd"/>
+        <file name="EEBus_SPINE_TS_PowerSequences_overview.xsd"/>
+        <file name="EEBus_SPINE_TS_PowerSequences.xsd"/>
+        <file name="EEBus_SPINE_TS_Result.xsd"/>
+        <file name="EEBus_SPINE_TS_Sensing_overview.xsd"/>
+        <file name="EEBus_SPINE_TS_Sensing.xsd"/>
+        <file name="EEBus_SPINE_TS_Setpoint_overview.xsd"/>
+        <file name="EEBus_SPINE_TS_Setpoint.xsd"/>
+        <file name="EEBus_SPINE_TS_SmartEnergyManagementPs_overview.xsd"/>
+        <file name="EEBus_SPINE_TS_SmartEnergyManagementPs.xsd"/>
+        <file name="EEBus_SPINE_TS_StateInformation_overview.xsd"/>
+        <file name="EEBus_SPINE_TS_StateInformation.xsd"/>
+        <file name="EEBus_SPINE_TS_SubscriptionManagement_overview.xsd"/>
+        <file name="EEBus_SPINE_TS_SubscriptionManagement.xsd"/>
+        <file name="EEBus_SPINE_TS_SupplyCondition_overview.xsd"/>
+        <file name="EEBus_SPINE_TS_SupplyCondition.xsd"/>
+        <file name="EEBus_SPINE_TS_TariffInformation_overview.xsd"/>
+        <file name="EEBus_SPINE_TS_TariffInformation.xsd"/>
+        <file name="EEBus_SPINE_TS_TaskManagement_overview.xsd"/>
+        <file name="EEBus_SPINE_TS_TaskManagement.xsd"/>
+        <file name="EEBus_SPINE_TS_Threshold_overview.xsd"/>
+        <file name="EEBus_SPINE_TS_Threshold.xsd"/>
+        <file name="EEBus_SPINE_TS_TimeInformation_overview.xsd"/>
+        <file name="EEBus_SPINE_TS_TimeInformation.xsd"/>
+        <file name="EEBus_SPINE_TS_TimeSeries_overview.xsd"/>
+        <file name="EEBus_SPINE_TS_TimeSeries.xsd"/>
+        <file name="EEBus_SPINE_TS_TimeTable_overview.xsd"/>
+        <file name="EEBus_SPINE_TS_TimeTable.xsd"/>
+        <file name="EEBus_SPINE_TS_UseCaseInformation_overview.xsd"/>
+        <file name="EEBus_SPINE_TS_UseCaseInformation.xsd"/>
+        <file name="EEBus_SPINE_TS_Version_overview.xsd"/>
+        <file name="EEBus_SPINE_TS_Version.xsd"/>
+    </projectTree>
+</project>

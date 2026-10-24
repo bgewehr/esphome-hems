@@ -1,0 +1,1052 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Smart Premises Interoperable Neutral-Message Exchange (SPINE)
+    Version 1.3.0 (final)
+    2023-08-31
+    Copyright (c) 2023 EEBus Initiative e.V.  All Rights Reserved.
+    Source: https://www.eebus.org/en/specifications/
+-->
+<xs:schema xmlns:ns_p="http://docs.eebus.org/spine/xsd/v1" xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://docs.eebus.org/spine/xsd/v1" version="1.3.0"
+    blockDefault="#all" elementFormDefault="qualified">
+    <xs:annotation>
+        <xs:documentation>EEBus SPINE Specification schema. Copyright 2023 EEBus Initiative e.V.  All rights reserved.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType name="ElementTagType"/>
+    <xs:simpleType name="LabelType">
+        <xs:restriction base="xs:string"> </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="DescriptionType">
+        <xs:restriction base="xs:string"> </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="SpecificationVersionType">
+        <xs:restriction base="xs:string">
+            <xs:pattern value="[1-9][0-9]*\.[0-9]+\.[0-9]+"/>
+            <xs:maxLength value="128"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:complexType name="TimePeriodType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="startTime" type="ns_p:AbsoluteOrRelativeTimeType"/>
+            <xs:element minOccurs="0" name="endTime" type="ns_p:AbsoluteOrRelativeTimeType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="TimePeriodElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="startTime" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="endTime" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="TimestampIntervalType">
+        <xs:sequence>
+            <xs:element name="startTime" type="ns_p:AbsoluteOrRelativeTimeType" minOccurs="0"/>
+            <xs:element name="endTime" type="ns_p:AbsoluteOrRelativeTimeType" minOccurs="0"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:simpleType name="EnumExtendType">
+        <xs:restriction base="xs:string">
+            <xs:pattern value="_(i:[1-9][0-9]*|n:[a-zA-Z0-9-]+)_[^\p{Cc}\p{Cf}\p{Z}]+"/>
+            <xs:maxLength value="256"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="AbsoluteOrRelativeTimeType">
+        <xs:union memberTypes="xs:duration xs:dateTime"/>
+    </xs:simpleType>
+    <xs:simpleType name="RecurringIntervalType">
+        <xs:union memberTypes="ns_p:RecurringIntervalEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="RecurringIntervalEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="yearly"/>
+            <xs:enumeration value="monthly"/>
+            <xs:enumeration value="weekly"/>
+            <xs:enumeration value="daily"/>
+            <xs:enumeration value="hourly"/>
+            <xs:enumeration value="everyMinute"/>
+            <xs:enumeration value="everySecond"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="MonthType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="january"/>
+            <xs:enumeration value="february"/>
+            <xs:enumeration value="march"/>
+            <xs:enumeration value="april"/>
+            <xs:enumeration value="may"/>
+            <xs:enumeration value="june"/>
+            <xs:enumeration value="july"/>
+            <xs:enumeration value="august"/>
+            <xs:enumeration value="september"/>
+            <xs:enumeration value="october"/>
+            <xs:enumeration value="november"/>
+            <xs:enumeration value="december"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="DayOfMonthType">
+        <xs:restriction base="xs:unsignedByte">
+            <xs:minInclusive value="1"/>
+            <xs:maxInclusive value="31"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="CalendarWeekType">
+        <xs:restriction base="xs:unsignedByte">
+            <xs:minInclusive value="1"/>
+            <xs:maxInclusive value="53"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="DayOfWeekType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="monday"/>
+            <xs:enumeration value="tuesday"/>
+            <xs:enumeration value="wednesday"/>
+            <xs:enumeration value="thursday"/>
+            <xs:enumeration value="friday"/>
+            <xs:enumeration value="saturday"/>
+            <xs:enumeration value="sunday"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:complexType name="DaysOfWeekType">
+        <xs:sequence>
+            <xs:element name="monday" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element name="tuesday" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element name="wednesday" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element name="thursday" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element name="friday" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element name="saturday" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element name="sunday" minOccurs="0" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:simpleType name="OccurrenceType">
+        <xs:union memberTypes="ns_p:OccurrenceEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="OccurrenceEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="first"/>
+            <xs:enumeration value="second"/>
+            <xs:enumeration value="third"/>
+            <xs:enumeration value="fourth"/>
+            <xs:enumeration value="last"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:complexType name="AbsoluteOrRecurringTimeType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="dateTime" type="xs:dateTime"/>
+            <xs:element name="month" minOccurs="0" type="ns_p:MonthType"/>
+            <xs:element name="dayOfMonth" minOccurs="0" type="ns_p:DayOfMonthType"/>
+            <xs:element minOccurs="0" name="calendarWeek" type="ns_p:CalendarWeekType"/>
+            <xs:element minOccurs="0" name="dayOfWeekOccurrence" type="ns_p:OccurrenceType"/>
+            <xs:element minOccurs="0" name="daysOfWeek" type="ns_p:DaysOfWeekType"/>
+            <xs:element minOccurs="0" name="time" type="xs:time"/>
+            <xs:element minOccurs="0" name="relative" type="xs:duration"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="AbsoluteOrRecurringTimeElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="dateTime" type="ns_p:ElementTagType"/>
+            <xs:element name="month" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element name="dayOfMonth" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="calendarWeek" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="dayOfWeekOccurrence" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="daysOfWeek" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="time" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="relative" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="RecurrenceInformationType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="recurringInterval" type="ns_p:RecurringIntervalType"/>
+            <xs:element minOccurs="0" name="recurringIntervalStep" type="xs:unsignedInt"/>
+            <xs:element minOccurs="0" name="firstExecution" type="xs:dateTime"/>
+            <xs:element minOccurs="0" name="executionCount" type="xs:unsignedInt"/>
+            <xs:element minOccurs="0" name="lastExecution" type="xs:dateTime"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="RecurrenceInformationElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="recurringInterval" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="recurringIntervalStep" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="firstExecution" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="executionCount" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="lastExecution" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="ScaledNumberRangeType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="min" type="ns_p:ScaledNumberType"/>
+            <xs:element minOccurs="0" name="max" type="ns_p:ScaledNumberType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="ScaledNumberRangeElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="min" type="ns_p:ScaledNumberElementsType"/>
+            <xs:element minOccurs="0" name="max" type="ns_p:ScaledNumberElementsType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="ScaledNumberSetType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" name="value" type="ns_p:ScaledNumberType"/>
+            <xs:element maxOccurs="unbounded" minOccurs="0" name="range" type="ns_p:ScaledNumberRangeType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="ScaledNumberSetElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="value" type="ns_p:ScaledNumberElementsType"/>
+            <xs:element minOccurs="0" name="range" type="ns_p:ScaledNumberRangeElementsType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:simpleType name="NumberType">
+        <xs:restriction base="xs:long"/>
+    </xs:simpleType>
+    <xs:simpleType name="ScaleType">
+        <xs:restriction base="xs:short"/>
+    </xs:simpleType>
+    <xs:complexType name="ScaledNumberType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="number" type="ns_p:NumberType"/>
+            <xs:element minOccurs="0" name="scale" type="ns_p:ScaleType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="ScaledNumberElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="number" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="scale" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:simpleType name="MaxResponseDelayType">
+        <xs:restriction base="xs:duration"/>
+    </xs:simpleType>
+    <xs:simpleType name="CommodityTypeType">
+        <xs:union memberTypes="ns_p:CommodityTypeEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="CommodityTypeEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="electricity"/>
+            <xs:enumeration value="gas"/>
+            <xs:enumeration value="oil"/>
+            <xs:enumeration value="water"/>
+            <xs:enumeration value="wasteWater"/>
+            <xs:enumeration value="domesticHotWater"/>
+            <xs:enumeration value="heatingWater"/>
+            <xs:enumeration value="steam"/>
+            <xs:enumeration value="heat"/>
+            <xs:enumeration value="coolingLoad"/>
+            <xs:enumeration value="air"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="EnergyDirectionType">
+        <xs:union memberTypes="ns_p:EnergyDirectionEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="EnergyDirectionEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="consume"/>
+            <xs:enumeration value="produce"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="EnergyModeType">
+        <xs:union memberTypes="ns_p:EnergyModeEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="EnergyModeEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="consume"/>
+            <xs:enumeration value="produce"/>
+            <xs:enumeration value="idle"/>
+            <xs:enumeration value="auto"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="UnitOfMeasurementType">
+        <xs:union memberTypes="ns_p:UnitOfMeasurementEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="UnitOfMeasurementEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="unknown"/>
+            <xs:enumeration value="1"/>
+            <xs:enumeration value="m"/>
+            <xs:enumeration value="kg"/>
+            <xs:enumeration value="s"/>
+            <xs:enumeration value="A"/>
+            <xs:enumeration value="K"/>
+            <xs:enumeration value="mol"/>
+            <xs:enumeration value="cd"/>
+            <xs:enumeration value="V"/>
+            <xs:enumeration value="W"/>
+            <xs:enumeration value="Wh"/>
+            <xs:enumeration value="VA"/>
+            <xs:enumeration value="VAh"/>
+            <xs:enumeration value="var"/>
+            <xs:enumeration value="varh"/>
+            <xs:enumeration value="degC"/>
+            <xs:enumeration value="degF"/>
+            <xs:enumeration value="Lm"/>
+            <xs:enumeration value="lx"/>
+            <xs:enumeration value="Ohm"/>
+            <xs:enumeration value="Hz"/>
+            <xs:enumeration value="dB"/>
+            <xs:enumeration value="dBm"/>
+            <xs:enumeration value="pct"/>
+            <xs:enumeration value="ppm"/>
+            <xs:enumeration value="l"/>
+            <xs:enumeration value="l/s"/>
+            <xs:enumeration value="l/h"/>
+            <xs:enumeration value="deg"/>
+            <xs:enumeration value="rad"/>
+            <xs:enumeration value="rad/s"/>
+            <xs:enumeration value="sr"/>
+            <xs:enumeration value="Gy"/>
+            <xs:enumeration value="Bq"/>
+            <xs:enumeration value="Bq/m^3"/>
+            <xs:enumeration value="Sv"/>
+            <xs:enumeration value="Rd"/>
+            <xs:enumeration value="C"/>
+            <xs:enumeration value="F"/>
+            <xs:enumeration value="H"/>
+            <xs:enumeration value="J"/>
+            <xs:enumeration value="N"/>
+            <xs:enumeration value="N_m"/>
+            <xs:enumeration value="N_s"/>
+            <xs:enumeration value="Wb"/>
+            <xs:enumeration value="T"/>
+            <xs:enumeration value="Pa"/>
+            <xs:enumeration value="bar"/>
+            <xs:enumeration value="atm"/>
+            <xs:enumeration value="psi"/>
+            <xs:enumeration value="mmHg"/>
+            <xs:enumeration value="m^2"/>
+            <xs:enumeration value="m^3"/>
+            <xs:enumeration value="m^3/h"/>
+            <xs:enumeration value="m/s"/>
+            <xs:enumeration value="m/s^2"/>
+            <xs:enumeration value="m^3/s"/>
+            <xs:enumeration value="m/m^3"/>
+            <xs:enumeration value="kg/m^3"/>
+            <xs:enumeration value="kg_m"/>
+            <xs:enumeration value="m^2/s"/>
+            <xs:enumeration value="W/m_K"/>
+            <xs:enumeration value="J/K"/>
+            <xs:enumeration value="1/s"/>
+            <xs:enumeration value="W/m^2"/>
+            <xs:enumeration value="J/m^2"/>
+            <xs:enumeration value="S"/>
+            <xs:enumeration value="S/m"/>
+            <xs:enumeration value="K/s"/>
+            <xs:enumeration value="Pa/s"/>
+            <xs:enumeration value="J/kg_K"/>
+            <xs:enumeration value="Vs"/>
+            <xs:enumeration value="V/m"/>
+            <xs:enumeration value="V/Hz"/>
+            <xs:enumeration value="As"/>
+            <xs:enumeration value="A/m"/>
+            <xs:enumeration value="Hz/s"/>
+            <xs:enumeration value="kg/s"/>
+            <xs:enumeration value="kg_m^2"/>
+            <xs:enumeration value="J/Wh"/>
+            <xs:enumeration value="W/s"/>
+            <xs:enumeration value="ft^3"/>
+            <xs:enumeration value="ft^3/h"/>
+            <xs:enumeration value="ccf"/>
+            <xs:enumeration value="ccf/h"/>
+            <xs:enumeration value="US.liq.gal"/>
+            <xs:enumeration value="US.liq.gal/h"/>
+            <xs:enumeration value="Imp.gal"/>
+            <xs:enumeration value="Imp.gal/h"/>
+            <xs:enumeration value="Btu"/>
+            <xs:enumeration value="Btu/h"/>
+            <xs:enumeration value="Ah"/>
+            <xs:enumeration value="kg/Wh"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="CurrencyType">
+        <xs:union memberTypes="ns_p:CurrencyEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="CurrencyEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="AED"/>
+            <xs:enumeration value="AFN"/>
+            <xs:enumeration value="ALL"/>
+            <xs:enumeration value="AMD"/>
+            <xs:enumeration value="ANG"/>
+            <xs:enumeration value="AOA"/>
+            <xs:enumeration value="ARS"/>
+            <xs:enumeration value="AUD"/>
+            <xs:enumeration value="AWG"/>
+            <xs:enumeration value="AZN"/>
+            <xs:enumeration value="BAM"/>
+            <xs:enumeration value="BBD"/>
+            <xs:enumeration value="BDT"/>
+            <xs:enumeration value="BGN"/>
+            <xs:enumeration value="BHD"/>
+            <xs:enumeration value="BIF"/>
+            <xs:enumeration value="BMD"/>
+            <xs:enumeration value="BND"/>
+            <xs:enumeration value="BOB"/>
+            <xs:enumeration value="BOV"/>
+            <xs:enumeration value="BRL"/>
+            <xs:enumeration value="BSD"/>
+            <xs:enumeration value="BTN"/>
+            <xs:enumeration value="BWP"/>
+            <xs:enumeration value="BYR"/>
+            <xs:enumeration value="BZD"/>
+            <xs:enumeration value="CAD"/>
+            <xs:enumeration value="CDF"/>
+            <xs:enumeration value="CHE"/>
+            <xs:enumeration value="CHF"/>
+            <xs:enumeration value="CHW"/>
+            <xs:enumeration value="CLF"/>
+            <xs:enumeration value="CLP"/>
+            <xs:enumeration value="CNY"/>
+            <xs:enumeration value="COP"/>
+            <xs:enumeration value="COU"/>
+            <xs:enumeration value="CRC"/>
+            <xs:enumeration value="CUC"/>
+            <xs:enumeration value="CUP"/>
+            <xs:enumeration value="CVE"/>
+            <xs:enumeration value="CZK"/>
+            <xs:enumeration value="DJF"/>
+            <xs:enumeration value="DKK"/>
+            <xs:enumeration value="DOP"/>
+            <xs:enumeration value="DZD"/>
+            <xs:enumeration value="EGP"/>
+            <xs:enumeration value="ERN"/>
+            <xs:enumeration value="ETB"/>
+            <xs:enumeration value="EUR"/>
+            <xs:enumeration value="FJD"/>
+            <xs:enumeration value="FKP"/>
+            <xs:enumeration value="GBP"/>
+            <xs:enumeration value="GEL"/>
+            <xs:enumeration value="GHS"/>
+            <xs:enumeration value="GIP"/>
+            <xs:enumeration value="GMD"/>
+            <xs:enumeration value="GNF"/>
+            <xs:enumeration value="GTQ"/>
+            <xs:enumeration value="GYD"/>
+            <xs:enumeration value="HKD"/>
+            <xs:enumeration value="HNL"/>
+            <xs:enumeration value="HRK"/>
+            <xs:enumeration value="HTG"/>
+            <xs:enumeration value="HUF"/>
+            <xs:enumeration value="IDR"/>
+            <xs:enumeration value="ILS"/>
+            <xs:enumeration value="INR"/>
+            <xs:enumeration value="IQD"/>
+            <xs:enumeration value="IRR"/>
+            <xs:enumeration value="ISK"/>
+            <xs:enumeration value="JMD"/>
+            <xs:enumeration value="JOD"/>
+            <xs:enumeration value="JPY"/>
+            <xs:enumeration value="KES"/>
+            <xs:enumeration value="KGS"/>
+            <xs:enumeration value="KHR"/>
+            <xs:enumeration value="KMF"/>
+            <xs:enumeration value="KPW"/>
+            <xs:enumeration value="KRW"/>
+            <xs:enumeration value="KWD"/>
+            <xs:enumeration value="KYD"/>
+            <xs:enumeration value="KZT"/>
+            <xs:enumeration value="LAK"/>
+            <xs:enumeration value="LBP"/>
+            <xs:enumeration value="LKR"/>
+            <xs:enumeration value="LRD"/>
+            <xs:enumeration value="LSL"/>
+            <xs:enumeration value="LYD"/>
+            <xs:enumeration value="MAD"/>
+            <xs:enumeration value="MDL"/>
+            <xs:enumeration value="MGA"/>
+            <xs:enumeration value="MKD"/>
+            <xs:enumeration value="MMK"/>
+            <xs:enumeration value="MNT"/>
+            <xs:enumeration value="MOP"/>
+            <xs:enumeration value="MRO"/>
+            <xs:enumeration value="MUR"/>
+            <xs:enumeration value="MVR"/>
+            <xs:enumeration value="MWK"/>
+            <xs:enumeration value="MXN"/>
+            <xs:enumeration value="MXV"/>
+            <xs:enumeration value="MYR"/>
+            <xs:enumeration value="MZN"/>
+            <xs:enumeration value="NAD"/>
+            <xs:enumeration value="NGN"/>
+            <xs:enumeration value="NIO"/>
+            <xs:enumeration value="NOK"/>
+            <xs:enumeration value="NPR"/>
+            <xs:enumeration value="NZD"/>
+            <xs:enumeration value="OMR"/>
+            <xs:enumeration value="PAB"/>
+            <xs:enumeration value="PEN"/>
+            <xs:enumeration value="PGK"/>
+            <xs:enumeration value="PHP"/>
+            <xs:enumeration value="PKR"/>
+            <xs:enumeration value="PLN"/>
+            <xs:enumeration value="PYG"/>
+            <xs:enumeration value="QAR"/>
+            <xs:enumeration value="RON"/>
+            <xs:enumeration value="RSD"/>
+            <xs:enumeration value="RUB"/>
+            <xs:enumeration value="RWF"/>
+            <xs:enumeration value="SAR"/>
+            <xs:enumeration value="SBD"/>
+            <xs:enumeration value="SCR"/>
+            <xs:enumeration value="SDG"/>
+            <xs:enumeration value="SEK"/>
+            <xs:enumeration value="SGD"/>
+            <xs:enumeration value="SHP"/>
+            <xs:enumeration value="SLL"/>
+            <xs:enumeration value="SOS"/>
+            <xs:enumeration value="SRD"/>
+            <xs:enumeration value="SSP"/>
+            <xs:enumeration value="STD"/>
+            <xs:enumeration value="SVC"/>
+            <xs:enumeration value="SYP"/>
+            <xs:enumeration value="SZL"/>
+            <xs:enumeration value="THB"/>
+            <xs:enumeration value="TJS"/>
+            <xs:enumeration value="TMT"/>
+            <xs:enumeration value="TND"/>
+            <xs:enumeration value="TOP"/>
+            <xs:enumeration value="TRY"/>
+            <xs:enumeration value="TTD"/>
+            <xs:enumeration value="TWD"/>
+            <xs:enumeration value="TZS"/>
+            <xs:enumeration value="UAH"/>
+            <xs:enumeration value="UGX"/>
+            <xs:enumeration value="USD"/>
+            <xs:enumeration value="USN"/>
+            <xs:enumeration value="UYI"/>
+            <xs:enumeration value="UYU"/>
+            <xs:enumeration value="UZS"/>
+            <xs:enumeration value="VEF"/>
+            <xs:enumeration value="VND"/>
+            <xs:enumeration value="VUV"/>
+            <xs:enumeration value="WST"/>
+            <xs:enumeration value="XAF"/>
+            <xs:enumeration value="XAG"/>
+            <xs:enumeration value="XAU"/>
+            <xs:enumeration value="XBA"/>
+            <xs:enumeration value="XBB"/>
+            <xs:enumeration value="XBC"/>
+            <xs:enumeration value="XBD"/>
+            <xs:enumeration value="XCD"/>
+            <xs:enumeration value="XDR"/>
+            <xs:enumeration value="XOF"/>
+            <xs:enumeration value="XPD"/>
+            <xs:enumeration value="XPF"/>
+            <xs:enumeration value="XPT"/>
+            <xs:enumeration value="XSU"/>
+            <xs:enumeration value="XTS"/>
+            <xs:enumeration value="XUA"/>
+            <xs:enumeration value="XXX"/>
+            <xs:enumeration value="YER"/>
+            <xs:enumeration value="ZAR"/>
+            <xs:enumeration value="ZMW"/>
+            <xs:enumeration value="ZWL"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="AddressDeviceType">
+        <xs:restriction base="xs:string">
+            <xs:pattern value="d:_(i:[1-9][0-9]*|n:[a-zA-Z0-9-]+)_[^\p{Cc}\p{Cf}\p{Z}]+"/>
+            <xs:maxLength value="256"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="AddressEntityType">
+        <xs:restriction base="xs:unsignedInt"/>
+    </xs:simpleType>
+    <xs:simpleType name="AddressFeatureType">
+        <xs:restriction base="xs:unsignedInt"/>
+    </xs:simpleType>
+    <xs:element name="device" type="ns_p:AddressDeviceType"/>
+    <xs:element name="entity" type="ns_p:AddressEntityType"/>
+    <xs:element name="feature" type="ns_p:AddressFeatureType"/>
+    <xs:complexType name="DeviceAddressType">
+        <xs:sequence>
+            <xs:element minOccurs="0" ref="ns_p:device"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="DeviceAddressElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="device" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="EntityAddressType">
+        <xs:complexContent>
+            <xs:extension base="ns_p:DeviceAddressType">
+                <xs:sequence>
+                    <xs:element minOccurs="0" ref="ns_p:entity" maxOccurs="unbounded"/>
+                </xs:sequence>
+            </xs:extension>
+        </xs:complexContent>
+    </xs:complexType>
+    <xs:complexType name="EntityAddressElementsType">
+        <xs:complexContent>
+            <xs:extension base="ns_p:DeviceAddressElementsType">
+                <xs:sequence>
+                    <xs:element minOccurs="0" name="entity" type="ns_p:ElementTagType"/>
+                </xs:sequence>
+            </xs:extension>
+        </xs:complexContent>
+    </xs:complexType>
+    <xs:complexType name="FeatureAddressType">
+        <xs:complexContent>
+            <xs:extension base="ns_p:EntityAddressType">
+                <xs:sequence>
+                    <xs:element minOccurs="0" ref="ns_p:feature"/>
+                </xs:sequence>
+            </xs:extension>
+        </xs:complexContent>
+    </xs:complexType>
+    <xs:complexType name="FeatureAddressElementsType">
+        <xs:complexContent>
+            <xs:extension base="ns_p:EntityAddressElementsType">
+                <xs:sequence>
+                    <xs:element minOccurs="0" name="feature" type="ns_p:ElementTagType"/>
+                </xs:sequence>
+            </xs:extension>
+        </xs:complexContent>
+    </xs:complexType>
+    <xs:simpleType name="ScopeTypeType">
+        <xs:union memberTypes="ns_p:ScopeTypeEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="ScopeTypeEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="ac"/>
+            <xs:enumeration value="acCosPhiGrid"/>
+            <xs:enumeration value="acCurrentA"/>
+            <xs:enumeration value="acCurrentB"/>
+            <xs:enumeration value="acCurrentC"/>
+            <xs:enumeration value="acFrequencyGrid"/>
+            <xs:enumeration value="acPowerA"/>
+            <xs:enumeration value="acPowerB"/>
+            <xs:enumeration value="acPowerC"/>
+            <xs:enumeration value="acPowerLimitPct"/>
+            <xs:enumeration value="acPowerTotal"/>
+            <xs:enumeration value="acVoltageA"/>
+            <xs:enumeration value="acVoltageB"/>
+            <xs:enumeration value="acVoltageC"/>
+            <xs:enumeration value="acYieldDay"/>
+            <xs:enumeration value="acYieldTotal"/>
+            <xs:enumeration value="dcCurrent"/>
+            <xs:enumeration value="dcPower"/>
+            <xs:enumeration value="dcString1"/>
+            <xs:enumeration value="dcString2"/>
+            <xs:enumeration value="dcString3"/>
+            <xs:enumeration value="dcString4"/>
+            <xs:enumeration value="dcString5"/>
+            <xs:enumeration value="dcString6"/>
+            <xs:enumeration value="dcTotal"/>
+            <xs:enumeration value="dcVoltage"/>
+            <xs:enumeration value="dhwTemperature"/>
+            <xs:enumeration value="flowTemperature"/>
+            <xs:enumeration value="outsideAirTemperature"/>
+            <xs:enumeration value="returnTemperature"/>
+            <xs:enumeration value="roomAirTemperature"/>
+            <xs:enumeration value="charge"/>
+            <xs:enumeration value="stateOfCharge"/>
+            <xs:enumeration value="discharge"/>
+            <xs:enumeration value="gridConsumption"/>
+            <xs:enumeration value="gridFeedIn"/>
+            <xs:enumeration value="selfConsumption"/>
+            <xs:enumeration value="overloadProtection"/>
+            <xs:enumeration value="acPower"/>
+            <xs:enumeration value="acEnergy"/>
+            <xs:enumeration value="acCurrent"/>
+            <xs:enumeration value="acVoltage"/>
+            <xs:enumeration value="batteryControl"/>
+            <xs:enumeration value="simpleIncentiveTable"/>
+            <xs:enumeration value="stateOfHealth"/>
+            <xs:enumeration value="travelRange"/>
+            <xs:enumeration value="nominalEnergyCapacity"/>
+            <xs:enumeration value="acPowerReal"/>
+            <xs:enumeration value="acPowerApparent"/>
+            <xs:enumeration value="acPowerReactive"/>
+            <xs:enumeration value="acYieldMonth"/>
+            <xs:enumeration value="acYieldYear"/>
+            <xs:enumeration value="acFrequency"/>
+            <xs:enumeration value="acCosPhi"/>
+            <xs:enumeration value="dcEnergy"/>
+            <xs:enumeration value="insulationResistance"/>
+            <xs:enumeration value="stateOfEnergy"/>
+            <xs:enumeration value="useableCapacity"/>
+            <xs:enumeration value="dcChargeEnergy"/>
+            <xs:enumeration value="dcDischargeEnergy"/>
+            <xs:enumeration value="loadCycleCount"/>
+            <xs:enumeration value="componentTemperature"/>
+            <xs:enumeration value="gridLimit"/>
+            <xs:enumeration value="gridLimitFallback"/>
+            <xs:enumeration value="acPowerApparentTotal"/>
+            <xs:enumeration value="acPowerReactiveTotal"/>
+            <xs:enumeration value="acCurrentTotal"/>
+            <xs:enumeration value="acEnergyConsumed"/>
+            <xs:enumeration value="acEnergyProduced"/>
+            <xs:enumeration value="batteryAcPower"/>
+            <xs:enumeration value="batteryAcPowerPhaseSpecific"/>
+            <xs:enumeration value="batteryDcPower"/>
+            <xs:enumeration value="pccPower"/>
+            <xs:enumeration value="activePowerLimit"/>
+            <xs:enumeration value="activePowerLimitPercentage"/>
+            <xs:enumeration value="simpleCommittedIncentiveTable"/>
+            <xs:enumeration value="simplePreliminaryIncentiveTable"/>
+            <xs:enumeration value="committedPowerPlan"/>
+            <xs:enumeration value="preliminaryPowerPlan"/>
+            <xs:enumeration value="incentiveTableEnConsWithPoETF"/>
+            <xs:enumeration value="incentiveTableEnProdWithPoETF"/>
+            <xs:enumeration value="incentiveTableEnConsWithPoE"/>
+            <xs:enumeration value="incentiveTableEnProdWithPoE"/>
+            <xs:enumeration value="incentiveTableEnConsWithTF"/>
+            <xs:enumeration value="incentiveTableEnProdWithTF"/>
+            <xs:enumeration value="activePowerForecast"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="RoleType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="client"/>
+            <xs:enumeration value="server"/>
+            <xs:enumeration value="special"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="FeatureGroupType">
+        <xs:restriction base="xs:string">
+            <xs:pattern value="(#[1-9][0-9]*)*"/>
+            <xs:maxLength value="128"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="DeviceTypeType">
+        <xs:union memberTypes="ns_p:DeviceTypeEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="DeviceTypeEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="Dishwasher"/>
+            <xs:enumeration value="Dryer"/>
+            <xs:enumeration value="EnvironmentSensor"/>
+            <xs:enumeration value="Generic"/>
+            <xs:enumeration value="HeatGenerationSystem"/>
+            <xs:enumeration value="HeatSinkSystem"/>
+            <xs:enumeration value="HeatStorageSystem"/>
+            <xs:enumeration value="HVACController"/>
+            <xs:enumeration value="SubMeter"/>
+            <xs:enumeration value="Washer"/>
+            <xs:enumeration value="ElectricitySupplySystem"/>
+            <xs:enumeration value="EnergyManagementSystem"/>
+            <xs:enumeration value="Inverter"/>
+            <xs:enumeration value="ChargingStation"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="EntityTypeType">
+        <xs:union memberTypes="ns_p:EntityTypeEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="EntityTypeEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="Battery"/>
+            <xs:enumeration value="Compressor"/>
+            <xs:enumeration value="DeviceInformation"/>
+            <xs:enumeration value="DHWCircuit"/>
+            <xs:enumeration value="DHWStorage"/>
+            <xs:enumeration value="Dishwasher"/>
+            <xs:enumeration value="Dryer"/>
+            <xs:enumeration value="ElectricalImmersionHeater"/>
+            <xs:enumeration value="Fan"/>
+            <xs:enumeration value="GasHeatingAppliance"/>
+            <xs:enumeration value="Generic"/>
+            <xs:enumeration value="HeatingBufferStorage"/>
+            <xs:enumeration value="HeatingCircuit"/>
+            <xs:enumeration value="HeatingObject"/>
+            <xs:enumeration value="HeatingZone"/>
+            <xs:enumeration value="HeatPumpAppliance"/>
+            <xs:enumeration value="HeatSinkCircuit"/>
+            <xs:enumeration value="HeatSourceCircuit"/>
+            <xs:enumeration value="HeatSourceUnit"/>
+            <xs:enumeration value="HVACController"/>
+            <xs:enumeration value="HVACRoom"/>
+            <xs:enumeration value="InstantDHWHeater"/>
+            <xs:enumeration value="Inverter"/>
+            <xs:enumeration value="OilHeatingAppliance"/>
+            <xs:enumeration value="Pump"/>
+            <xs:enumeration value="RefrigerantCircuit"/>
+            <xs:enumeration value="SmartEnergyAppliance"/>
+            <xs:enumeration value="SolarDHWStorage"/>
+            <xs:enumeration value="SolarThermalCircuit"/>
+            <xs:enumeration value="SubMeterElectricity"/>
+            <xs:enumeration value="TemperatureSensor"/>
+            <xs:enumeration value="Washer"/>
+            <xs:enumeration value="BatterySystem"/>
+            <xs:enumeration value="ElectricityGenerationSystem"/>
+            <xs:enumeration value="ElectricityStorageSystem"/>
+            <xs:enumeration value="GridConnectionPointOfPremises"/>
+            <xs:enumeration value="Household"/>
+            <xs:enumeration value="PVSystem"/>
+            <xs:enumeration value="EV"/>
+            <xs:enumeration value="EVSE"/>
+            <xs:enumeration value="ChargingOutlet"/>
+            <xs:enumeration value="CEM"/>
+            <xs:enumeration value="PV"/>
+            <xs:enumeration value="PVESHybrid"/>
+            <xs:enumeration value="ElectricalStorage"/>
+            <xs:enumeration value="PVString"/>
+            <xs:enumeration value="GridGuard"/>
+            <xs:enumeration value="ControllableSystem"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="FeatureTypeType">
+        <xs:union memberTypes="ns_p:FeatureTypeEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="FeatureTypeEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="ActuatorLevel"/>
+            <xs:enumeration value="ActuatorSwitch"/>
+            <xs:enumeration value="Alarm"/>
+            <xs:enumeration value="DataTunneling"/>
+            <xs:enumeration value="DeviceClassification"/>
+            <xs:enumeration value="DeviceDiagnosis"/>
+            <xs:enumeration value="DirectControl"/>
+            <xs:enumeration value="ElectricalConnection"/>
+            <xs:enumeration value="Generic"/>
+            <xs:enumeration value="HVAC"/>
+            <xs:enumeration value="LoadControl"/>
+            <xs:enumeration value="Measurement"/>
+            <xs:enumeration value="Messaging"/>
+            <xs:enumeration value="NetworkManagement"/>
+            <xs:enumeration value="NodeManagement"/>
+            <xs:enumeration value="OperatingConstraints"/>
+            <xs:enumeration value="PowerSequences"/>
+            <xs:enumeration value="Sensing"/>
+            <xs:enumeration value="Setpoint"/>
+            <xs:enumeration value="SmartEnergyManagementPs"/>
+            <xs:enumeration value="TaskManagement"/>
+            <xs:enumeration value="Threshold"/>
+            <xs:enumeration value="TimeInformation"/>
+            <xs:enumeration value="TimeTable"/>
+            <xs:enumeration value="DeviceConfiguration"/>
+            <xs:enumeration value="SupplyCondition"/>
+            <xs:enumeration value="TimeSeries"/>
+            <xs:enumeration value="TariffInformation"/>
+            <xs:enumeration value="IncentiveTable"/>
+            <xs:enumeration value="Bill"/>
+            <xs:enumeration value="Identification"/>
+            <xs:enumeration value="StateInformation"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="FeatureSpecificUsageType">
+        <xs:union memberTypes="ns_p:FeatureSpecificUsageEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="FeatureSpecificUsageEnumType">
+        <xs:union
+            memberTypes="ns_p:FeatureDirectControlSpecificUsageEnumType ns_p:FeatureHvacSpecificUsageEnumType ns_p:FeatureMeasurementSpecificUsageEnumType ns_p:FeatureSetpointSpecificUsageEnumType ns_p:FeatureSmartEnergyManagementPsSpecificUsageEnumType"
+        />
+    </xs:simpleType>
+    <xs:simpleType name="FeatureDirectControlSpecificUsageEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="History"/>
+            <xs:enumeration value="RealTime"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="FeatureHvacSpecificUsageEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="OperationMode"/>
+            <xs:enumeration value="Overrun"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="FeatureMeasurementSpecificUsageEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="Contact"/>
+            <xs:enumeration value="Electrical"/>
+            <xs:enumeration value="Heat"/>
+            <xs:enumeration value="Level"/>
+            <xs:enumeration value="Pressure"/>
+            <xs:enumeration value="Temperature"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="FeatureSetpointSpecificUsageEnumType">
+        <xs:restriction base="ns_p:FeatureMeasurementSpecificUsageEnumType"/>
+    </xs:simpleType>
+    <xs:simpleType name="FeatureSmartEnergyManagementPsSpecificUsageEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="FixedForecast"/>
+            <xs:enumeration value="FlexibleChosenForecast"/>
+            <xs:enumeration value="FlexibleOptionalForecast"/>
+            <xs:enumeration value="OptionalSequenceBasedImmediateControl"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="FunctionType">
+        <xs:union memberTypes="ns_p:FunctionEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="FunctionEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="actuatorLevelData"/>
+            <xs:enumeration value="actuatorLevelDescriptionData"/>
+            <xs:enumeration value="actuatorSwitchData"/>
+            <xs:enumeration value="actuatorSwitchDescriptionData"/>
+            <xs:enumeration value="alarmListData"/>
+            <xs:enumeration value="bindingManagementDeleteCall"/>
+            <xs:enumeration value="bindingManagementEntryListData"/>
+            <xs:enumeration value="bindingManagementRequestCall"/>
+            <xs:enumeration value="dataTunnelingCall"/>
+            <xs:enumeration value="deviceClassificationManufacturerData"/>
+            <xs:enumeration value="deviceClassificationUserData"/>
+            <xs:enumeration value="deviceDiagnosisHeartbeatData"/>
+            <xs:enumeration value="deviceDiagnosisServiceData"/>
+            <xs:enumeration value="deviceDiagnosisStateData"/>
+            <xs:enumeration value="directControlActivityListData"/>
+            <xs:enumeration value="directControlDescriptionData"/>
+            <xs:enumeration value="electricalConnectionDescriptionListData"/>
+            <xs:enumeration value="electricalConnectionParameterDescriptionListData"/>
+            <xs:enumeration value="electricalConnectionStateListData"/>
+            <xs:enumeration value="hvacOperationModeDescriptionListData"/>
+            <xs:enumeration value="hvacOverrunDescriptionListData"/>
+            <xs:enumeration value="hvacOverrunListData"/>
+            <xs:enumeration value="hvacSystemFunctionDescriptionListData"/>
+            <xs:enumeration value="hvacSystemFunctionListData"/>
+            <xs:enumeration value="hvacSystemFunctionOperationModeRelationListData"/>
+            <xs:enumeration value="hvacSystemFunctionPowerSequenceRelationListData"/>
+            <xs:enumeration value="hvacSystemFunctionSetpointRelationListData"/>
+            <xs:enumeration value="loadControlEventListData"/>
+            <xs:enumeration value="loadControlStateListData"/>
+            <xs:enumeration value="measurementConstraintsListData"/>
+            <xs:enumeration value="measurementDescriptionListData"/>
+            <xs:enumeration value="measurementListData"/>
+            <xs:enumeration value="measurementThresholdRelationListData"/>
+            <xs:enumeration value="messagingListData"/>
+            <xs:enumeration value="networkManagementAbortCall"/>
+            <xs:enumeration value="networkManagementAddNodeCall"/>
+            <xs:enumeration value="networkManagementDeviceDescriptionListData"/>
+            <xs:enumeration value="networkManagementDiscoverCall"/>
+            <xs:enumeration value="networkManagementEntityDescriptionListData"/>
+            <xs:enumeration value="networkManagementFeatureDescriptionListData"/>
+            <xs:enumeration value="networkManagementJoiningModeData"/>
+            <xs:enumeration value="networkManagementModifyNodeCall"/>
+            <xs:enumeration value="networkManagementProcessStateData"/>
+            <xs:enumeration value="networkManagementRemoveNodeCall"/>
+            <xs:enumeration value="networkManagementReportCandidateData"/>
+            <xs:enumeration value="networkManagementScanNetworkCall"/>
+            <xs:enumeration value="nodeManagementBindingData"/>
+            <xs:enumeration value="nodeManagementBindingDeleteCall"/>
+            <xs:enumeration value="nodeManagementBindingRequestCall"/>
+            <xs:enumeration value="nodeManagementDestinationListData"/>
+            <xs:enumeration value="nodeManagementDetailedDiscoveryData"/>
+            <xs:enumeration value="nodeManagementSubscriptionData"/>
+            <xs:enumeration value="nodeManagementSubscriptionDeleteCall"/>
+            <xs:enumeration value="nodeManagementSubscriptionRequestCall"/>
+            <xs:enumeration value="operatingConstraintsDurationListData"/>
+            <xs:enumeration value="operatingConstraintsInterruptListData"/>
+            <xs:enumeration value="operatingConstraintsPowerDescriptionListData"/>
+            <xs:enumeration value="operatingConstraintsPowerLevelListData"/>
+            <xs:enumeration value="operatingConstraintsPowerRangeListData"/>
+            <xs:enumeration value="operatingConstraintsResumeImplicationListData"/>
+            <xs:enumeration value="powerSequenceAlternativesRelationListData"/>
+            <xs:enumeration value="powerSequenceDescriptionListData"/>
+            <xs:enumeration value="powerSequenceNodeScheduleInformationData"/>
+            <xs:enumeration value="powerSequencePriceCalculationRequestCall"/>
+            <xs:enumeration value="powerSequencePriceListData"/>
+            <xs:enumeration value="powerSequenceScheduleConfigurationRequestCall"/>
+            <xs:enumeration value="powerSequenceScheduleConstraintsListData"/>
+            <xs:enumeration value="powerSequenceScheduleListData"/>
+            <xs:enumeration value="powerSequenceSchedulePreferenceListData"/>
+            <xs:enumeration value="powerSequenceStateListData"/>
+            <xs:enumeration value="powerTimeSlotScheduleConstraintsListData"/>
+            <xs:enumeration value="powerTimeSlotScheduleListData"/>
+            <xs:enumeration value="powerTimeSlotValueListData"/>
+            <xs:enumeration value="resultData"/>
+            <xs:enumeration value="sensingDescriptionData"/>
+            <xs:enumeration value="sensingListData"/>
+            <xs:enumeration value="sessionIdentificationListData"/>
+            <xs:enumeration value="sessionMeasurementRelationListData"/>
+            <xs:enumeration value="setpointConstraintsListData"/>
+            <xs:enumeration value="setpointDescriptionListData"/>
+            <xs:enumeration value="setpointListData"/>
+            <xs:enumeration value="smartEnergyManagementPsConfigurationRequestCall"/>
+            <xs:enumeration value="smartEnergyManagementPsData"/>
+            <xs:enumeration value="smartEnergyManagementPsPriceCalculationRequestCall"/>
+            <xs:enumeration value="smartEnergyManagementPsPriceData"/>
+            <xs:enumeration value="specificationVersionListData"/>
+            <xs:enumeration value="subscriptionManagementDeleteCall"/>
+            <xs:enumeration value="subscriptionManagementEntryListData"/>
+            <xs:enumeration value="subscriptionManagementRequestCall"/>
+            <xs:enumeration value="supplyConditionDescriptionListData"/>
+            <xs:enumeration value="supplyConditionListData"/>
+            <xs:enumeration value="supplyConditionThresholdRelationListData"/>
+            <xs:enumeration value="taskManagementJobDescriptionListData"/>
+            <xs:enumeration value="taskManagementJobListData"/>
+            <xs:enumeration value="taskManagementJobRelationListData"/>
+            <xs:enumeration value="taskManagementOverviewData"/>
+            <xs:enumeration value="thresholdConstraintsListData"/>
+            <xs:enumeration value="thresholdDescriptionListData"/>
+            <xs:enumeration value="thresholdListData"/>
+            <xs:enumeration value="timeDistributorData"/>
+            <xs:enumeration value="timeDistributorEnquiryCall"/>
+            <xs:enumeration value="timeInformationData"/>
+            <xs:enumeration value="timePrecisionData"/>
+            <xs:enumeration value="timeTableConstraintsListData"/>
+            <xs:enumeration value="timeTableDescriptionListData"/>
+            <xs:enumeration value="timeTableListData"/>
+            <xs:enumeration value="deviceConfigurationKeyValueConstraintsListData"/>
+            <xs:enumeration value="deviceConfigurationKeyValueListData"/>
+            <xs:enumeration value="deviceConfigurationKeyValueDescriptionListData"/>
+            <xs:enumeration value="loadControlLimitConstraintsListData"/>
+            <xs:enumeration value="loadControlLimitDescriptionListData"/>
+            <xs:enumeration value="loadControlLimitListData"/>
+            <xs:enumeration value="loadControlNodeData"/>
+            <xs:enumeration value="timeSeriesConstraintsListData"/>
+            <xs:enumeration value="timeSeriesDescriptionListData"/>
+            <xs:enumeration value="timeSeriesListData"/>
+            <xs:enumeration value="tariffOverallConstraintsData"/>
+            <xs:enumeration value="tariffListData"/>
+            <xs:enumeration value="tariffBoundaryRelationListData"/>
+            <xs:enumeration value="tariffTierRelationListData"/>
+            <xs:enumeration value="tariffDescriptionListData"/>
+            <xs:enumeration value="tierBoundaryListData"/>
+            <xs:enumeration value="tierBoundaryDescriptionListData"/>
+            <xs:enumeration value="commodityListData"/>
+            <xs:enumeration value="tierListData"/>
+            <xs:enumeration value="tierIncentiveRelationListData"/>
+            <xs:enumeration value="tierDescriptionListData"/>
+            <xs:enumeration value="incentiveListData"/>
+            <xs:enumeration value="incentiveDescriptionListData"/>
+            <xs:enumeration value="incentiveTableData"/>
+            <xs:enumeration value="incentiveTableDescriptionData"/>
+            <xs:enumeration value="incentiveTableConstraintsData"/>
+            <xs:enumeration value="electricalConnectionPermittedValueSetListData"/>
+            <xs:enumeration value="useCaseInformationListData"/>
+            <xs:enumeration value="nodeManagementUseCaseData"/>
+            <xs:enumeration value="billConstraintsListData"/>
+            <xs:enumeration value="billDescriptionListData"/>
+            <xs:enumeration value="billListData"/>
+            <xs:enumeration value="identificationListData"/>
+            <xs:enumeration value="measurementSeriesListData"/>
+            <xs:enumeration value="electricalConnectionCharacteristicListData"/>
+            <xs:enumeration value="stateInformationListData"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:complexType name="PossibleOperationsClassifierType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="partial" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="PossibleOperationsReadType">
+        <xs:complexContent>
+            <xs:extension base="ns_p:PossibleOperationsClassifierType"/>
+        </xs:complexContent>
+    </xs:complexType>
+    <xs:complexType name="PossibleOperationsWriteType">
+        <xs:complexContent>
+            <xs:extension base="ns_p:PossibleOperationsClassifierType"/>
+        </xs:complexContent>
+    </xs:complexType>
+    <xs:complexType name="PossibleOperationsType">
+        <xs:sequence>
+            <xs:element name="read" minOccurs="0" type="ns_p:PossibleOperationsReadType"/>
+            <xs:element name="write" minOccurs="0" type="ns_p:PossibleOperationsWriteType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="PossibleOperationsElementsType">
+        <xs:sequence>
+            <xs:element name="read" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element name="write" minOccurs="0" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="FunctionPropertyType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="function" type="ns_p:FunctionType"/>
+            <xs:element minOccurs="0" name="possibleOperations" type="ns_p:PossibleOperationsType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="FunctionPropertyElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="function" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="possibleOperations" type="ns_p:PossibleOperationsElementsType"/>
+        </xs:sequence>
+    </xs:complexType>
+</xs:schema>

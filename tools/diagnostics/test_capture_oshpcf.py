@@ -1,7 +1,53 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
-from capture_oshpcf import StartReads, request_semp_read
+from capture_oshpcf import RELEVANT_LINE, CaptureStats, StartReads, request_semp_read
+
+
+class CaptureStatsTest(unittest.TestCase):
+    def test_registration_transport_logs_are_retained_without_false_confirmations(self):
+        stats = CaptureStats()
+        for line in (
+            "[W][eebus-registration] SPINE registration tx: kind=binding msg_cnt=42 send_err=0",
+            "[W][eebus-registration] SPINE registration result: msg_ref_present=true msg_ref=42 error_present=true error=0",
+            "EG1 OSSHPCF binding table: msg_ref=43 entries=0 array=null",
+            "EG1 OSSHPCF subscription entry[0] server: device=? entity=[2] feature=7 comparison=missing-device",
+            "[E][fronius] Storage writer latched off: transaction expired: stage=read-timeout token=42 age_ms=10001",
+            "'ESPHome HEMS Storage Writer Status' >> 'Schutzpause: timeout not confirmed'",
+        ):
+            with self.subTest(line=line):
+                self.assertIsNotNone(RELEVANT_LINE.search(line))
+                stats.observe(line)
+        self.assertEqual((stats.subscription_confirmations, stats.binding_confirmations, stats.semp_messages), (0, 0, 0))
+
+    def test_classifies_messages_without_counting_decoded_lines(self):
+        stats = CaptureStats()
+        stats.observe("EG1 OSSHPCF msg from peer: SempData (fn=104) cmd=notify")
+        stats.observe("EG1 OSSHPCF msg from peer: SempData (fn=104) cmd=reply")
+        stats.observe("EG1 OSSHPCF data: summary: alternatives=0")
+        stats.observe("EG1 OSSHPCF read reply: msg_ref=1 fn=104 alternatives=0")
+        self.assertEqual((stats.semp_messages, stats.notifications, stats.replies, stats.read_replies), (2, 1, 1, 1))
+
+    def test_legacy_logs_do_not_prove_subscription_or_notification(self):
+        stats = CaptureStats()
+        stats.observe("EG1 OSSHPCF msg from peer: SempData (fn=104) data=present")
+        stats.observe("EG1 OSSHPCF: remote SEMP entity 2 subscribe_err=0 read_err=0")
+        self.assertEqual(stats.unclassified, 1)
+        self.assertEqual(stats.legacy_subscription_checks, 1)
+        self.assertEqual(stats.subscription_confirmations, 0)
+        self.assertEqual(stats.notifications, 0)
+
+    def test_only_remote_table_matches_count_as_confirmation(self):
+        stats = CaptureStats()
+        for kind in ("subscription", "binding"):
+            stats.observe(f"EG1 OSSHPCF {kind} request: result=sent")
+            stats.observe(f"EG1 OSSHPCF {kind} verified: present=false")
+            stats.observe(f"EG1 OSSHPCF {kind} verification failed: err=1")
+        self.assertEqual((stats.subscription_requests, stats.binding_requests), (1, 1))
+        self.assertEqual((stats.subscription_confirmations, stats.binding_confirmations), (0, 0))
+        stats.observe("EG1 OSSHPCF subscription verified: present=true")
+        stats.observe("EG1 OSSHPCF binding verified: present=true")
+        self.assertEqual((stats.subscription_confirmations, stats.binding_confirmations), (1, 1))
 
 
 class StartReadsTest(unittest.TestCase):

@@ -23,12 +23,25 @@ struct SolarOptions {
   bool low_solar_grid{false};
 };
 
+struct SolarForecast {
+  float remaining_kwh{NAN};
+  uint32_t valid_until_epoch{0};
+
+  bool low(uint32_t now_epoch) const {
+    return now_epoch != 0 && valid_until_epoch > now_epoch &&
+           valid_until_epoch - now_epoch <= 7200 &&
+           std::isfinite(remaining_kwh) && remaining_kwh >= 0.0f && remaining_kwh < 0.5f;
+  }
+};
+
 struct SolarInputs {
   SolarSample pv_generation;
   SolarSample pv_ac;
   SolarSample non_ev_load_ac;
   SolarSample battery_charge_ac;
   SolarSample charge_capacity_ac;
+  SolarForecast forecast;
+  uint32_t now_epoch{0};
 };
 
 enum class SolarReason { UNRESTRICTED, INVALID_DATA, WAITING_PV, PV_SUPPORT, LOW_SOLAR };
@@ -71,11 +84,34 @@ inline float storage_ev_limit(float requested, bool battery_allowed, bool writer
   return requested;
 }
 
+class StorageWriterRetry {
+ public:
+  void failed(uint32_t now) {
+    failed_ms_ = now;
+    delay_ms_ = delay_ms_ == 0 ? 30000 : std::min(delay_ms_ * 2, uint32_t{300000});
+  }
+
+  bool ready(uint32_t now) const {
+    return delay_ms_ != 0 && now - failed_ms_ >= delay_ms_;
+  }
+
+  void verified() { delay_ms_ = 0; }
+
+ private:
+  uint32_t failed_ms_{0};
+  uint32_t delay_ms_{0};
+};
+
 inline bool storage_target_valid(float requested_pct, bool priority_enabled,
                                  uint32_t updated_ms, uint32_t now, float latest_pct) {
   return requested_pct >= 0.0f ||
          (priority_enabled && updated_ms != 0 && now - updated_ms <= 10000 &&
           std::isfinite(latest_pct) && latest_pct <= 0.0f);
+}
+
+inline bool solar_options_match(uint8_t current, uint8_t evaluated, bool low_grid_permission) {
+  return ((current ^ evaluated) & 3) == 0 &&
+         (!low_grid_permission || (current & evaluated & 4) != 0);
 }
 
 inline float solar_ev_limit(float requested, bool solar_only, bool permitted,
@@ -155,22 +191,10 @@ class SolarPolicy {
       pv_timer_.reset();
     }
 
-    if (!options.low_solar_grid) {
-      low_solar_ = false;
-      low_timer_.reset();
-    } else if (!low_solar_) {
-      if (low_timer_.held(low_support, now, 600000)) {
-        low_solar_ = true;
-        low_timer_.reset();
-      }
-    } else if (low_timer_.held(pv_support, now, 300000)) {
-      low_solar_ = false;
-      low_timer_.reset();
-    }
-
-    result.ev_permitted = pv_allowed_ || low_solar_;
-    result.reason = pv_allowed_ ? SolarReason::PV_SUPPORT
-                               : low_solar_ ? SolarReason::LOW_SOLAR : SolarReason::WAITING_PV;
+    const bool low_solar = options.low_solar_grid && inputs.forecast.low(inputs.now_epoch);
+    result.ev_permitted = pv_allowed_ || low_solar;
+    result.reason = low_solar ? SolarReason::LOW_SOLAR
+                  : pv_allowed_ ? SolarReason::PV_SUPPORT : SolarReason::WAITING_PV;
     return result;
   }
 
@@ -196,22 +220,17 @@ class SolarPolicy {
 
   bool same_options_(const SolarOptions &options) const {
     return options.battery_first == options_.battery_first &&
-           options.solar_only == options_.solar_only &&
-           options.low_solar_grid == options_.low_solar_grid;
+           options.solar_only == options_.solar_only;
   }
 
   void reset_() {
     pv_allowed_ = false;
-    low_solar_ = false;
     pv_timer_.reset();
-    low_timer_.reset();
   }
 
   SolarOptions options_;
   HoldTimer pv_timer_;
-  HoldTimer low_timer_;
   bool pv_allowed_{false};
-  bool low_solar_{false};
   bool stepped_{false};
   uint32_t last_step_{0};
 };

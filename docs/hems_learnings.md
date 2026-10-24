@@ -282,13 +282,14 @@ certification claims. A running experiment is not a completed acceptance test.
   The series continues if power falls, but missing samples for more than
   15 seconds or an API disconnect cancel it. Busy/disconnected read status
   skips an attempt; missed attempts are not replayed in a burst.
-- **The new 24-hour experiment is still pending.** Started 2026-10-17 at
-  10:49 local time, with nominal end 2026-10-18 at 10:49. Seven offline tests
-  and an eight-second live startup/deadline check passed. The short check
-  sent no SEMP read because the plant was already running. Successful
-  event-triggered Bosch responses and the completed 24-hour result are not
-  yet established. Keep the recording machine awake and avoid OTA during
-  the observation.
+- **The October 17/18 experiment completed.** Eleven start series produced
+  110 correlated empty replies, including 85 reads above 500 W, without
+  read timeouts or API disconnects. This closes the previous active-power
+  sampling gap, not the complete operating-mode matrix. Legacy subscription
+  counters counted local checks, not remote acceptance; the old log also
+  lacked notify/reply classification. The new capability-gated registration
+  diagnostics verify remote tables and log raw versus merged feature data;
+  they are locally tested but not yet deployed or verified on hardware.
 - **citolen's PRs are relevant, not a fix for empty raw snapshots.** As
   reviewed on 2026-10-17, [#75](https://github.com/NIBEGroup/openeebus/pull/75)
   fixes state mapping, [#76](https://github.com/NIBEGroup/openeebus/pull/76)
@@ -303,7 +304,7 @@ certification claims. A running experiment is not a completed acceptance test.
 - **Estimated power is not a guaranteed ceiling.** PR #78 stores a fallback
   `power` estimate in `max_power_w`; retain that distinction before using it
   for budgeting. It cannot replace an LPC limit or measured enforcement.
-- Keep OSSHPCF read-only until the concrete Bosch units, time base, mandatory
+- Keep OSSHPCF scheduling disabled until the concrete Bosch units, time base, mandatory
   slots, state transition after selection and behavior under concurrent LPC
   are documented. The capture matrix and staged implementation plan are in
   [oss-hpcf-bosch.md](oss-hpcf-bosch.md); dated historical status there must

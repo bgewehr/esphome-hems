@@ -63,6 +63,8 @@ button:
 text_sensor:
   - platform: template
     id: one_wire_status
+    filters:
+      - lambda: 'if (id(one_wire_status).has_state() && id(one_wire_status).state == x) return {}; return x;'
     disabled_by_default: true
     name: "${device_name} 1-Wire Status"
     icon: "mdi:thermometer-lines"

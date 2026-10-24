@@ -155,10 +155,13 @@ ausfuehren.
 - PV-/Batteriepriorisierung ist inzwischen aktiv integriert, nicht mehr nur
   ein Dry Run. Die datierten Teilabnahmen bis 2026-10-08 und offenen
   Fehlerfaelle stehen im Budgetkonzept; sie ersetzen keine Gesamtfreigabe.
-- OSSHPCF bleibt read-only. Die 24h-Auswertung vom 7./8. Oktober fand elf
-  leere Snapshots und eine Beobachtungsluecke im laufenden Betrieb. Seit
-  17. Oktober 10:49 laeuft eine neue 24h-Messung mit zehn SEMP-Read-Versuchen
-  im 60-s-Abstand nach einer 50-W-Startflanke. Ergebnis noch offen.
+- Die 24h-Messung vom 17./18. Oktober lieferte 110 korrelierte leere
+  SEMP-Antworten, davon 85 bei mehr als 500 W Anlagenleistung, ohne
+  API-Abbruch oder Read-Timeout. Die alte Subscription-Zaehlung war kein
+  Annahmenachweis. Seit 18. Oktober aktiviert die lokale Anbindung
+  Subscription und Binding automatisch bei angebotenem Compressor/OSSHPCF
+  und prueft die entfernten Tabellen. Kein CEM-Controller und keine
+  Sequenz-/Heizungssteuerung; neuer Stand noch nicht per OTA abgenommen.
 - Die OHPCF-PR-Kette #75 bis #78 wurde gelesen, nicht integriert oder lokal
   testausgefuehrt. Vor einer Controller-Integration sind API-Aenderungen,
   Bosch-Daten und die Unterscheidung Schaetzleistung/Maximalleistung zu pruefen.
@@ -172,6 +175,13 @@ ausfuehren.
 
 ### Phase 2: Betriebsmodell und Diagnose
 
+- **SYS-17:** Historisch angesammelte UI-Diagnose auf aktuelle betriebliche
+  Verwendung und offene Abnahmen pruefen. Ueberholte Anzeigen zusammen mit
+  ihren exklusiven Polls, Berechnungen und Logs entfernen, nicht nur verbergen.
+  Schutzfunktionen, Messwertfrische, Verbindungs-/Befehlsstatus und noch
+  erforderliche Abnahmedaten bleiben erhalten. Hosttests, Referenzpruefung
+  und Firmware-Build sichern die Bereinigung ab; Live-Abnahme erst nach
+  gesondert freigegebenem OTA (aufgenommen 2026-10-18).
 - **SYS-20:** Einheitliche Systemzustaende `normal`, `limited`, `degraded`
   und `failsafe` definieren. Ursache, Eintrittszeit und Rueckkehrbedingung
   werden sichtbar gemacht.
@@ -184,6 +194,32 @@ ausfuehren.
 
 Abnahme: Der Betreiber kann fuer jede aktive Begrenzung erkennen, welche
 Quelle, Entscheidung, Anforderung, Quittierung und Messwirkung vorliegt.
+
+### Diagnosebereinigung SYS-17 (2026-10-18)
+
+| Bereich | Entscheidung und Zweck |
+|---|---|
+| EG1 K40RF-Untergrenzen-Test | Testlimit, ACK-Anzeige, Testmodus, Testzustand, exklusiven ACK-Getter und altes Live-Testskript entfernt; Grenze seit 20.07. bestaetigt. Produktiver Mindestwert bleibt unveraendert. |
+| §14a | Doppelte Steuerungskanalanzeige entfernt; Status mit Quelle, Limit, letztes Ereignis und Budgetverteilung bleiben. |
+| Batterie-Rohwerte | Grid-Charge-Permission-Erkundungspoll entfernt; Ladezustand nur noch interner Eingang fuer FULL-Erkennung und Datenqualitaet. |
+| Batterie/Fronius | Writer-/Solar-Status, Zielwerte, Reserve, EV-Unterstuetzung und Revert-Time fuer aktuelle Regelung und offene Timeout-/BMS-Abnahme erhalten. Skalierungswerte waren bereits intern. |
+| EG-Messdiagnose | Reine MPC-Log-Automationen entfernt. Heartbeat-Anzeige nur noch im vorhandenen 5-s-Takt, nicht zusaetzlich in jeder Hauptschleife; Protokoll-Heartbeat unveraendert. |
+| EEBus/OSSHPCF | Verbindung, SKIs, aktive/unterstuetzte Use Cases und Failsafe-Pruefung bleiben fuer Pairing und SYS-15; neue Read-/Subscription-/Binding-Statuswerte fuer OHP-20 bleiben. |
+| Xemex | Sollwert, Sperrgrund, Mess-/Anfrage-/Antwortalter, Stromantwort, CRC und Abbruchzaehler bleiben fuer laufenden Schutz und offene CSMB-Abnahme. |
+| System, DI/DO, 1-Wire, Wasser | Build/Version und Logauswahl sowie reale Eingaenge, Ausgaenge, Sensoren und Scanstatus bleiben fuer Betrieb, Zuordnung und Wartung. |
+
+Sechs UI-Elemente entfallen, darunter der weiterhin intern benoetigte
+Ladezustand. Das Entfernen des Erkundungsregisters entfernt dessen eigene
+Sensorverarbeitung; Modbus darf benachbarte benoetigte Register weiterhin
+zu einem Block zusammenfassen. Keine Aussage ueber eine feste Anzahl
+eingesparter Netzwerkanfragen. Kein periodischer Analysejob als Ersatz.
+
+Verifiziert: 3/3 HEMS-Hosttests und ESPHome-Build
+`2026-10-18 11:45:40 +0200`. Gegenueber dem HPCF-Stand vor Bereinigung:
+statischer RAM 66276 -> 65340 Byte, Firmware 1323583 -> 1320871 Byte.
+Keine gemessene CPU-/Buslast-Abnahme und kein OTA. Nach einem spaeteren
+freigegebenen Update gegebenenfalls verbliebene HA-Registry-Eintraege der
+entfernten Entitaeten separat bereinigen; keine automatische Live-Loeschung.
 
 ### Phase 3: Netzwerk- und Zugangsschutz
 

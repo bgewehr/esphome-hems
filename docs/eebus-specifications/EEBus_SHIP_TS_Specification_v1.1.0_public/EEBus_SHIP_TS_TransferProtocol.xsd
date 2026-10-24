@@ -1,0 +1,348 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:ship="http://docs.eebus.org/ship/xsd/v1" xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://docs.eebus.org/ship/xsd/v1" version="1.1.0" blockDefault="#all"
+    elementFormDefault="qualified">
+    <xs:group name="MessageValueGroup">
+        <xs:choice>
+            <xs:group ref="ship:MsgTypeInitGroup"/>
+            <xs:group ref="ship:MsgTypeControlGroup"/>
+            <xs:group ref="ship:MsgTypeDataGroup"/>
+            <xs:group ref="ship:MsgTypeEndGroup"/>
+        </xs:choice>
+    </xs:group>
+    <xs:group name="MsgTypeInitGroup">
+        <xs:annotation>
+            <xs:documentation>MSG_TYPE=init; this is just a placeholder here - the real message is defined in the specification (text).</xs:documentation>
+        </xs:annotation>
+        <xs:sequence>
+            <xs:element name="__cmi__">
+                <xs:annotation>
+                    <xs:documentation>This is just a placeholder for the "CMI" message! See specification for details.</xs:documentation>
+                </xs:annotation>
+            </xs:element>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="MsgTypeControlGroup">
+        <xs:annotation>
+            <xs:documentation>MSG_TYPE=control</xs:documentation>
+        </xs:annotation>
+        <xs:choice>
+            <xs:element ref="ship:connectionHello"/>
+            <xs:element ref="ship:messageProtocolHandshake"/>
+            <xs:element ref="ship:messageProtocolHandshakeError"/>
+            <xs:element ref="ship:connectionPinState"/>
+            <xs:element ref="ship:connectionPinInput"/>
+            <xs:element ref="ship:connectionPinError"/>
+            <xs:element ref="ship:accessMethodsRequest"/>
+            <xs:element ref="ship:accessMethods"/>
+            <xs:group ref="ship:MsgTypeControlKeyMaterialExchangeGroup"/>
+        </xs:choice>
+    </xs:group>
+    <xs:group name="MsgTypeDataGroup">
+        <xs:annotation>
+            <xs:documentation>MSG_TYPE=data</xs:documentation>
+        </xs:annotation>
+        <xs:choice>
+            <xs:element ref="ship:data"/>
+        </xs:choice>
+    </xs:group>
+    <xs:group name="MsgTypeControlKeyMaterialExchangeGroup">
+        <xs:annotation>
+            <xs:documentation>MSG_TYPE=control, only "key material exchange"</xs:documentation>
+        </xs:annotation>
+        <xs:choice>
+            <xs:element ref="ship:commissioningRequest"/>
+            <xs:element ref="ship:commissioningResponse"/>
+            <xs:element ref="ship:keyMaterialRequest"/>
+            <xs:element ref="ship:keyMaterial"/>
+            <xs:element ref="ship:keyMaterialResponse"/>
+            <xs:element ref="ship:keyMaterialDelete"/>
+            <xs:element ref="ship:keyMaterialDeleteResponse"/>
+            <xs:element ref="ship:keyMaterialState"/>
+            <xs:element ref="ship:keyMaterialStateResponse"/>
+            <xs:element ref="ship:keyMaterialStateRequest"/>
+        </xs:choice>
+    </xs:group>
+    <xs:group name="MsgTypeEndGroup">
+        <xs:annotation>
+            <xs:documentation>MSG_TYPE=end</xs:documentation>
+        </xs:annotation>
+        <xs:choice>
+            <xs:element ref="ship:connectionClose"/>
+        </xs:choice>
+    </xs:group>
+    <xs:simpleType name="ConnectionHelloPhaseType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="pending"/>
+            <xs:enumeration value="ready"/>
+            <xs:enumeration value="aborted"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:complexType name="ConnectionHelloType">
+        <xs:sequence>
+            <xs:element name="phase" type="ship:ConnectionHelloPhaseType"/>
+            <xs:element minOccurs="0" name="waiting" type="xs:unsignedInt"/>
+            <xs:element name="prolongationRequest" minOccurs="0" type="xs:boolean">
+                <xs:annotation>
+                    <xs:documentation>true=request waiting prolongation</xs:documentation>
+                </xs:annotation>
+            </xs:element>
+            <xs:element minOccurs="0" name="keyMaterialState">
+                <xs:complexType>
+                    <xs:sequence>
+                        <xs:element minOccurs="0" name="updateCounter" type="xs:unsignedShort"/>
+                    </xs:sequence>
+                </xs:complexType>
+            </xs:element>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="connectionHello" type="ship:ConnectionHelloType"> </xs:element>
+    <xs:simpleType name="MessageProtocolFormatType">
+        <xs:restriction base="xs:string"/>
+    </xs:simpleType>
+    <xs:complexType name="MessageProtocolFormatsType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" name="format" type="ship:MessageProtocolFormatType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:simpleType name="ProtocolHandshakeTypeType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="announceMax"/>
+            <xs:enumeration value="select"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:complexType name="MessageProtocolHandshakeType">
+        <xs:sequence>
+            <xs:element name="handshakeType" type="ship:ProtocolHandshakeTypeType"/>
+            <xs:element name="version">
+                <xs:complexType>
+                    <xs:sequence>
+                        <xs:element name="major" type="xs:unsignedShort"/>
+                        <xs:element name="minor" type="xs:unsignedShort"/>
+                    </xs:sequence>
+                </xs:complexType>
+            </xs:element>
+            <xs:element name="formats" type="ship:MessageProtocolFormatsType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="messageProtocolHandshake" type="ship:MessageProtocolHandshakeType"> </xs:element>
+    <xs:simpleType name="MessageProtocolHandshakeErrorErrorType">
+        <xs:restriction base="xs:unsignedByte"/>
+    </xs:simpleType>
+    <xs:complexType name="MessageProtocolHandshakeErrorType">
+        <xs:sequence>
+            <xs:element name="error" type="ship:MessageProtocolHandshakeErrorErrorType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="messageProtocolHandshakeError" type="ship:MessageProtocolHandshakeErrorType"/>
+    <xs:simpleType name="PinStateType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="required"/>
+            <xs:enumeration value="optional"/>
+            <xs:enumeration value="pinOk"/>
+            <xs:enumeration value="none"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="PinInputPermissionType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="busy"/>
+            <xs:enumeration value="ok"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:complexType name="ConnectionPinStateType">
+        <xs:sequence>
+            <xs:element name="pinState" type="ship:PinStateType"/>
+            <xs:element minOccurs="0" name="inputPermission" type="ship:PinInputPermissionType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="connectionPinState" type="ship:ConnectionPinStateType"> </xs:element>
+    <xs:simpleType name="PinValueType">
+        <xs:restriction base="xs:string">
+            <xs:pattern value="[0-9a-fA-F]{8,16}"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:complexType name="ConnectionPinInputType">
+        <xs:sequence>
+            <xs:element name="pin" type="ship:PinValueType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="connectionPinInput" type="ship:ConnectionPinInputType"> </xs:element>
+    <xs:simpleType name="ConnectionPinErrorErrorType">
+        <xs:restriction base="xs:unsignedByte"/>
+    </xs:simpleType>
+    <xs:complexType name="ConnectionPinErrorType">
+        <xs:sequence>
+            <xs:element name="error" type="ship:ConnectionPinErrorErrorType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="connectionPinError" type="ship:ConnectionPinErrorType"/>
+    <xs:simpleType name="ProtocolIdType">
+        <xs:restriction base="xs:string"/>
+    </xs:simpleType>
+    <xs:complexType name="HeaderType">
+        <xs:sequence>
+            <xs:element name="protocolId" type="ship:ProtocolIdType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="ExtensionType">
+        <xs:sequence>
+            <xs:element name="extensionId" type="xs:string" minOccurs="0"/>
+            <xs:element minOccurs="0" name="binary" type="xs:hexBinary"/>
+            <xs:element minOccurs="0" name="string" type="xs:string"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="DataType">
+        <xs:sequence>
+            <xs:element name="header" type="ship:HeaderType"/>
+            <xs:element name="payload" type="xs:anyType"/>
+            <xs:element minOccurs="0" name="extension" type="ship:ExtensionType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="data" type="ship:DataType"/>
+    <xs:simpleType name="ConnectionClosePhaseType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="announce"/>
+            <xs:enumeration value="confirm"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="ConnectionCloseReasonType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="unspecific"/>
+            <xs:enumeration value="removedConnection"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:complexType name="ConnectionCloseType">
+        <xs:sequence>
+            <xs:element name="phase" type="ship:ConnectionClosePhaseType"/>
+            <xs:element minOccurs="0" name="maxTime" type="xs:unsignedInt"/>
+            <xs:element minOccurs="0" name="reason" type="ship:ConnectionCloseReasonType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="connectionClose" type="ship:ConnectionCloseType"> </xs:element>
+    <xs:complexType name="AccessMethodsRequestType"/>
+    <xs:element name="accessMethodsRequest" type="ship:AccessMethodsRequestType"/>
+    <xs:complexType name="AccessMethodsType">
+        <xs:sequence>
+            <xs:element name="id" type="xs:string"/>
+            <xs:element minOccurs="0" name="dnsSd_mDns">
+                <xs:complexType>
+                    <xs:sequence/>
+                </xs:complexType>
+            </xs:element>
+            <xs:element minOccurs="0" name="dns">
+                <xs:complexType>
+                    <xs:sequence>
+                        <xs:element name="uri" type="xs:string"/>
+                    </xs:sequence>
+                </xs:complexType>
+            </xs:element>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="accessMethods" type="ship:AccessMethodsType"/>
+    <xs:simpleType name="KeyMaterialStateCurrentStateType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="predecessor"/>
+            <xs:enumeration value="current"/>
+            <xs:enumeration value="successor"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:element name="keyMaterialStateRequest" type="ship:KeyMaterialStateRequestType"/>
+    <xs:complexType name="KeyMaterialStateRequestType">
+        <xs:sequence>
+            <xs:element name="knownUpdateCounter" type="xs:unsignedShort"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="keyMaterialState" type="ship:KeyMaterialStateType"/>
+    <xs:complexType name="KeyMaterialStateType">
+        <xs:sequence>
+            <xs:element name="updateCounter" type="xs:unsignedShort"/>
+            <xs:element maxOccurs="256" minOccurs="1" name="entry" type="ship:KeyMaterialStateEntryType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="KeyMaterialStateEntryType">
+        <xs:sequence>
+            <xs:element name="currentState" type="ship:KeyMaterialStateCurrentStateType"/>
+            <xs:element minOccurs="1" name="curve" type="xs:unsignedShort"/>
+            <xs:element name="ski" type="xs:hexBinary"/>
+            <xs:element minOccurs="0" name="publicKey" type="xs:hexBinary"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="keyMaterialStateResponse" type="ship:KeyMaterialStateResponseType"/>
+    <xs:complexType name="KeyMaterialStateResponseType">
+        <xs:sequence>
+            <xs:element name="accept" type="xs:boolean"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="keyMaterialRequest" type="ship:KeyMaterialRequestType"/>
+    <xs:complexType name="KeyMaterialRequestType"/>
+    <xs:element name="keyMaterial" type="ship:KeyMaterialType"/>
+    <xs:complexType name="KeyMaterialType">
+        <xs:sequence>
+            <xs:element name="maxEntries" type="xs:unsignedLong"/>
+            <xs:element maxOccurs="unbounded" minOccurs="0" name="entry" type="ship:KeyMaterialEntryType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="KeyMaterialEntryType">
+        <xs:sequence>
+            <xs:element minOccurs="1" name="curve" type="xs:unsignedShort"/>
+            <xs:element name="ski" type="xs:hexBinary"/>
+            <xs:element minOccurs="0" name="publicKey" type="xs:hexBinary"/>
+            <xs:element name="userTrust" type="xs:unsignedInt" minOccurs="0"/>
+            <xs:element minOccurs="0" name="commissioningTool" type="xs:boolean"/>
+            <xs:element name="id" type="xs:string"/>
+            <xs:element minOccurs="0" name="note" type="xs:string"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="keyMaterialResponse" type="ship:KeyMaterialResponseType"/>
+    <xs:complexType name="KeyMaterialResponseType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" name="entry" type="ship:KeyMaterialResponseEntryType" minOccurs="0"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="KeyMaterialResponseEntryType">
+        <xs:sequence>
+            <xs:element minOccurs="1" name="curve" type="xs:unsignedShort"/>
+            <xs:element name="ski" type="xs:hexBinary"/>
+            <xs:element minOccurs="0" name="publicKey" type="xs:hexBinary"/>
+            <xs:element name="userTrust" type="xs:unsignedInt"/>
+            <xs:element minOccurs="0" name="id" type="xs:string"/>
+            <xs:element minOccurs="0" name="note" type="xs:string"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="keyMaterialDelete" type="ship:KeyMaterialDeleteType"/>
+    <xs:complexType name="KeyMaterialDeleteType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="1" name="entry" type="ship:KeyMaterialDeleteEntryType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="KeyMaterialDeleteEntryType">
+        <xs:sequence>
+            <xs:element minOccurs="1" name="curve" type="xs:unsignedShort"/>
+            <xs:element name="ski" type="xs:hexBinary"/>
+            <xs:element minOccurs="0" name="note" type="xs:string"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="keyMaterialDeleteResponse" type="ship:KeyMaterialDeleteResponseType"/>
+    <xs:complexType name="KeyMaterialDeleteResponseType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="1" name="entry" type="ship:KeyMaterialDeleteResponseEntryType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="KeyMaterialDeleteResponseEntryType">
+        <xs:sequence>
+            <xs:element minOccurs="1" name="curve" type="xs:unsignedShort"/>
+            <xs:element name="ski" type="xs:hexBinary"/>
+            <xs:element minOccurs="0" name="publicKey" type="xs:hexBinary"/>
+            <xs:element name="userTrust" type="xs:unsignedInt" minOccurs="1"/>
+            <xs:element minOccurs="0" name="id" type="xs:string"/>
+            <xs:element minOccurs="0" name="note" type="xs:string"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="commissioningRequest" type="ship:CommissioningRequestType"/>
+    <xs:complexType name="CommissioningRequestType"/>
+    <xs:element name="commissioningResponse" type="ship:CommissioningResponseType"/>
+    <xs:complexType name="CommissioningResponseType">
+        <xs:sequence>
+            <xs:element name="accept" type="xs:boolean"/>
+        </xs:sequence>
+    </xs:complexType>
+</xs:schema>

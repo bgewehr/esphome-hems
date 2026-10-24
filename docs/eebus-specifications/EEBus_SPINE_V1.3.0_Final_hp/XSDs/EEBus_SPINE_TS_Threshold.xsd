@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Smart Premises Interoperable Neutral-Message Exchange (SPINE)
+    Version 1.3.0 (final)
+    2023-08-31
+    Copyright (c) 2023 EEBus Initiative e.V.  All Rights Reserved.
+    Source: https://www.eebus.org/en/specifications/
+-->
+<xs:schema xmlns:ns_p="http://docs.eebus.org/spine/xsd/v1" xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://docs.eebus.org/spine/xsd/v1" version="1.3.0"
+    blockDefault="#all" elementFormDefault="qualified">
+    <xs:annotation>
+        <xs:documentation>EEBus SPINE Specification schema. Copyright 2023 EEBus Initiative e.V.  All rights reserved.</xs:documentation>
+    </xs:annotation>
+    <xs:include schemaLocation="EEBus_SPINE_TS_CommonDataTypes.xsd"/>
+    <xs:simpleType name="ThresholdIdType">
+        <xs:restriction base="xs:unsignedInt"/>
+    </xs:simpleType>
+    <xs:simpleType name="ThresholdTypeType">
+        <xs:union memberTypes="ns_p:ThresholdTypeEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="ThresholdTypeEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="goodAbove"/>
+            <xs:enumeration value="badAbove"/>
+            <xs:enumeration value="goodBelow"/>
+            <xs:enumeration value="badBelow"/>
+            <xs:enumeration value="minValueThreshold"/>
+            <xs:enumeration value="maxValueThreshold"/>
+            <xs:enumeration value="minValueThresholdExtreme"/>
+            <xs:enumeration value="maxValueThresholdExtreme"/>
+            <xs:enumeration value="sagThreshold"/>
+            <xs:enumeration value="swellThreshold"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:complexType name="ThresholdDataType">
+        <xs:sequence>
+            <xs:element name="thresholdId" minOccurs="0" type="ns_p:ThresholdIdType"/>
+            <xs:element minOccurs="0" name="thresholdValue" type="ns_p:ScaledNumberType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="thresholdData" type="ns_p:ThresholdDataType"/>
+    <xs:complexType name="ThresholdDataElementsType">
+        <xs:sequence>
+            <xs:element name="thresholdId" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="thresholdValue" type="ns_p:ScaledNumberElementsType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="thresholdDataElements" type="ns_p:ThresholdDataElementsType"/>
+    <xs:complexType name="ThresholdListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:thresholdData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="thresholdListData" type="ns_p:ThresholdListDataType"/>
+    <xs:complexType name="ThresholdListDataSelectorsType">
+        <xs:sequence>
+            <xs:element name="thresholdId" minOccurs="0" type="ns_p:ThresholdIdType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="thresholdListDataSelectors" type="ns_p:ThresholdListDataSelectorsType"/>
+    <xs:complexType name="ThresholdConstraintsDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="thresholdId" type="ns_p:ThresholdIdType"/>
+            <xs:element minOccurs="0" name="thresholdRangeMin" type="ns_p:ScaledNumberType"/>
+            <xs:element minOccurs="0" name="thresholdRangeMax" type="ns_p:ScaledNumberType"/>
+            <xs:element minOccurs="0" name="thresholdStepSize" type="ns_p:ScaledNumberType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="thresholdConstraintsData" type="ns_p:ThresholdConstraintsDataType"/>
+    <xs:complexType name="ThresholdConstraintsDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="thresholdId" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="thresholdRangeMin" type="ns_p:ScaledNumberElementsType"/>
+            <xs:element minOccurs="0" name="thresholdRangeMax" type="ns_p:ScaledNumberElementsType"/>
+            <xs:element minOccurs="0" name="thresholdStepSize" type="ns_p:ScaledNumberElementsType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="thresholdConstraintsDataElements" type="ns_p:ThresholdConstraintsDataElementsType"/>
+    <xs:complexType name="ThresholdConstraintsListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:thresholdConstraintsData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="thresholdConstraintsListData" type="ns_p:ThresholdConstraintsListDataType"/>
+    <xs:complexType name="ThresholdConstraintsListDataSelectorsType">
+        <xs:sequence>
+            <xs:element name="thresholdId" minOccurs="0" type="ns_p:ThresholdIdType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="thresholdConstraintsListDataSelectors" type="ns_p:ThresholdConstraintsListDataSelectorsType"/>
+    <xs:complexType name="ThresholdDescriptionDataType">
+        <xs:sequence>
+            <xs:element name="thresholdId" minOccurs="0" type="ns_p:ThresholdIdType"/>
+            <xs:element name="thresholdType" minOccurs="0" type="ns_p:ThresholdTypeType"/>
+            <xs:element minOccurs="0" name="unit" type="ns_p:UnitOfMeasurementType"/>
+            <xs:element minOccurs="0" name="scopeType" type="ns_p:ScopeTypeType"/>
+            <xs:element minOccurs="0" name="label" type="ns_p:LabelType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:DescriptionType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="thresholdDescriptionData" type="ns_p:ThresholdDescriptionDataType"/>
+    <xs:complexType name="ThresholdDescriptionDataElementsType">
+        <xs:sequence>
+            <xs:element name="thresholdId" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element name="thresholdType" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="unit" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="scopeType" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="label" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="thresholdDescriptionDataElements" type="ns_p:ThresholdDescriptionDataElementsType"/>
+    <xs:complexType name="ThresholdDescriptionListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:thresholdDescriptionData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="thresholdDescriptionListData" type="ns_p:ThresholdDescriptionListDataType"/>
+    <xs:complexType name="ThresholdDescriptionListDataSelectorsType">
+        <xs:sequence>
+            <xs:element name="thresholdId" minOccurs="0" type="ns_p:ThresholdIdType"/>
+            <xs:element minOccurs="0" name="scopeType" type="ns_p:ScopeTypeType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="thresholdDescriptionListDataSelectors" type="ns_p:ThresholdDescriptionListDataSelectorsType"/>
+</xs:schema>

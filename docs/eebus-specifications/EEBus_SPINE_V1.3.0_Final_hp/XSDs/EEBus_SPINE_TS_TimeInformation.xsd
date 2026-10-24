@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Smart Premises Interoperable Neutral-Message Exchange (SPINE)
+    Version 1.3.0 (final)
+    2023-08-31
+    Copyright (c) 2023 EEBus Initiative e.V.  All Rights Reserved.
+    Source: https://www.eebus.org/en/specifications/
+-->
+<xs:schema xmlns:ns_p="http://docs.eebus.org/spine/xsd/v1" xmlns:xs="http://www.w3.org/2001/XMLSchema"
+    targetNamespace="http://docs.eebus.org/spine/xsd/v1" version="1.3.0" blockDefault="#all" elementFormDefault="qualified">
+    <xs:annotation>
+        <xs:documentation>EEBus SPINE Specification schema. Copyright 2023 EEBus Initiative e.V.  All rights reserved.</xs:documentation>
+    </xs:annotation>
+    <xs:include schemaLocation="EEBus_SPINE_TS_CommonDataTypes.xsd"/>
+    <xs:complexType name="TimeInformationDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="utc" type="xs:dateTime"/>
+            <xs:element minOccurs="0" name="utcOffset" type="xs:duration"/>
+            <xs:element minOccurs="0" name="dayOfWeek" type="ns_p:DayOfWeekType"/>
+            <xs:element minOccurs="0" name="calendarWeek" type="ns_p:CalendarWeekType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="timeInformationData" type="ns_p:TimeInformationDataType"/>
+    <xs:complexType name="TimeInformationDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="utc" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="utcOffset" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="dayOfWeek" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="calendarWeek" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="timeInformationDataElements" type="ns_p:TimeInformationDataElementsType"/>
+    <xs:complexType name="TimeDistributorDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="isTimeDistributor" type="xs:boolean"/>
+            <xs:element minOccurs="0" name="distributorPriority" type="xs:unsignedInt"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="timeDistributorData" type="ns_p:TimeDistributorDataType"/>
+    <xs:complexType name="TimeDistributorDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="isTimeDistributor" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="distributorPriority" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="timeDistributorDataElements" type="ns_p:TimeDistributorDataElementsType"/>
+    <xs:complexType name="TimePrecisionDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="isSynchronised" type="xs:boolean"/>
+            <xs:element minOccurs="0" name="lastSyncAt" type="xs:dateTime"/>
+            <xs:element minOccurs="0" name="clockDrift" type="xs:integer"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="timePrecisionData" type="ns_p:TimePrecisionDataType"/>
+    <xs:complexType name="TimePrecisionDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="isSynchronised" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="lastSyncAt" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="clockDrift" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="timePrecisionDataElements" type="ns_p:TimePrecisionDataElementsType"/>
+    <xs:complexType name="TimeDistributorEnquiryCallType"/>
+    <xs:element name="timeDistributorEnquiryCall" type="ns_p:TimeDistributorEnquiryCallType"/>
+    <xs:complexType name="TimeDistributorEnquiryCallElementsType"/>
+    <xs:element name="timeDistributorEnquiryCallElements" type="ns_p:TimeDistributorEnquiryCallElementsType"/>
+</xs:schema>

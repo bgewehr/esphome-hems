@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:ship="http://docs.eebus.org/ship/xsd/v1"
+    xmlns:xs="http://www.w3.org/2001/XMLSchema"
+    targetNamespace="http://docs.eebus.org/ship/xsd/v1"
+    version="1.0.1" blockDefault="#all" elementFormDefault="qualified">
+    <xs:group name="MessageValueGroup">
+        <xs:choice>
+            <xs:group ref="ship:MsgTypeInitGroup"/>
+            <xs:group ref="ship:MsgTypeControlGroup"/>
+            <xs:group ref="ship:MsgTypeDataGroup"/>
+            <xs:group ref="ship:MsgTypeEndGroup"/>
+        </xs:choice>
+    </xs:group>
+    <xs:group name="MsgTypeInitGroup">
+        <xs:annotation>
+            <xs:documentation>MSG_TYPE=init; this is just a placeholder here - the real message is defined in the specification (text).</xs:documentation>
+        </xs:annotation>
+        <xs:sequence>
+            <xs:element name="__cmi__">
+                <xs:annotation>
+                    <xs:documentation>This is just a placeholder for the "CMI" message! See specification for details.</xs:documentation>
+                </xs:annotation>
+            </xs:element>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="MsgTypeControlGroup">
+        <xs:annotation>
+            <xs:documentation>MSG_TYPE=control</xs:documentation>
+        </xs:annotation>
+        <xs:choice>
+            <xs:element ref="ship:connectionHello"/>
+            <xs:element ref="ship:messageProtocolHandshake"/>
+            <xs:element ref="ship:messageProtocolHandshakeError"/>
+            <xs:element ref="ship:connectionPinState"/>
+            <xs:element ref="ship:connectionPinInput"/>
+            <xs:element ref="ship:connectionPinError"/>
+            <xs:element ref="ship:accessMethodsRequest"/>
+            <xs:element ref="ship:accessMethods"/>
+        </xs:choice>
+    </xs:group>
+    <xs:group name="MsgTypeDataGroup">
+        <xs:annotation>
+            <xs:documentation>MSG_TYPE=data</xs:documentation>
+        </xs:annotation>
+        <xs:choice>
+            <xs:element ref="ship:data"/>
+        </xs:choice>
+    </xs:group>
+    <xs:group name="MsgTypeEndGroup">
+        <xs:annotation>
+            <xs:documentation>MSG_TYPE=end</xs:documentation>
+        </xs:annotation>
+        <xs:choice>
+            <xs:element ref="ship:connectionClose"/>
+        </xs:choice>
+    </xs:group>
+    <xs:simpleType name="ConnectionHelloPhaseType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="pending"/>
+            <xs:enumeration value="ready"/>
+            <xs:enumeration value="aborted"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:complexType name="ConnectionHelloType">
+        <xs:sequence>
+            <xs:element name="phase" type="ship:ConnectionHelloPhaseType"/>
+            <xs:element minOccurs="0" name="waiting" type="xs:unsignedInt"/>
+            <xs:element name="prolongationRequest" minOccurs="0" type="xs:boolean">
+                <xs:annotation>
+                    <xs:documentation>true=request waiting prolongation</xs:documentation>
+                </xs:annotation>
+            </xs:element>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="connectionHello" type="ship:ConnectionHelloType"> </xs:element>
+    <xs:simpleType name="MessageProtocolFormatType">
+        <xs:restriction base="xs:string"/>
+    </xs:simpleType>
+    <xs:complexType name="MessageProtocolFormatsType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" name="format" type="ship:MessageProtocolFormatType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:simpleType name="ProtocolHandshakeTypeType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="announceMax"/>
+            <xs:enumeration value="select"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:complexType name="MessageProtocolHandshakeType">
+        <xs:sequence>
+            <xs:element name="handshakeType" type="ship:ProtocolHandshakeTypeType"/>
+            <xs:element name="version">
+                <xs:complexType>
+                    <xs:sequence>
+                        <xs:element name="major" type="xs:unsignedShort"/>
+                        <xs:element name="minor" type="xs:unsignedShort"/>
+                    </xs:sequence>
+                </xs:complexType>
+            </xs:element>
+            <xs:element name="formats" type="ship:MessageProtocolFormatsType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="messageProtocolHandshake" type="ship:MessageProtocolHandshakeType"> </xs:element>
+    <xs:simpleType name="MessageProtocolHandshakeErrorErrorType">
+        <xs:restriction base="xs:unsignedByte"/>
+    </xs:simpleType>
+    <xs:complexType name="MessageProtocolHandshakeErrorType">
+        <xs:sequence>
+            <xs:element name="error" type="ship:MessageProtocolHandshakeErrorErrorType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="messageProtocolHandshakeError" type="ship:MessageProtocolHandshakeErrorType"/>
+    <xs:simpleType name="PinStateType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="required"/>
+            <xs:enumeration value="optional"/>
+            <xs:enumeration value="pinOk"/>
+            <xs:enumeration value="none"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="PinInputPermissionType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="busy"/>
+            <xs:enumeration value="ok"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:complexType name="ConnectionPinStateType">
+        <xs:sequence>
+            <xs:element name="pinState" type="ship:PinStateType"/>
+            <xs:element minOccurs="0" name="inputPermission" type="ship:PinInputPermissionType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="connectionPinState" type="ship:ConnectionPinStateType"> </xs:element>
+    <xs:simpleType name="PinValueType">
+        <xs:restriction base="xs:string">
+            <xs:pattern value="[0-9a-fA-F]{8,16}"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:complexType name="ConnectionPinInputType">
+        <xs:sequence>
+            <xs:element name="pin" type="ship:PinValueType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="connectionPinInput" type="ship:ConnectionPinInputType"> </xs:element>
+    <xs:simpleType name="ConnectionPinErrorErrorType">
+        <xs:restriction base="xs:unsignedByte"/>
+    </xs:simpleType>
+    <xs:complexType name="ConnectionPinErrorType">
+        <xs:sequence>
+            <xs:element name="error" type="ship:ConnectionPinErrorErrorType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="connectionPinError" type="ship:ConnectionPinErrorType"/>
+    <xs:simpleType name="ProtocolIdType">
+        <xs:restriction base="xs:string"/>
+    </xs:simpleType>
+    <xs:complexType name="HeaderType">
+        <xs:sequence>
+            <xs:element name="protocolId" type="ship:ProtocolIdType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="ExtensionType">
+        <xs:sequence>
+            <xs:element name="extensionId" type="xs:string" minOccurs="0"/>
+            <xs:element minOccurs="0" name="binary" type="xs:hexBinary"/>
+            <xs:element minOccurs="0" name="string" type="xs:string"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="DataType">
+        <xs:sequence>
+            <xs:element name="header" type="ship:HeaderType"/>
+            <xs:element name="payload" type="xs:anyType"/>
+            <xs:element minOccurs="0" name="extension" type="ship:ExtensionType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="data" type="ship:DataType"/>
+    <xs:simpleType name="ConnectionClosePhaseType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="announce"/>
+            <xs:enumeration value="confirm"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="ConnectionCloseReasonType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="unspecific"/>
+            <xs:enumeration value="removedConnection"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:complexType name="ConnectionCloseType">
+        <xs:sequence>
+            <xs:element name="phase" type="ship:ConnectionClosePhaseType"/>
+            <xs:element minOccurs="0" name="maxTime" type="xs:unsignedInt"/>
+            <xs:element minOccurs="0" name="reason" type="ship:ConnectionCloseReasonType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="connectionClose" type="ship:ConnectionCloseType"> </xs:element>
+    <xs:complexType name="AccessMethodsRequestType"/>
+    <xs:element name="accessMethodsRequest" type="ship:AccessMethodsRequestType"/>
+    <xs:complexType name="AccessMethodsType">
+        <xs:sequence>
+            <xs:element name="id" type="xs:string"/>
+            <xs:element minOccurs="0" name="dnsSd_mDns">
+                <xs:complexType>
+                    <xs:sequence/>
+                </xs:complexType>
+            </xs:element>
+            <xs:element minOccurs="0" name="dns">
+                <xs:complexType>
+                    <xs:sequence>
+                        <xs:element name="uri" type="xs:string"/>
+                    </xs:sequence>
+                </xs:complexType>
+            </xs:element>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="accessMethods" type="ship:AccessMethodsType"/>
+</xs:schema>

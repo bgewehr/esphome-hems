@@ -1,0 +1,308 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Smart Premises Interoperable Neutral-Message Exchange (SPINE)
+    Version 1.3.0 (final)
+    2023-08-31
+    Copyright (c) 2023 EEBus Initiative e.V.  All Rights Reserved.
+    Source: https://www.eebus.org/en/specifications/
+-->
+<xs:schema xmlns:ns_p="http://docs.eebus.org/spine/xsd/v1" xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://docs.eebus.org/spine/xsd/v1" version="1.3.0"
+    blockDefault="#all" elementFormDefault="qualified">
+    <xs:annotation>
+        <xs:documentation>EEBus SPINE Specification schema. Copyright 2023 EEBus Initiative e.V.  All rights reserved.</xs:documentation>
+    </xs:annotation>
+    <xs:include schemaLocation="EEBus_SPINE_TS_CommonDataTypes.xsd"/>
+    <xs:include schemaLocation="EEBus_SPINE_TS_Measurement.xsd"/>
+    <xs:simpleType name="ElectricalConnectionIdType">
+        <xs:restriction base="xs:unsignedInt"/>
+    </xs:simpleType>
+    <xs:simpleType name="ElectricalConnectionParameterIdType">
+        <xs:restriction base="xs:unsignedInt"/>
+    </xs:simpleType>
+    <xs:simpleType name="ElectricalConnectionMeasurandVariantType">
+        <xs:union memberTypes="ns_p:ElectricalConnectionMeasurandVariantEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="ElectricalConnectionMeasurandVariantEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="amplitude"/>
+            <xs:enumeration value="rms"/>
+            <xs:enumeration value="instantaneous"/>
+            <xs:enumeration value="angle"/>
+            <xs:enumeration value="cosPhi"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="ElectricalConnectionVoltageTypeType">
+        <xs:union memberTypes="ns_p:ElectricalConnectionVoltageTypeEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="ElectricalConnectionVoltageTypeEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="ac"/>
+            <xs:enumeration value="dc"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="ElectricalConnectionAcMeasurementTypeType">
+        <xs:union memberTypes="ns_p:ElectricalConnectionAcMeasurementTypeEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="ElectricalConnectionAcMeasurementTypeEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="real"/>
+            <xs:enumeration value="reactive"/>
+            <xs:enumeration value="apparent"/>
+            <xs:enumeration value="phase"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="ElectricalConnectionPhaseNameType">
+        <xs:union memberTypes="ns_p:ElectricalConnectionPhaseNameEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="ElectricalConnectionPhaseNameEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="a"/>
+            <xs:enumeration value="b"/>
+            <xs:enumeration value="c"/>
+            <xs:enumeration value="ab"/>
+            <xs:enumeration value="bc"/>
+            <xs:enumeration value="ac"/>
+            <xs:enumeration value="abc"/>
+            <xs:enumeration value="neutral"/>
+            <xs:enumeration value="ground"/>
+            <xs:enumeration value="none"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="ElectricalConnectionConnectionPointType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="grid"/>
+            <xs:enumeration value="home"/>
+            <xs:enumeration value="pv"/>
+            <xs:enumeration value="sd"/>
+            <xs:enumeration value="other"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="ElectricalConnectionCharacteristicIdType">
+        <xs:restriction base="xs:unsignedInt"/>
+    </xs:simpleType>
+    <xs:simpleType name="ElectricalConnectionCharacteristicContextType">
+        <xs:union memberTypes="ns_p:ElectricalConnectionCharacteristicContextEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="ElectricalConnectionCharacteristicContextEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="device"/>
+            <xs:enumeration value="entity"/>
+            <xs:enumeration value="inverter"/>
+            <xs:enumeration value="pvString"/>
+            <xs:enumeration value="battery"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="ElectricalConnectionCharacteristicTypeType">
+        <xs:union memberTypes="ns_p:ElectricalConnectionCharacteristicTypeEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="ElectricalConnectionCharacteristicTypeEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="powerConsumptionMin"/>
+            <xs:enumeration value="powerConsumptionMax"/>
+            <xs:enumeration value="powerConsumptionNominalMin"/>
+            <xs:enumeration value="powerConsumptionNominalMax"/>
+            <xs:enumeration value="powerProductionMin"/>
+            <xs:enumeration value="powerProductionMax"/>
+            <xs:enumeration value="powerProductionNominalMin"/>
+            <xs:enumeration value="powerProductionNominalMax"/>
+            <xs:enumeration value="energyCapacityNominalMax"/>
+            <xs:enumeration value="contractualConsumptionNominalMax"/>
+            <xs:enumeration value="contractualProductionNominalMax"/>
+            <xs:enumeration value="apparentPowerProductionNominalMax"/>
+            <xs:enumeration value="apparentPowerConsumptionNominalMax"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:complexType name="ElectricalConnectionParameterDescriptionDataType">
+        <xs:sequence>
+            <xs:element name="electricalConnectionId" minOccurs="0" type="ns_p:ElectricalConnectionIdType"/>
+            <xs:element name="parameterId" minOccurs="0" type="ns_p:ElectricalConnectionParameterIdType"/>
+            <xs:element minOccurs="0" name="measurementId" type="ns_p:MeasurementIdType"/>
+            <xs:element minOccurs="0" name="voltageType" type="ns_p:ElectricalConnectionVoltageTypeType"/>
+            <xs:element name="acMeasuredPhases" minOccurs="0" type="ns_p:ElectricalConnectionPhaseNameType"/>
+            <xs:element name="acMeasuredInReferenceTo" minOccurs="0" type="ns_p:ElectricalConnectionPhaseNameType"/>
+            <xs:element name="acMeasurementType" type="ns_p:ElectricalConnectionAcMeasurementTypeType" minOccurs="0"/>
+            <xs:element name="acMeasurementVariant" minOccurs="0" type="ns_p:ElectricalConnectionMeasurandVariantType"/>
+            <xs:element minOccurs="0" name="acMeasuredHarmonic" type="xs:unsignedByte"/>
+            <xs:element minOccurs="0" name="scopeType" type="ns_p:ScopeTypeType"/>
+            <xs:element minOccurs="0" name="label" type="ns_p:LabelType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:DescriptionType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="electricalConnectionParameterDescriptionData" type="ns_p:ElectricalConnectionParameterDescriptionDataType"/>
+    <xs:complexType name="ElectricalConnectionParameterDescriptionDataElementsType">
+        <xs:sequence>
+            <xs:element name="electricalConnectionId" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element name="parameterId" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="measurementId" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="voltageType" type="ns_p:ElementTagType"/>
+            <xs:element name="acMeasuredPhases" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element name="acMeasuredInReferenceTo" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element name="acMeasurementType" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element name="acMeasurementVariant" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="acMeasuredHarmonic" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="scopeType" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="label" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="electricalConnectionParameterDescriptionDataElements" type="ns_p:ElectricalConnectionParameterDescriptionDataElementsType"/>
+    <xs:complexType name="ElectricalConnectionParameterDescriptionListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:electricalConnectionParameterDescriptionData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="electricalConnectionParameterDescriptionListData" type="ns_p:ElectricalConnectionParameterDescriptionListDataType"/>
+    <xs:complexType name="ElectricalConnectionParameterDescriptionListDataSelectorsType">
+        <xs:sequence>
+            <xs:element name="electricalConnectionId" minOccurs="0" type="ns_p:ElectricalConnectionIdType"/>
+            <xs:element name="parameterId" minOccurs="0" type="ns_p:ElectricalConnectionParameterIdType"/>
+            <xs:element minOccurs="0" name="measurementId" type="ns_p:MeasurementIdType"/>
+            <xs:element minOccurs="0" name="scopeType" type="ns_p:ScopeTypeType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="electricalConnectionParameterDescriptionListDataSelectors" type="ns_p:ElectricalConnectionParameterDescriptionListDataSelectorsType"/>
+    <xs:complexType name="ElectricalConnectionPermittedValueSetDataType">
+        <xs:sequence>
+            <xs:element name="electricalConnectionId" minOccurs="0" type="ns_p:ElectricalConnectionIdType"/>
+            <xs:element name="parameterId" minOccurs="0" type="ns_p:ElectricalConnectionParameterIdType"/>
+            <xs:element minOccurs="0" name="permittedValueSet" type="ns_p:ScaledNumberSetType" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="electricalConnectionPermittedValueSetData" type="ns_p:ElectricalConnectionPermittedValueSetDataType"/>
+    <xs:complexType name="ElectricalConnectionPermittedValueSetDataElementsType">
+        <xs:sequence>
+            <xs:element name="electricalConnectionId" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element name="parameterId" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="permittedValueSet" type="ns_p:ScaledNumberSetElementsType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="electricalConnectionPermittedValueSetDataElements" type="ns_p:ElectricalConnectionPermittedValueSetDataElementsType"/>
+    <xs:complexType name="ElectricalConnectionPermittedValueSetListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:electricalConnectionPermittedValueSetData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="electricalConnectionPermittedValueSetListData" type="ns_p:ElectricalConnectionPermittedValueSetListDataType"/>
+    <xs:complexType name="ElectricalConnectionPermittedValueSetListDataSelectorsType">
+        <xs:sequence>
+            <xs:element name="electricalConnectionId" minOccurs="0" type="ns_p:ElectricalConnectionIdType"/>
+            <xs:element name="parameterId" minOccurs="0" type="ns_p:ElectricalConnectionParameterIdType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="electricalConnectionPermittedValueSetListDataSelectors" type="ns_p:ElectricalConnectionPermittedValueSetListDataSelectorsType"/>
+    <xs:complexType name="ElectricalConnectionCharacteristicDataType">
+        <xs:sequence>
+            <xs:element name="electricalConnectionId" minOccurs="0" type="ns_p:ElectricalConnectionIdType"/>
+            <xs:element name="parameterId" minOccurs="0" type="ns_p:ElectricalConnectionParameterIdType"/>
+            <xs:element name="characteristicId" minOccurs="0" type="ns_p:ElectricalConnectionCharacteristicIdType"/>
+            <xs:element name="characteristicContext" minOccurs="0" type="ns_p:ElectricalConnectionCharacteristicContextType"/>
+            <xs:element name="characteristicType" minOccurs="0" type="ns_p:ElectricalConnectionCharacteristicTypeType"/>
+            <xs:element name="value" minOccurs="0" type="ns_p:ScaledNumberType"/>
+            <xs:element minOccurs="0" name="unit" type="ns_p:UnitOfMeasurementType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="electricalConnectionCharacteristicData" type="ns_p:ElectricalConnectionCharacteristicDataType"/>
+    <xs:complexType name="ElectricalConnectionCharacteristicDataElementsType">
+        <xs:sequence>
+            <xs:element name="electricalConnectionId" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element name="parameterId" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element name="characteristicId" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element name="characteristicContext" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element name="characteristicType" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element name="value" minOccurs="0" type="ns_p:ScaledNumberElementsType"/>
+            <xs:element minOccurs="0" name="unit" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="electricalConnectionCharacteristicDataElements" type="ns_p:ElectricalConnectionCharacteristicDataElementsType"/>
+    <xs:complexType name="ElectricalConnectionCharacteristicListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:electricalConnectionCharacteristicData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="electricalConnectionCharacteristicListData" type="ns_p:ElectricalConnectionCharacteristicListDataType"/>
+    <xs:complexType name="ElectricalConnectionCharacteristicListDataSelectorsType">
+        <xs:sequence>
+            <xs:element name="electricalConnectionId" minOccurs="0" type="ns_p:ElectricalConnectionIdType"/>
+            <xs:element name="parameterId" minOccurs="0" type="ns_p:ElectricalConnectionParameterIdType"/>
+            <xs:element name="characteristicId" minOccurs="0" type="ns_p:ElectricalConnectionCharacteristicIdType"/>
+            <xs:element name="characteristicContext" minOccurs="0" type="ns_p:ElectricalConnectionCharacteristicContextType"/>
+            <xs:element name="characteristicType" minOccurs="0" type="ns_p:ElectricalConnectionCharacteristicTypeType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="electricalConnectionCharacteristicListDataSelectors" type="ns_p:ElectricalConnectionCharacteristicListDataSelectorsType"/>
+    <xs:complexType name="ElectricalConnectionStateDataType">
+        <xs:sequence>
+            <xs:element name="electricalConnectionId" minOccurs="0" type="ns_p:ElectricalConnectionIdType"/>
+            <xs:element minOccurs="0" name="timestamp" type="ns_p:AbsoluteOrRelativeTimeType"/>
+            <xs:element name="currentEnergyMode" minOccurs="0" type="ns_p:EnergyModeType"/>
+            <xs:element minOccurs="0" name="consumptionTime" type="xs:duration"/>
+            <xs:element minOccurs="0" name="productionTime" type="xs:duration"/>
+            <xs:element minOccurs="0" name="totalConsumptionTime" type="xs:duration"/>
+            <xs:element minOccurs="0" name="totalProductionTime" type="xs:duration"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="electricalConnectionStateData" type="ns_p:ElectricalConnectionStateDataType"/>
+    <xs:complexType name="ElectricalConnectionStateDataElementsType">
+        <xs:sequence>
+            <xs:element name="electricalConnectionId" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="timestamp" type="ns_p:ElementTagType"/>
+            <xs:element name="currentEnergyMode" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="consumptionTime" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="productionTime" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="totalConsumptionTime" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="totalProductionTime" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="electricalConnectionStateDataElements" type="ns_p:ElectricalConnectionStateDataElementsType"/>
+    <xs:complexType name="ElectricalConnectionStateListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:electricalConnectionStateData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="electricalConnectionStateListData" type="ns_p:ElectricalConnectionStateListDataType"/>
+    <xs:complexType name="ElectricalConnectionStateListDataSelectorsType">
+        <xs:sequence>
+            <xs:element name="electricalConnectionId" minOccurs="0" type="ns_p:ElectricalConnectionIdType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="electricalConnectionStateListDataSelectors" type="ns_p:ElectricalConnectionStateListDataSelectorsType"/>
+    <xs:complexType name="ElectricalConnectionDescriptionDataType">
+        <xs:sequence>
+            <xs:element name="electricalConnectionId" minOccurs="0" type="ns_p:ElectricalConnectionIdType"/>
+            <xs:element name="powerSupplyType" type="ns_p:ElectricalConnectionVoltageTypeType" minOccurs="0"/>
+            <xs:element name="acConnectedPhases" minOccurs="0" type="xs:unsignedInt"/>
+            <xs:element minOccurs="0" name="acRmsPeriodDuration" type="xs:duration"/>
+            <xs:element minOccurs="0" name="positiveEnergyDirection" type="ns_p:EnergyDirectionType"/>
+            <xs:element minOccurs="0" name="scopeType" type="ns_p:ScopeTypeType"/>
+            <xs:element minOccurs="0" name="label" type="ns_p:LabelType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:DescriptionType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="electricalConnectionDescriptionData" type="ns_p:ElectricalConnectionDescriptionDataType"/>
+    <xs:complexType name="ElectricalConnectionDescriptionDataElementsType">
+        <xs:sequence>
+            <xs:element name="electricalConnectionId" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element name="powerSupplyType" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element name="acConnectedPhases" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="acRmsPeriodDuration" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="positiveEnergyDirection" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="scopeType" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="label" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="electricalConnectionDescriptionDataElements" type="ns_p:ElectricalConnectionDescriptionDataElementsType"/>
+    <xs:complexType name="ElectricalConnectionDescriptionListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:electricalConnectionDescriptionData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="electricalConnectionDescriptionListData" type="ns_p:ElectricalConnectionDescriptionListDataType"/>
+    <xs:complexType name="ElectricalConnectionDescriptionListDataSelectorsType">
+        <xs:sequence>
+            <xs:element name="electricalConnectionId" minOccurs="0" type="ns_p:ElectricalConnectionIdType"/>
+            <xs:element minOccurs="0" name="scopeType" type="ns_p:ScopeTypeType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="electricalConnectionDescriptionListDataSelectors" type="ns_p:ElectricalConnectionDescriptionListDataSelectorsType"/>
+</xs:schema>

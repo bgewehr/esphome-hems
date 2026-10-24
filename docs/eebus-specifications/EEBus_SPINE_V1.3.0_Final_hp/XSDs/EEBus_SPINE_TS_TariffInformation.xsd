@@ -1,0 +1,504 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Smart Premises Interoperable Neutral-Message Exchange (SPINE)
+    Version 1.3.0 (final)
+    2023-08-31
+    Copyright (c) 2023 EEBus Initiative e.V.  All Rights Reserved.
+    Source: https://www.eebus.org/en/specifications/
+-->
+<xs:schema xmlns:ns_p="http://docs.eebus.org/spine/xsd/v1" xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://docs.eebus.org/spine/xsd/v1" version="1.3.0"
+    blockDefault="#all" elementFormDefault="qualified">
+    <xs:annotation>
+        <xs:documentation>EEBus SPINE Specification schema. Copyright 2023 EEBus Initiative e.V.  All rights reserved.</xs:documentation>
+    </xs:annotation>
+    <xs:include schemaLocation="EEBus_SPINE_TS_CommonDataTypes.xsd"/>
+    <xs:include schemaLocation="EEBus_SPINE_TS_Measurement.xsd"/>
+    <xs:include schemaLocation="EEBus_SPINE_TS_TimeTable.xsd"/>
+    <xs:simpleType name="TariffIdType">
+        <xs:restriction base="xs:unsignedInt"/>
+    </xs:simpleType>
+    <xs:simpleType name="TariffCountType">
+        <xs:restriction base="ns_p:TariffIdType"/>
+    </xs:simpleType>
+    <xs:simpleType name="TierBoundaryIdType">
+        <xs:restriction base="xs:unsignedInt"/>
+    </xs:simpleType>
+    <xs:simpleType name="TierBoundaryCountType">
+        <xs:restriction base="ns_p:TierBoundaryIdType"/>
+    </xs:simpleType>
+    <xs:simpleType name="TierBoundaryTypeType">
+        <xs:union memberTypes="ns_p:TierBoundaryTypeEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="TierBoundaryTypeEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="powerBoundary"/>
+            <xs:enumeration value="energyBoundary"/>
+            <xs:enumeration value="countBoundary"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="CommodityIdType">
+        <xs:restriction base="xs:unsignedInt"/>
+    </xs:simpleType>
+    <xs:simpleType name="TierIdType">
+        <xs:restriction base="xs:unsignedInt"/>
+    </xs:simpleType>
+    <xs:simpleType name="TierCountType">
+        <xs:restriction base="ns_p:TierIdType"/>
+    </xs:simpleType>
+    <xs:simpleType name="TierTypeType">
+        <xs:union memberTypes="ns_p:TierTypeEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="TierTypeEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="fixedCost"/>
+            <xs:enumeration value="dynamicCost"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="IncentiveIdType">
+        <xs:restriction base="xs:unsignedInt"/>
+    </xs:simpleType>
+    <xs:simpleType name="IncentiveCountType">
+        <xs:restriction base="ns_p:IncentiveIdType"/>
+    </xs:simpleType>
+    <xs:simpleType name="IncentiveTypeType">
+        <xs:union memberTypes="ns_p:IncentiveTypeEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="IncentiveTypeEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="absoluteCost"/>
+            <xs:enumeration value="relativeCost"/>
+            <xs:enumeration value="renewableEnergyPercentage"/>
+            <xs:enumeration value="co2Emission"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="IncentivePriorityType">
+        <xs:restriction base="xs:unsignedInt"/>
+    </xs:simpleType>
+    <xs:simpleType name="IncentiveValueTypeType">
+        <xs:union memberTypes="ns_p:IncentiveValueTypeEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="IncentiveValueTypeEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="value"/>
+            <xs:enumeration value="averageValue"/>
+            <xs:enumeration value="minValue"/>
+            <xs:enumeration value="maxValue"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:complexType name="TariffOverallConstraintsDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="maxTariffCount" type="ns_p:TariffCountType"/>
+            <xs:element minOccurs="0" name="maxBoundaryCount" type="ns_p:TierBoundaryCountType"/>
+            <xs:element minOccurs="0" name="maxTierCount" type="ns_p:TierCountType"/>
+            <xs:element minOccurs="0" name="maxIncentiveCount" type="ns_p:IncentiveCountType"/>
+            <xs:element minOccurs="0" name="maxBoundariesPerTariff" type="ns_p:TierBoundaryCountType"/>
+            <xs:element minOccurs="0" name="maxTiersPerTariff" type="ns_p:TierCountType"/>
+            <xs:element minOccurs="0" name="maxBoundariesPerTier" type="ns_p:TierBoundaryCountType"/>
+            <xs:element minOccurs="0" name="maxIncentivesPerTier" type="ns_p:IncentiveCountType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="tariffOverallConstraintsData" type="ns_p:TariffOverallConstraintsDataType"/>
+    <xs:complexType name="TariffOverallConstraintsDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="maxTariffCount" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="maxBoundaryCount" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="maxTierCount" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="maxIncentiveCount" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="maxBoundariesPerTariff" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="maxTiersPerTariff" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="maxBoundariesPerTier" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="maxIncentivesPerTier" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="tariffOverallConstraintsDataElements" type="ns_p:TariffOverallConstraintsDataElementsType"/>
+    <xs:complexType name="TariffDataType">
+        <xs:sequence>
+            <xs:element name="tariffId" type="ns_p:TariffIdType" minOccurs="0"/>
+            <xs:element name="activeTierId" type="ns_p:TierIdType" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="tariffData" type="ns_p:TariffDataType"/>
+    <xs:complexType name="TariffDataElementsType">
+        <xs:sequence>
+            <xs:element name="tariffId" type="ns_p:ElementTagType" minOccurs="0"/>
+            <xs:element name="activeTierId" type="ns_p:ElementTagType" minOccurs="0"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="tariffDataElements" type="ns_p:TariffDataElementsType"/>
+    <xs:complexType name="TariffListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:tariffData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="tariffListData" type="ns_p:TariffListDataType"/>
+    <xs:complexType name="TariffListDataSelectorsType">
+        <xs:sequence>
+            <xs:element name="tariffId" type="ns_p:TariffIdType" minOccurs="0"/>
+            <xs:element name="activeTierId" type="ns_p:TierIdType" minOccurs="0"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="tariffListDataSelectors" type="ns_p:TariffListDataSelectorsType"/>
+    <xs:complexType name="TariffTierRelationDataType">
+        <xs:sequence>
+            <xs:element name="tariffId" type="ns_p:TariffIdType" minOccurs="0"/>
+            <xs:element name="tierId" maxOccurs="unbounded" type="ns_p:TierIdType" minOccurs="0"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="tariffTierRelationData" type="ns_p:TariffTierRelationDataType"/>
+    <xs:complexType name="TariffTierRelationDataElementsType">
+        <xs:sequence>
+            <xs:element name="tariffId" type="ns_p:ElementTagType" minOccurs="0"/>
+            <xs:element name="tierId" type="ns_p:ElementTagType" minOccurs="0"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="tariffTierRelationDataElements" type="ns_p:TariffTierRelationDataElementsType"/>
+    <xs:complexType name="TariffTierRelationListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:tariffTierRelationData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="tariffTierRelationListData" type="ns_p:TariffTierRelationListDataType"/>
+    <xs:complexType name="TariffTierRelationListDataSelectorsType">
+        <xs:sequence>
+            <xs:element name="tariffId" type="ns_p:TariffIdType" minOccurs="0"/>
+            <xs:element name="tierId" type="ns_p:TierIdType" minOccurs="0"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="tariffTierRelationListDataSelectors" type="ns_p:TariffTierRelationListDataSelectorsType"/>
+    <xs:complexType name="TariffBoundaryRelationDataType">
+        <xs:sequence>
+            <xs:element name="tariffId" type="ns_p:TariffIdType" minOccurs="0"/>
+            <xs:element minOccurs="0" name="boundaryId" type="ns_p:TierBoundaryIdType" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="tariffBoundaryRelationData" type="ns_p:TariffBoundaryRelationDataType"/>
+    <xs:complexType name="TariffBoundaryRelationDataElementsType">
+        <xs:sequence>
+            <xs:element name="tariffId" type="ns_p:ElementTagType" minOccurs="0"/>
+            <xs:element name="boundaryId" type="ns_p:ElementTagType" minOccurs="0"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="tariffBoundaryRelationDataElements" type="ns_p:TariffBoundaryRelationDataElementsType"/>
+    <xs:complexType name="TariffBoundaryRelationListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:tariffBoundaryRelationData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="tariffBoundaryRelationListData" type="ns_p:TariffBoundaryRelationListDataType"/>
+    <xs:complexType name="TariffBoundaryRelationListDataSelectorsType">
+        <xs:sequence>
+            <xs:element name="tariffId" type="ns_p:TariffIdType" minOccurs="0"/>
+            <xs:element minOccurs="0" name="boundaryId" type="ns_p:TierBoundaryIdType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="tariffBoundaryRelationListDataSelectors" type="ns_p:TariffBoundaryRelationListDataSelectorsType"/>
+    <xs:complexType name="TariffDescriptionDataType">
+        <xs:sequence>
+            <xs:element name="tariffId" type="ns_p:TariffIdType" minOccurs="0"/>
+            <xs:element name="commodityId" type="ns_p:CommodityIdType" minOccurs="0"/>
+            <xs:element name="measurementId" type="ns_p:MeasurementIdType" minOccurs="0"/>
+            <xs:element name="tariffWriteable" type="xs:boolean" minOccurs="0"/>
+            <xs:element name="updateRequired" type="xs:boolean" minOccurs="0"/>
+            <xs:element minOccurs="0" name="scopeType" type="ns_p:ScopeTypeType"/>
+            <xs:element name="label" type="ns_p:LabelType" minOccurs="0"/>
+            <xs:element name="description" type="ns_p:DescriptionType" minOccurs="0"/>
+            <xs:element name="slotIdSupport" type="xs:boolean" minOccurs="0"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="tariffDescriptionData" type="ns_p:TariffDescriptionDataType"/>
+    <xs:complexType name="TariffDescriptionDataElementsType">
+        <xs:sequence>
+            <xs:element name="tariffId" type="ns_p:ElementTagType" minOccurs="0"/>
+            <xs:element name="commodityId" type="ns_p:ElementTagType" minOccurs="0"/>
+            <xs:element name="measurementId" type="ns_p:ElementTagType" minOccurs="0"/>
+            <xs:element name="tariffWriteable" type="ns_p:ElementTagType" minOccurs="0"/>
+            <xs:element name="updateRequired" type="ns_p:ElementTagType" minOccurs="0"/>
+            <xs:element minOccurs="0" name="scopeType" type="ns_p:ElementTagType"/>
+            <xs:element name="label" type="ns_p:ElementTagType" minOccurs="0"/>
+            <xs:element name="description" type="ns_p:ElementTagType" minOccurs="0"/>
+            <xs:element name="slotIdSupport" type="ns_p:ElementTagType" minOccurs="0"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="tariffDescriptionDataElements" type="ns_p:TariffDescriptionDataElementsType"/>
+    <xs:complexType name="TariffDescriptionListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:tariffDescriptionData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="tariffDescriptionListData" type="ns_p:TariffDescriptionListDataType"/>
+    <xs:complexType name="TariffDescriptionListDataSelectorsType">
+        <xs:sequence>
+            <xs:element name="tariffId" type="ns_p:TariffIdType" minOccurs="0"/>
+            <xs:element name="commodityId" type="ns_p:CommodityIdType" minOccurs="0"/>
+            <xs:element name="measurementId" type="ns_p:MeasurementIdType" minOccurs="0"/>
+            <xs:element minOccurs="0" name="scopeType" type="ns_p:ScopeTypeType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="tariffDescriptionListDataSelectors" type="ns_p:TariffDescriptionListDataSelectorsType"/>
+    <xs:complexType name="TierBoundaryDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="boundaryId" type="ns_p:TierBoundaryIdType"/>
+            <xs:element minOccurs="0" name="timePeriod" type="ns_p:TimePeriodType"/>
+            <xs:element minOccurs="0" name="timeTableId" type="ns_p:TimeTableIdType"/>
+            <xs:element minOccurs="0" name="lowerBoundaryValue" type="ns_p:ScaledNumberType"/>
+            <xs:element minOccurs="0" name="upperBoundaryValue" type="ns_p:ScaledNumberType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="tierBoundaryData" type="ns_p:TierBoundaryDataType"/>
+    <xs:complexType name="TierBoundaryDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="boundaryId" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="timePeriod" type="ns_p:TimePeriodElementsType"/>
+            <xs:element minOccurs="0" name="timeTableId" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="lowerBoundaryValue" type="ns_p:ScaledNumberElementsType"/>
+            <xs:element minOccurs="0" name="upperBoundaryValue" type="ns_p:ScaledNumberElementsType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="tierBoundaryDataElements" type="ns_p:TierBoundaryDataElementsType"/>
+    <xs:complexType name="TierBoundaryListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:tierBoundaryData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="tierBoundaryListData" type="ns_p:TierBoundaryListDataType"/>
+    <xs:complexType name="TierBoundaryListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="boundaryId" type="ns_p:TierBoundaryIdType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="tierBoundaryListDataSelectors" type="ns_p:TierBoundaryListDataSelectorsType"/>
+    <xs:complexType name="TierBoundaryDescriptionDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="boundaryId" type="ns_p:TierBoundaryIdType"/>
+            <xs:element minOccurs="0" name="boundaryType" type="ns_p:TierBoundaryTypeType"/>
+            <xs:element minOccurs="0" name="validForTierId" type="ns_p:TierIdType"/>
+            <xs:element minOccurs="0" name="switchToTierIdWhenLower" type="ns_p:TierIdType"/>
+            <xs:element minOccurs="0" name="switchToTierIdWhenHigher" type="ns_p:TierIdType"/>
+            <xs:element minOccurs="0" name="boundaryUnit" type="ns_p:UnitOfMeasurementType"/>
+            <xs:element minOccurs="0" name="label" type="ns_p:LabelType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:DescriptionType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="tierBoundaryDescriptionData" type="ns_p:TierBoundaryDescriptionDataType"/>
+    <xs:complexType name="TierBoundaryDescriptionDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="boundaryId" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="boundaryType" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="validForTierId" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="switchToTierIdWhenLower" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="switchToTierIdWhenHigher" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="boundaryUnit" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="label" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="description" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="tierBoundaryDescriptionDataElements" type="ns_p:TierBoundaryDescriptionDataElementsType"/>
+    <xs:complexType name="TierBoundaryDescriptionListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:tierBoundaryDescriptionData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="tierBoundaryDescriptionListData" type="ns_p:TierBoundaryDescriptionListDataType"/>
+    <xs:complexType name="TierBoundaryDescriptionListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="boundaryId" type="ns_p:TierBoundaryIdType"/>
+            <xs:element minOccurs="0" name="boundaryType" type="ns_p:TierBoundaryTypeType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="tierBoundaryDescriptionListDataSelectors" type="ns_p:TierBoundaryDescriptionListDataSelectorsType"/>
+    <xs:complexType name="CommodityDataType">
+        <xs:sequence>
+            <xs:element name="commodityId" type="ns_p:CommodityIdType" minOccurs="0"/>
+            <xs:element name="commodityType" type="ns_p:CommodityTypeType" minOccurs="0"/>
+            <xs:element name="positiveEnergyDirection" type="ns_p:EnergyDirectionType" minOccurs="0"/>
+            <xs:element name="label" type="ns_p:LabelType" minOccurs="0"/>
+            <xs:element name="description" type="ns_p:DescriptionType" minOccurs="0"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="commodityData" type="ns_p:CommodityDataType"/>
+    <xs:complexType name="CommodityDataElementsType">
+        <xs:sequence>
+            <xs:element name="commodityId" type="ns_p:ElementTagType" minOccurs="0"/>
+            <xs:element name="commodityType" type="ns_p:ElementTagType" minOccurs="0"/>
+            <xs:element name="positiveEnergyDirection" type="ns_p:ElementTagType" minOccurs="0"/>
+            <xs:element name="label" type="ns_p:ElementTagType" minOccurs="0"/>
+            <xs:element name="description" type="ns_p:ElementTagType" minOccurs="0"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="commodityDataElements" type="ns_p:CommodityDataElementsType"/>
+    <xs:complexType name="CommodityListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:commodityData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="commodityListData" type="ns_p:CommodityListDataType"/>
+    <xs:complexType name="CommodityListDataSelectorsType">
+        <xs:sequence>
+            <xs:element name="commodityId" type="ns_p:CommodityIdType" minOccurs="0"/>
+            <xs:element name="commodityType" type="ns_p:CommodityTypeType" minOccurs="0"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="commodityListDataSelectors" type="ns_p:CommodityListDataSelectorsType"/>
+    <xs:complexType name="TierDataType">
+        <xs:sequence>
+            <xs:element name="tierId" type="ns_p:TierIdType" minOccurs="0"/>
+            <xs:element name="timePeriod" type="ns_p:TimePeriodType" minOccurs="0"/>
+            <xs:element minOccurs="0" name="timeTableId" type="ns_p:TimeTableIdType"/>
+            <xs:element name="activeIncentiveId" type="ns_p:IncentiveIdType" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="tierData" type="ns_p:TierDataType"/>
+    <xs:complexType name="TierDataElementsType">
+        <xs:sequence>
+            <xs:element name="tierId" type="ns_p:ElementTagType" minOccurs="0"/>
+            <xs:element name="timePeriod" type="ns_p:TimePeriodElementsType" minOccurs="0"/>
+            <xs:element minOccurs="0" name="timeTableId" type="ns_p:ElementTagType"/>
+            <xs:element name="activeIncentiveId" type="ns_p:ElementTagType" minOccurs="0"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="tierDataElements" type="ns_p:TierDataElementsType"/>
+    <xs:complexType name="TierListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:tierData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="tierListData" type="ns_p:TierListDataType"/>
+    <xs:complexType name="TierListDataSelectorsType">
+        <xs:sequence>
+            <xs:element name="tierId" type="ns_p:TierIdType" minOccurs="0"/>
+            <xs:element name="activeIncentiveId" type="ns_p:IncentiveIdType" minOccurs="0"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="tierListDataSelectors" type="ns_p:TierListDataSelectorsType"/>
+    <xs:complexType name="TierIncentiveRelationDataType">
+        <xs:sequence>
+            <xs:element name="tierId" type="ns_p:TierIdType" minOccurs="0"/>
+            <xs:element name="incentiveId" maxOccurs="unbounded" type="ns_p:IncentiveIdType" minOccurs="0"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="tierIncentiveRelationData" type="ns_p:TierIncentiveRelationDataType"/>
+    <xs:complexType name="TierIncentiveRelationDataElementsType">
+        <xs:sequence>
+            <xs:element name="tierId" type="ns_p:ElementTagType" minOccurs="0"/>
+            <xs:element name="incentiveId" type="ns_p:ElementTagType" minOccurs="0"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="tierIncentiveRelationDataElements" type="ns_p:TierIncentiveRelationDataElementsType"/>
+    <xs:complexType name="TierIncentiveRelationListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:tierIncentiveRelationData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="tierIncentiveRelationListData" type="ns_p:TierIncentiveRelationListDataType"/>
+    <xs:complexType name="TierIncentiveRelationListDataSelectorsType">
+        <xs:sequence>
+            <xs:element name="tierId" type="ns_p:TierIdType" minOccurs="0"/>
+            <xs:element name="incentiveId" type="ns_p:IncentiveIdType" minOccurs="0"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="tierIncentiveRelationListDataSelectors" type="ns_p:TierIncentiveRelationListDataSelectorsType"/>
+    <xs:complexType name="TierDescriptionDataType">
+        <xs:sequence>
+            <xs:element name="tierId" type="ns_p:TierIdType" minOccurs="0"/>
+            <xs:element name="tierType" minOccurs="0" type="ns_p:TierTypeType"/>
+            <xs:element name="label" type="ns_p:LabelType" minOccurs="0"/>
+            <xs:element name="description" type="ns_p:DescriptionType" minOccurs="0"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="tierDescriptionData" type="ns_p:TierDescriptionDataType"/>
+    <xs:complexType name="TierDescriptionDataElementsType">
+        <xs:sequence>
+            <xs:element name="tierId" type="ns_p:ElementTagType" minOccurs="0"/>
+            <xs:element name="tierType" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element name="label" type="ns_p:ElementTagType" minOccurs="0"/>
+            <xs:element name="description" type="ns_p:ElementTagType" minOccurs="0"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="tierDescriptionDataElements" type="ns_p:TierDescriptionDataElementsType"/>
+    <xs:complexType name="TierDescriptionListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:tierDescriptionData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="tierDescriptionListData" type="ns_p:TierDescriptionListDataType"/>
+    <xs:complexType name="TierDescriptionListDataSelectorsType">
+        <xs:sequence>
+            <xs:element name="tierId" type="ns_p:TierIdType" minOccurs="0"/>
+            <xs:element name="tierType" minOccurs="0" type="ns_p:TierTypeType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="tierDescriptionListDataSelectors" type="ns_p:TierDescriptionListDataSelectorsType"/>
+    <xs:complexType name="IncentiveDataType">
+        <xs:sequence>
+            <xs:element name="incentiveId" type="ns_p:IncentiveIdType" minOccurs="0"/>
+            <xs:element name="valueType" type="ns_p:IncentiveValueTypeType" minOccurs="0"/>
+            <xs:element name="timestamp" type="ns_p:AbsoluteOrRelativeTimeType" minOccurs="0"/>
+            <xs:element name="timePeriod" type="ns_p:TimePeriodType" minOccurs="0"/>
+            <xs:element minOccurs="0" name="timeTableId" type="ns_p:TimeTableIdType"/>
+            <xs:element minOccurs="0" name="value" type="ns_p:ScaledNumberType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="incentiveData" type="ns_p:IncentiveDataType"/>
+    <xs:complexType name="IncentiveDataElementsType">
+        <xs:sequence>
+            <xs:element name="incentiveId" type="ns_p:ElementTagType" minOccurs="0"/>
+            <xs:element name="valueType" type="ns_p:ElementTagType" minOccurs="0"/>
+            <xs:element name="timestamp" type="ns_p:ElementTagType" minOccurs="0"/>
+            <xs:element name="timePeriod" type="ns_p:TimePeriodElementsType" minOccurs="0"/>
+            <xs:element minOccurs="0" name="timeTableId" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="value" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="incentiveDataElements" type="ns_p:IncentiveDataElementsType"/>
+    <xs:complexType name="IncentiveListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:incentiveData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="incentiveListData" type="ns_p:IncentiveListDataType"/>
+    <xs:complexType name="IncentiveListDataSelectorsType">
+        <xs:sequence>
+            <xs:element name="incentiveId" type="ns_p:IncentiveIdType" minOccurs="0"/>
+            <xs:element name="valueType" type="ns_p:IncentiveValueTypeType" minOccurs="0"/>
+            <xs:element minOccurs="0" name="timestampInterval" type="ns_p:TimestampIntervalType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="incentiveListDataSelectors" type="ns_p:IncentiveListDataSelectorsType"/>
+    <xs:complexType name="IncentiveDescriptionDataType">
+        <xs:sequence>
+            <xs:element name="incentiveId" type="ns_p:IncentiveIdType" minOccurs="0"/>
+            <xs:element name="incentiveType" type="ns_p:IncentiveTypeType" minOccurs="0"/>
+            <xs:element name="incentivePriority" type="ns_p:IncentivePriorityType" minOccurs="0"/>
+            <xs:element name="currency" type="ns_p:CurrencyType" minOccurs="0"/>
+            <xs:element name="unit" minOccurs="0" type="ns_p:UnitOfMeasurementType"/>
+            <xs:element name="label" type="ns_p:LabelType" minOccurs="0"/>
+            <xs:element name="description" type="ns_p:DescriptionType" minOccurs="0"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="incentiveDescriptionData" type="ns_p:IncentiveDescriptionDataType"/>
+    <xs:complexType name="IncentiveDescriptionDataElementsType">
+        <xs:sequence>
+            <xs:element name="incentiveId" type="ns_p:ElementTagType" minOccurs="0"/>
+            <xs:element name="incentiveType" type="ns_p:ElementTagType" minOccurs="0"/>
+            <xs:element name="incentivePriority" type="ns_p:ElementTagType" minOccurs="0"/>
+            <xs:element name="currency" type="ns_p:ElementTagType" minOccurs="0"/>
+            <xs:element name="unit" minOccurs="0" type="ns_p:ElementTagType"/>
+            <xs:element name="label" type="ns_p:ElementTagType" minOccurs="0"/>
+            <xs:element name="description" type="ns_p:ElementTagType" minOccurs="0"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="incentiveDescriptionDataElements" type="ns_p:IncentiveDescriptionDataElementsType"/>
+    <xs:complexType name="IncentiveDescriptionListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:incentiveDescriptionData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="incentiveDescriptionListData" type="ns_p:IncentiveDescriptionListDataType"/>
+    <xs:complexType name="IncentiveDescriptionListDataSelectorsType">
+        <xs:sequence>
+            <xs:element name="incentiveId" type="ns_p:IncentiveIdType" minOccurs="0"/>
+            <xs:element name="incentiveType" type="ns_p:IncentiveTypeType" minOccurs="0"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="incentiveDescriptionListDataSelectors" type="ns_p:IncentiveDescriptionListDataSelectorsType"/>
+</xs:schema>

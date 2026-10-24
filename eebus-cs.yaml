@@ -160,6 +160,9 @@ text_sensor:
   # --- CS (sg_eebus_cs, weights 3-7) ---
   - platform: template
     name: "${device_name} CS Verbindungsstatus"
+    id: cs_connection_status
+    filters:
+      - lambda: 'if (id(cs_connection_status).has_state() && id(cs_connection_status).state == x) return {}; return x;'
     icon: "mdi:lan-connect"
     web_server:
       sorting_group_id: sg_eebus_cs
@@ -177,6 +180,9 @@ text_sensor:
 
   - platform: template
     name: "${device_name} CS Pairing ausstehend"
+    id: cs_pending_ski
+    filters:
+      - lambda: 'if (id(cs_pending_ski).has_state() && id(cs_pending_ski).state == x) return {}; return x;'
     icon: "mdi:key-alert"
     web_server:
       sorting_group_id: sg_eebus_cs
@@ -189,6 +195,9 @@ text_sensor:
 
   - platform: template
     name: "${device_name} CS Gepaarte SKI"
+    id: cs_paired_ski
+    filters:
+      - lambda: 'if (id(cs_paired_ski).has_state() && id(cs_paired_ski).state == x) return {}; return x;'
     icon: "mdi:key-chain"
     web_server:
       sorting_group_id: sg_eebus_cs
@@ -201,6 +210,9 @@ text_sensor:
 
   - platform: template
     name: "${device_name} CS Eigene SKI (Port 4712)"
+    id: cs_local_ski
+    filters:
+      - lambda: 'if (id(cs_local_ski).has_state() && id(cs_local_ski).state == x) return {}; return x;'
     icon: "mdi:key"
     web_server:
       sorting_group_id: sg_eebus_cs
@@ -212,6 +224,8 @@ text_sensor:
   - platform: template
     name: "${device_name} CS Aktive UC"
     id: cs_active_use_cases
+    filters:
+      - lambda: 'if (id(cs_active_use_cases).has_state() && id(cs_active_use_cases).state == x) return {}; return x;'
     icon: "mdi:format-list-checks"
     web_server:
       sorting_group_id: sg_eebus_cs
@@ -222,6 +236,8 @@ text_sensor:
   - platform: template
     name: "${device_name} CS Unterstützte UC"
     id: cs_supported_use_cases
+    filters:
+      - lambda: 'if (id(cs_supported_use_cases).has_state() && id(cs_supported_use_cases).state == x) return {}; return x;'
     icon: "mdi:format-list-bulleted"
     web_server:
       sorting_group_id: sg_eebus_cs
@@ -231,21 +247,10 @@ text_sensor:
 
   # --- §14a control channel (sg_netz) ---
   - platform: template
-    name: "${device_name} §14a Steuerungskanal"
-    icon: "mdi:transmission-tower"
-    web_server:
-      sorting_group_id: sg_netz
-      sorting_weight: 4
-    update_interval: 5s
-    lambda: |-
-      if (id(hems_cs).is_limit_active()) return std::string("EEBus digital (CS)");
-      if (id(grid_provider_switch).state) return std::string("Relaiskontakt DI1");
-      if (id(manual_enwg_test).state) return std::string("Simulation 4200 W");
-      return std::string("Kein Eingriff aktiv");
-
-  - platform: template
     name: "${device_name} §14a Status"
     id: enwg_status
+    filters:
+      - lambda: 'if (id(enwg_status).has_state() && id(enwg_status).state == x) return {}; return x;'
     icon: "mdi:transmission-tower"
     web_server:
       sorting_group_id: sg_netz

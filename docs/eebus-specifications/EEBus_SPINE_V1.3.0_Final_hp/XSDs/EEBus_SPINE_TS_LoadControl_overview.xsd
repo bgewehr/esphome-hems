@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Smart Premises Interoperable Neutral-Message Exchange (SPINE)
+    Version 1.3.0 (final)
+    2023-08-31
+    Copyright (c) 2023 EEBus Initiative e.V.  All Rights Reserved.
+    Source: https://www.eebus.org/en/specifications/
+-->
+<xs:schema xmlns:ns_p="http://docs.eebus.org/spine/xsd/v1" xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://docs.eebus.org/spine/xsd/v1" version="1.3.0"
+    blockDefault="#all" elementFormDefault="qualified">
+    <xs:annotation>
+        <xs:documentation>EEBus SPINE Specification schema. Copyright 2023 EEBus Initiative e.V.  All rights reserved.</xs:documentation>
+    </xs:annotation>
+    <xs:include schemaLocation="EEBus_SPINE_TS_LoadControl.xsd"/>
+    <xs:group name="group_loadControl">
+        <xs:sequence>
+            <xs:group ref="ns_p:loadControlNode"/>
+            <xs:group ref="ns_p:loadControlEvent"/>
+            <xs:group ref="ns_p:loadControlState"/>
+            <xs:group ref="ns_p:loadControlLimit"/>
+            <xs:group ref="ns_p:loadControlLimitConstraints"/>
+            <xs:group ref="ns_p:loadControlLimitDescription"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="loadControlNode">
+        <xs:sequence>
+            <xs:element ref="ns_p:loadControlNodeData"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="loadControlEvent">
+        <xs:sequence>
+            <xs:element ref="ns_p:loadControlEventListData"/>
+            <xs:element ref="ns_p:loadControlEventListDataSelectors"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="loadControlState">
+        <xs:sequence>
+            <xs:element ref="ns_p:loadControlStateListData"/>
+            <xs:element ref="ns_p:loadControlStateListDataSelectors"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="loadControlLimit">
+        <xs:sequence>
+            <xs:element ref="ns_p:loadControlLimitListData"/>
+            <xs:element ref="ns_p:loadControlLimitListDataSelectors"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="loadControlLimitConstraints">
+        <xs:sequence>
+            <xs:element ref="ns_p:loadControlLimitConstraintsListData"/>
+            <xs:element ref="ns_p:loadControlLimitConstraintsListDataSelectors"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="loadControlLimitDescription">
+        <xs:sequence>
+            <xs:element ref="ns_p:loadControlLimitDescriptionListData"/>
+            <xs:element ref="ns_p:loadControlLimitDescriptionListDataSelectors"/>
+        </xs:sequence>
+    </xs:group>
+</xs:schema>

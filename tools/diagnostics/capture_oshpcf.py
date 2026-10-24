@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import datetime
+from dataclasses import dataclass
 import json
 import math
 import pathlib
@@ -17,12 +18,42 @@ import urllib.request
 
 
 RELEVANT_LINE = re.compile(
-    r"eebus_eg|OSSHPCF|Semp|SmartEnergy|Fronius HP Power|EG1 MPC Leistung|"
+    r"eebus_eg|SPINE registration|OSSHPCF|Semp|SmartEnergy|Storage writer|Fronius HP Power|EG1 MPC Leistung|"
     r"Connecting to|Successfully connected|Connection error|Disconnected",
     re.IGNORECASE,
 )
 HP_POWER = re.compile(r"Fronius HP Power' >> ([0-9.]+) W")
 MPC_POWER = re.compile(r"EG1 MPC Leistung' >> ([0-9.]+) W")
+
+
+@dataclass
+class CaptureStats:
+    semp_messages: int = 0
+    replies: int = 0
+    notifications: int = 0
+    unclassified: int = 0
+    read_replies: int = 0
+    subscription_requests: int = 0
+    subscription_confirmations: int = 0
+    binding_requests: int = 0
+    binding_confirmations: int = 0
+    legacy_subscription_checks: int = 0
+
+    def observe(self, line: str) -> None:
+        if "OSSHPCF msg" in line and "SempData" in line:
+            self.semp_messages += 1
+            if re.search(r"\bcmd=reply\b", line):
+                self.replies += 1
+            elif re.search(r"\bcmd=notify\b", line):
+                self.notifications += 1
+            else:
+                self.unclassified += 1
+        self.read_replies += "OSSHPCF read reply:" in line
+        self.subscription_requests += "OSSHPCF subscription request: result=sent" in line
+        self.subscription_confirmations += "OSSHPCF subscription verified: present=true" in line
+        self.binding_requests += "OSSHPCF binding request: result=sent" in line
+        self.binding_confirmations += "OSSHPCF binding verified: present=true" in line
+        self.legacy_subscription_checks += "remote SEMP entity" in line and "subscribe_err=0" in line
 
 
 class StartReads:
@@ -132,8 +163,7 @@ def main() -> int:
     started = datetime.datetime.now().astimezone()
     output_path = output_dir / f"oshpcf-{started:%Y%m%d-%H%M%S}.log"
     deadline = time.monotonic() + args.duration
-    semp_messages = 0
-    subscriptions = 0
+    stats = CaptureStats()
     reconnects = 0
     max_hp_power = 0.0
     max_mpc_power = 0.0
@@ -180,8 +210,7 @@ def main() -> int:
                         output.write(line)
                         output.flush()
                         sys.stdout.write(line)
-                        semp_messages += "OSSHPCF msg" in line and "SempData" in line
-                        subscriptions += "remote SEMP entity" in line and "subscribe_err=0" in line
+                        stats.observe(line)
                         max_hp_power = update_maximum(line, HP_POWER, max_hp_power)
                         max_mpc_power = update_maximum(line, MPC_POWER, max_mpc_power)
                     if "Disconnected" in line or "Connection error" in line:
@@ -218,8 +247,13 @@ def main() -> int:
 
         finished = datetime.datetime.now().astimezone()
         summary = (
-            f"Capture finished {finished.isoformat()}; SEMP messages={semp_messages}; "
-            f"subscriptions={subscriptions}; logger reconnects={reconnects}; "
+            f"Capture finished {finished.isoformat()}; SEMP messages={stats.semp_messages}; "
+            f"SEMP replies={stats.replies}; SEMP notifications={stats.notifications}; "
+            f"SEMP unclassified={stats.unclassified}; confirmed read replies={stats.read_replies}; "
+            f"subscription requests={stats.subscription_requests}; "
+            f"subscription confirmations={stats.subscription_confirmations}; "
+            f"binding requests={stats.binding_requests}; binding confirmations={stats.binding_confirmations}; "
+            f"legacy subscription checks={stats.legacy_subscription_checks}; logger reconnects={reconnects}; "
             f"API disconnects={api_disconnects}; event read attempts={read_attempts}; "
             f"max HP power={max_hp_power:.0f} W; max MPC power={max_mpc_power:.0f} W\n"
         )

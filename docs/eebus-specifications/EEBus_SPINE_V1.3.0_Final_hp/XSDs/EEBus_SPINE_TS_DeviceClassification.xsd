@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Smart Premises Interoperable Neutral-Message Exchange (SPINE)
+    Version 1.3.0 (final)
+    2023-08-31
+    Copyright (c) 2023 EEBus Initiative e.V.  All Rights Reserved.
+    Source: https://www.eebus.org/en/specifications/
+-->
+<xs:schema xmlns:ns_p="http://docs.eebus.org/spine/xsd/v1" xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://docs.eebus.org/spine/xsd/v1" version="1.3.0"
+    blockDefault="#all" elementFormDefault="qualified">
+    <xs:annotation>
+        <xs:documentation>EEBus SPINE Specification schema. Copyright 2023 EEBus Initiative e.V.  All rights reserved.</xs:documentation>
+    </xs:annotation>
+    <xs:include schemaLocation="EEBus_SPINE_TS_CommonDataTypes.xsd"/>
+    <xs:simpleType name="DeviceClassificationStringType">
+        <xs:restriction base="xs:string"/>
+    </xs:simpleType>
+    <xs:simpleType name="PowerSourceType">
+        <xs:union memberTypes="ns_p:PowerSourceEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="PowerSourceEnumType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="unknown"/>
+            <xs:enumeration value="mainsSinglePhase"/>
+            <xs:enumeration value="mains3Phase"/>
+            <xs:enumeration value="battery"/>
+            <xs:enumeration value="dc"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:complexType name="DeviceClassificationManufacturerDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="deviceName" type="ns_p:DeviceClassificationStringType"/>
+            <xs:element minOccurs="0" name="deviceCode" type="ns_p:DeviceClassificationStringType"/>
+            <xs:element minOccurs="0" name="serialNumber" type="ns_p:DeviceClassificationStringType"/>
+            <xs:element minOccurs="0" name="softwareRevision" type="ns_p:DeviceClassificationStringType"/>
+            <xs:element minOccurs="0" name="hardwareRevision" type="ns_p:DeviceClassificationStringType"/>
+            <xs:element minOccurs="0" name="vendorName" type="ns_p:DeviceClassificationStringType"/>
+            <xs:element minOccurs="0" name="vendorCode" type="ns_p:DeviceClassificationStringType"/>
+            <xs:element minOccurs="0" name="brandName" type="ns_p:DeviceClassificationStringType"/>
+            <xs:element minOccurs="0" name="powerSource" type="ns_p:PowerSourceType"/>
+            <xs:element minOccurs="0" name="manufacturerNodeIdentification" type="ns_p:DeviceClassificationStringType"/>
+            <xs:element minOccurs="0" name="manufacturerLabel" type="ns_p:LabelType"/>
+            <xs:element minOccurs="0" name="manufacturerDescription" type="ns_p:DescriptionType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="deviceClassificationManufacturerData" type="ns_p:DeviceClassificationManufacturerDataType"/>
+    <xs:complexType name="DeviceClassificationManufacturerDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="deviceName" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="deviceCode" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="serialNumber" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="softwareRevision" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="hardwareRevision" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="vendorName" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="vendorCode" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="brandName" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="powerSource" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="manufacturerNodeIdentification" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="manufacturerLabel" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="manufacturerDescription" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="deviceClassificationManufacturerDataElements" type="ns_p:DeviceClassificationManufacturerDataElementsType"/>
+    <xs:complexType name="DeviceClassificationUserDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="userNodeIdentification" type="ns_p:DeviceClassificationStringType"/>
+            <xs:element minOccurs="0" name="userLabel" type="ns_p:LabelType"/>
+            <xs:element minOccurs="0" name="userDescription" type="ns_p:DescriptionType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="deviceClassificationUserData" type="ns_p:DeviceClassificationUserDataType"/>
+    <xs:complexType name="DeviceClassificationUserDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="userNodeIdentification" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="userLabel" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="userDescription" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="deviceClassificationUserDataElements" type="ns_p:DeviceClassificationUserDataElementsType"/>
+</xs:schema>

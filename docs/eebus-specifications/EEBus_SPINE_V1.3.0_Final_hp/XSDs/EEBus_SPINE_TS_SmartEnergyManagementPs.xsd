@@ -1,0 +1,630 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Smart Premises Interoperable Neutral-Message Exchange (SPINE)
+    Version 1.3.0 (final)
+    2023-08-31
+    Copyright (c) 2023 EEBus Initiative e.V.  All Rights Reserved.
+    Source: https://www.eebus.org/en/specifications/
+-->
+<xs:schema xmlns:ns_p="http://docs.eebus.org/spine/xsd/v1" xmlns:xs="http://www.w3.org/2001/XMLSchema"
+    targetNamespace="http://docs.eebus.org/spine/xsd/v1" version="1.3.0" blockDefault="#all" elementFormDefault="qualified">
+    <xs:annotation>
+        <xs:documentation>EEBus SPINE Specification schema. Copyright 2023 EEBus Initiative e.V.  All rights reserved.</xs:documentation>
+    </xs:annotation>
+    <xs:include schemaLocation="EEBus_SPINE_TS_CommonDataTypes.xsd"/>
+    <xs:include schemaLocation="EEBus_SPINE_TS_OperatingConstraints.xsd"/>
+    <xs:include schemaLocation="EEBus_SPINE_TS_PowerSequences.xsd"/>
+    <xs:complexType name="SmartEnergyManagementPsAlternativesRelationType">
+        <xs:complexContent>
+            <xs:restriction base="ns_p:PowerSequenceAlternativesRelationDataType">
+                <xs:sequence>
+                    <xs:element minOccurs="0" name="alternativesId" type="ns_p:AlternativesIdType"/>
+                </xs:sequence>
+            </xs:restriction>
+        </xs:complexContent>
+    </xs:complexType>
+    <xs:complexType name="SmartEnergyManagementPsAlternativesType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="relation" type="ns_p:SmartEnergyManagementPsAlternativesRelationType"/>
+            <xs:element name="powerSequence" maxOccurs="unbounded" minOccurs="0" type="ns_p:SmartEnergyManagementPsPowerSequenceType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="SmartEnergyManagementPsPowerSequenceType">
+        <xs:sequence>
+            <xs:element name="description" minOccurs="0">
+                <xs:complexType>
+                    <xs:complexContent>
+                        <xs:restriction base="ns_p:PowerSequenceDescriptionDataType">
+                            <xs:sequence>
+                                <xs:element name="sequenceId" type="ns_p:PowerSequenceIdType" minOccurs="0"/>
+                                <xs:element minOccurs="0" name="description">
+                                    <xs:simpleType>
+                                        <xs:restriction base="ns_p:DescriptionType">
+                                            <xs:minLength value="1"/>
+                                            <xs:maxLength value="60"/>
+                                        </xs:restriction>
+                                    </xs:simpleType>
+                                </xs:element>
+                                <xs:element minOccurs="0" name="powerUnit" type="ns_p:UnitOfMeasurementType"/>
+                                <xs:element minOccurs="0" name="energyUnit" type="ns_p:UnitOfMeasurementType"/>
+                                <xs:element minOccurs="0" name="valueSource" type="ns_p:MeasurementValueSourceType"/>
+                                <xs:element minOccurs="0" name="taskIdentifier" type="xs:unsignedInt"/>
+                                <xs:element minOccurs="0" name="repetitionsTotal" type="xs:unsignedInt"/>
+                            </xs:sequence>
+                        </xs:restriction>
+                    </xs:complexContent>
+                </xs:complexType>
+            </xs:element>
+            <xs:element name="state" minOccurs="0">
+                <xs:complexType>
+                    <xs:complexContent>
+                        <xs:restriction base="ns_p:PowerSequenceStateDataType">
+                            <xs:sequence>
+                                <xs:element name="state" type="ns_p:PowerSequenceStateType" minOccurs="0"/>
+                                <xs:element minOccurs="0" name="activeSlotNumber" type="ns_p:PowerTimeSlotNumberType"/>
+                                <xs:element minOccurs="0" name="elapsedSlotTime" type="xs:duration"/>
+                                <xs:element minOccurs="0" name="remainingSlotTime" type="xs:duration"/>
+                                <xs:element name="sequenceRemoteControllable" type="xs:boolean" minOccurs="0"/>
+                                <xs:element minOccurs="0" name="activeRepetitionNumber" type="xs:unsignedInt"/>
+                                <xs:element minOccurs="0" name="remainingPauseTime" type="xs:duration"/>
+                            </xs:sequence>
+                        </xs:restriction>
+                    </xs:complexContent>
+                </xs:complexType>
+            </xs:element>
+            <xs:element minOccurs="0" name="schedule">
+                <xs:complexType>
+                    <xs:complexContent>
+                        <xs:restriction base="ns_p:PowerSequenceScheduleDataType">
+                            <xs:sequence>
+                                <xs:element name="startTime" type="xs:duration" minOccurs="0"/>
+                                <xs:element name="endTime" type="xs:duration" minOccurs="0"/>
+                            </xs:sequence>
+                        </xs:restriction>
+                    </xs:complexContent>
+                </xs:complexType>
+            </xs:element>
+            <xs:element name="scheduleConstraints" minOccurs="0">
+                <xs:complexType>
+                    <xs:complexContent>
+                        <xs:restriction base="ns_p:PowerSequenceScheduleConstraintsDataType">
+                            <xs:sequence>
+                                <xs:element name="earliestStartTime" type="xs:duration" minOccurs="0"/>
+                                <xs:element name="latestEndTime" type="xs:duration" minOccurs="0"/>
+                            </xs:sequence>
+                        </xs:restriction>
+                    </xs:complexContent>
+                </xs:complexType>
+            </xs:element>
+            <xs:element minOccurs="0" name="schedulePreference">
+                <xs:complexType>
+                    <xs:complexContent>
+                        <xs:restriction base="ns_p:PowerSequenceSchedulePreferenceDataType">
+                            <xs:sequence>
+                                <xs:element minOccurs="0" name="greenest" type="xs:boolean"/>
+                                <xs:element minOccurs="0" name="cheapest" type="xs:boolean"/>
+                            </xs:sequence>
+                        </xs:restriction>
+                    </xs:complexContent>
+                </xs:complexType>
+            </xs:element>
+            <xs:element name="operatingConstraintsInterrupt" minOccurs="0">
+                <xs:complexType>
+                    <xs:complexContent>
+                        <xs:restriction base="ns_p:OperatingConstraintsInterruptDataType">
+                            <xs:sequence>
+                                <xs:element minOccurs="0" name="isPausable" type="xs:boolean"/>
+                                <xs:element minOccurs="0" name="isStoppable" type="xs:boolean"/>
+                                <xs:element minOccurs="0" name="maxCyclesPerDay" type="xs:unsignedInt"/>
+                            </xs:sequence>
+                        </xs:restriction>
+                    </xs:complexContent>
+                </xs:complexType>
+            </xs:element>
+            <xs:element name="operatingConstraintsDuration" minOccurs="0">
+                <xs:complexType>
+                    <xs:complexContent>
+                        <xs:restriction base="ns_p:OperatingConstraintsDurationDataType">
+                            <xs:sequence>
+                                <xs:element minOccurs="0" name="activeDurationMin" type="xs:duration"/>
+                                <xs:element minOccurs="0" name="activeDurationMax" type="xs:duration"/>
+                                <xs:element minOccurs="0" name="pauseDurationMin" type="xs:duration"/>
+                                <xs:element minOccurs="0" name="pauseDurationMax" type="xs:duration"/>
+                                <xs:element minOccurs="0" name="activeDurationSumMin" type="xs:duration"/>
+                                <xs:element minOccurs="0" name="activeDurationSumMax" type="xs:duration"/>
+                            </xs:sequence>
+                        </xs:restriction>
+                    </xs:complexContent>
+                </xs:complexType>
+            </xs:element>
+            <xs:element name="operatingConstraintsResumeImplication" minOccurs="0">
+                <xs:complexType>
+                    <xs:complexContent>
+                        <xs:restriction base="ns_p:OperatingConstraintsResumeImplicationDataType">
+                            <xs:sequence>
+                                <xs:element minOccurs="0" name="resumeEnergyEstimated" type="ns_p:ScaledNumberType"/>
+                                <xs:element minOccurs="0" name="energyUnit" type="ns_p:UnitOfMeasurementType"/>
+                                <xs:element minOccurs="0" name="resumeCostEstimated" type="ns_p:ScaledNumberType"/>
+                                <xs:element minOccurs="0" name="currency" type="ns_p:CurrencyType"/>
+                            </xs:sequence>
+                        </xs:restriction>
+                    </xs:complexContent>
+                </xs:complexType>
+            </xs:element>
+            <xs:element maxOccurs="unbounded" minOccurs="0" name="powerTimeSlot" type="ns_p:SmartEnergyManagementPsPowerTimeSlotType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="SmartEnergyManagementPsPowerTimeSlotType">
+        <xs:sequence>
+            <xs:element name="schedule" minOccurs="0">
+                <xs:complexType>
+                    <xs:complexContent>
+                        <xs:restriction base="ns_p:PowerTimeSlotScheduleDataType">
+                            <xs:sequence>
+                                <xs:element name="slotNumber" type="ns_p:PowerTimeSlotNumberType" minOccurs="0"/>
+                                <xs:element name="timePeriod" minOccurs="0">
+                                    <xs:complexType>
+                                        <xs:complexContent>
+                                            <xs:restriction base="ns_p:TimePeriodType">
+                                                <xs:sequence>
+                                                    <xs:element name="startTime" type="xs:duration" minOccurs="0"/>
+                                                    <xs:element name="endTime" type="xs:duration" minOccurs="0"/>
+                                                </xs:sequence>
+                                            </xs:restriction>
+                                        </xs:complexContent>
+                                    </xs:complexType>
+                                </xs:element>
+                                <xs:element name="defaultDuration" type="xs:duration" minOccurs="0"/>
+                                <xs:element minOccurs="0" name="durationUncertainty" type="xs:duration"/>
+                                <xs:element name="slotActivated" type="xs:boolean" minOccurs="0"/>
+                                <xs:element minOccurs="0" name="description">
+                                    <xs:simpleType>
+                                        <xs:restriction base="ns_p:DescriptionType">
+                                            <xs:minLength value="1"/>
+                                            <xs:maxLength value="60"/>
+                                        </xs:restriction>
+                                    </xs:simpleType>
+                                </xs:element>
+                            </xs:sequence>
+                        </xs:restriction>
+                    </xs:complexContent>
+                </xs:complexType>
+            </xs:element>
+            <xs:element minOccurs="0" name="valueList" type="ns_p:SmartEnergyManagementPsPowerTimeSlotValueListType"/>
+            <xs:element name="scheduleConstraints" minOccurs="0">
+                <xs:complexType>
+                    <xs:complexContent>
+                        <xs:restriction base="ns_p:PowerTimeSlotScheduleConstraintsDataType">
+                            <xs:sequence>
+                                <xs:element name="earliestStartTime" type="xs:duration" minOccurs="0"/>
+                                <xs:element name="latestEndTime" type="xs:duration" minOccurs="0"/>
+                                <xs:element minOccurs="0" name="minDuration" type="xs:duration"/>
+                                <xs:element minOccurs="0" name="maxDuration" type="xs:duration"/>
+                                <xs:element minOccurs="0" name="optionalSlot" type="xs:boolean"/>
+                            </xs:sequence>
+                        </xs:restriction>
+                    </xs:complexContent>
+                </xs:complexType>
+            </xs:element>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="SmartEnergyManagementPsPowerTimeSlotValueListType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" name="value">
+                <xs:complexType>
+                    <xs:complexContent>
+                        <xs:restriction base="ns_p:PowerTimeSlotValueDataType">
+                            <xs:sequence>
+                                <xs:element minOccurs="0" name="valueType" type="ns_p:PowerTimeSlotValueTypeType"/>
+                                <xs:element minOccurs="0" name="value" type="ns_p:ScaledNumberType"/>
+                            </xs:sequence>
+                        </xs:restriction>
+                    </xs:complexContent>
+                </xs:complexType>
+            </xs:element>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="SmartEnergyManagementPsDataType">
+        <xs:sequence>
+            <xs:element name="nodeScheduleInformation" minOccurs="0">
+                <xs:complexType>
+                    <xs:complexContent>
+                        <xs:restriction base="ns_p:PowerSequenceNodeScheduleInformationDataType">
+                            <xs:sequence>
+                                <xs:element name="nodeRemoteControllable" type="xs:boolean" minOccurs="0"/>
+                                <xs:element name="supportsSingleSlotSchedulingOnly" type="xs:boolean" minOccurs="0"/>
+                                <xs:element name="alternativesCount" type="xs:unsignedInt" minOccurs="0"/>
+                                <xs:element name="totalSequencesCountMax" type="xs:unsignedInt" minOccurs="0"/>
+                                <xs:element name="supportsReselection" type="xs:boolean" minOccurs="0"/>
+                            </xs:sequence>
+                        </xs:restriction>
+                    </xs:complexContent>
+                </xs:complexType>
+            </xs:element>
+            <xs:element name="alternatives" maxOccurs="unbounded" minOccurs="0" type="ns_p:SmartEnergyManagementPsAlternativesType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="smartEnergyManagementPsData" type="ns_p:SmartEnergyManagementPsDataType"/>
+    <xs:complexType name="SmartEnergyManagementPsAlternativesRelationElementsType">
+        <xs:complexContent>
+            <xs:restriction base="ns_p:PowerSequenceAlternativesRelationDataElementsType">
+                <xs:sequence>
+                    <xs:element minOccurs="0" name="alternativesId" type="ns_p:ElementTagType"/>
+                </xs:sequence>
+            </xs:restriction>
+        </xs:complexContent>
+    </xs:complexType>
+    <xs:complexType name="SmartEnergyManagementPsAlternativesElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="relation" type="ns_p:SmartEnergyManagementPsAlternativesRelationElementsType"/>
+            <xs:element name="powerSequence" minOccurs="0" type="ns_p:SmartEnergyManagementPsPowerSequenceElementsType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="SmartEnergyManagementPsPowerSequenceElementsType">
+        <xs:sequence>
+            <xs:element name="description" minOccurs="0">
+                <xs:complexType>
+                    <xs:complexContent>
+                        <xs:restriction base="ns_p:PowerSequenceDescriptionDataElementsType">
+                            <xs:sequence>
+                                <xs:element name="sequenceId" minOccurs="0" type="ns_p:ElementTagType"/>
+                                <xs:element minOccurs="0" name="description" type="ns_p:ElementTagType"/>
+                                <xs:element minOccurs="0" name="powerUnit" type="ns_p:ElementTagType"/>
+                                <xs:element minOccurs="0" name="energyUnit" type="ns_p:ElementTagType"/>
+                                <xs:element minOccurs="0" name="valueSource" type="ns_p:ElementTagType"/>
+                                <xs:element minOccurs="0" name="taskIdentifier" type="ns_p:ElementTagType"/>
+                                <xs:element minOccurs="0" name="repetitionsTotal" type="ns_p:ElementTagType"/>
+                            </xs:sequence>
+                        </xs:restriction>
+                    </xs:complexContent>
+                </xs:complexType>
+            </xs:element>
+            <xs:element name="state" minOccurs="0">
+                <xs:complexType>
+                    <xs:complexContent>
+                        <xs:restriction base="ns_p:PowerSequenceStateDataElementsType">
+                            <xs:sequence>
+                                <xs:element name="state" minOccurs="0" type="ns_p:ElementTagType"/>
+                                <xs:element minOccurs="0" name="activeSlotNumber" type="ns_p:ElementTagType"/>
+                                <xs:element minOccurs="0" name="elapsedSlotTime" type="ns_p:ElementTagType"/>
+                                <xs:element minOccurs="0" name="remainingSlotTime" type="ns_p:ElementTagType"/>
+                                <xs:element name="sequenceRemoteControllable" minOccurs="0" type="ns_p:ElementTagType"/>
+                                <xs:element minOccurs="0" name="activeRepetitionNumber" type="ns_p:ElementTagType"/>
+                                <xs:element minOccurs="0" name="remainingPauseTime" type="ns_p:ElementTagType"/>
+                            </xs:sequence>
+                        </xs:restriction>
+                    </xs:complexContent>
+                </xs:complexType>
+            </xs:element>
+            <xs:element minOccurs="0" name="schedule">
+                <xs:complexType>
+                    <xs:complexContent>
+                        <xs:restriction base="ns_p:PowerSequenceScheduleDataElementsType">
+                            <xs:sequence>
+                                <xs:element name="startTime" minOccurs="0" type="ns_p:ElementTagType"/>
+                                <xs:element name="endTime" minOccurs="0" type="ns_p:ElementTagType"/>
+                            </xs:sequence>
+                        </xs:restriction>
+                    </xs:complexContent>
+                </xs:complexType>
+            </xs:element>
+            <xs:element name="scheduleConstraints" minOccurs="0">
+                <xs:complexType>
+                    <xs:complexContent>
+                        <xs:restriction base="ns_p:PowerSequenceScheduleConstraintsDataElementsType">
+                            <xs:sequence>
+                                <xs:element name="earliestStartTime" minOccurs="0" type="ns_p:ElementTagType"/>
+                                <xs:element name="latestEndTime" minOccurs="0" type="ns_p:ElementTagType"/>
+                            </xs:sequence>
+                        </xs:restriction>
+                    </xs:complexContent>
+                </xs:complexType>
+            </xs:element>
+            <xs:element minOccurs="0" name="schedulePreference">
+                <xs:complexType>
+                    <xs:complexContent>
+                        <xs:restriction base="ns_p:PowerSequenceSchedulePreferenceDataElementsType">
+                            <xs:sequence>
+                                <xs:element minOccurs="0" name="greenest" type="ns_p:ElementTagType"/>
+                                <xs:element minOccurs="0" name="cheapest" type="ns_p:ElementTagType"/>
+                            </xs:sequence>
+                        </xs:restriction>
+                    </xs:complexContent>
+                </xs:complexType>
+            </xs:element>
+            <xs:element name="operatingConstraintsInterrupt" minOccurs="0">
+                <xs:complexType>
+                    <xs:complexContent>
+                        <xs:restriction base="ns_p:OperatingConstraintsInterruptDataElementsType">
+                            <xs:sequence>
+                                <xs:element minOccurs="0" name="isPausable" type="ns_p:ElementTagType"/>
+                                <xs:element minOccurs="0" name="isStoppable" type="ns_p:ElementTagType"/>
+                                <xs:element minOccurs="0" name="maxCyclesPerDay" type="ns_p:ElementTagType"/>
+                            </xs:sequence>
+                        </xs:restriction>
+                    </xs:complexContent>
+                </xs:complexType>
+            </xs:element>
+            <xs:element name="operatingConstraintsDuration" minOccurs="0">
+                <xs:complexType>
+                    <xs:complexContent>
+                        <xs:restriction base="ns_p:OperatingConstraintsDurationDataElementsType">
+                            <xs:sequence>
+                                <xs:element minOccurs="0" name="activeDurationMin" type="ns_p:ElementTagType"/>
+                                <xs:element minOccurs="0" name="activeDurationMax" type="ns_p:ElementTagType"/>
+                                <xs:element minOccurs="0" name="pauseDurationMin" type="ns_p:ElementTagType"/>
+                                <xs:element minOccurs="0" name="pauseDurationMax" type="ns_p:ElementTagType"/>
+                                <xs:element minOccurs="0" name="activeDurationSumMin" type="ns_p:ElementTagType"/>
+                                <xs:element minOccurs="0" name="activeDurationSumMax" type="ns_p:ElementTagType"/>
+                            </xs:sequence>
+                        </xs:restriction>
+                    </xs:complexContent>
+                </xs:complexType>
+            </xs:element>
+            <xs:element name="operatingConstraintsResumeImplication" minOccurs="0">
+                <xs:complexType>
+                    <xs:complexContent>
+                        <xs:restriction base="ns_p:OperatingConstraintsResumeImplicationDataElementsType">
+                            <xs:sequence>
+                                <xs:element minOccurs="0" name="resumeEnergyEstimated" type="ns_p:ScaledNumberElementsType"/>
+                                <xs:element minOccurs="0" name="energyUnit" type="ns_p:ElementTagType"/>
+                                <xs:element minOccurs="0" name="resumeCostEstimated" type="ns_p:ScaledNumberElementsType"/>
+                                <xs:element minOccurs="0" name="currency" type="ns_p:ElementTagType"/>
+                            </xs:sequence>
+                        </xs:restriction>
+                    </xs:complexContent>
+                </xs:complexType>
+            </xs:element>
+            <xs:element minOccurs="0" name="powerTimeSlot" type="ns_p:SmartEnergyManagementPsPowerTimeSlotElementsType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="SmartEnergyManagementPsPowerTimeSlotElementsType">
+        <xs:sequence>
+            <xs:element name="schedule" minOccurs="0">
+                <xs:complexType>
+                    <xs:complexContent>
+                        <xs:restriction base="ns_p:PowerTimeSlotScheduleDataElementsType">
+                            <xs:sequence>
+                                <xs:element name="slotNumber" minOccurs="0" type="ns_p:ElementTagType"/>
+                                <xs:element name="timePeriod" minOccurs="0">
+                                    <xs:complexType>
+                                        <xs:complexContent>
+                                            <xs:restriction base="ns_p:TimePeriodElementsType">
+                                                <xs:sequence>
+                                                    <xs:element name="startTime" minOccurs="0" type="ns_p:ElementTagType"/>
+                                                    <xs:element name="endTime" minOccurs="0" type="ns_p:ElementTagType"/>
+                                                </xs:sequence>
+                                            </xs:restriction>
+                                        </xs:complexContent>
+                                    </xs:complexType>
+                                </xs:element>
+                                <xs:element name="defaultDuration" minOccurs="0" type="ns_p:ElementTagType"/>
+                                <xs:element minOccurs="0" name="durationUncertainty" type="ns_p:ElementTagType"/>
+                                <xs:element name="slotActivated" minOccurs="0" type="ns_p:ElementTagType"/>
+                                <xs:element minOccurs="0" name="description" type="ns_p:ElementTagType"/>
+                            </xs:sequence>
+                        </xs:restriction>
+                    </xs:complexContent>
+                </xs:complexType>
+            </xs:element>
+            <xs:element name="valueList" minOccurs="0" type="ns_p:SmartEnergyManagementPsPowerTimeSlotValueListElementsType"/>
+            <xs:element name="scheduleConstraints" minOccurs="0">
+                <xs:complexType>
+                    <xs:complexContent>
+                        <xs:restriction base="ns_p:PowerTimeSlotScheduleConstraintsDataElementsType">
+                            <xs:sequence>
+                                <xs:element name="earliestStartTime" minOccurs="0" type="ns_p:ElementTagType"/>
+                                <xs:element name="latestEndTime" minOccurs="0" type="ns_p:ElementTagType"/>
+                                <xs:element minOccurs="0" name="minDuration" type="ns_p:ElementTagType"/>
+                                <xs:element minOccurs="0" name="maxDuration" type="ns_p:ElementTagType"/>
+                                <xs:element minOccurs="0" name="optionalSlot" type="ns_p:ElementTagType"/>
+                            </xs:sequence>
+                        </xs:restriction>
+                    </xs:complexContent>
+                </xs:complexType>
+            </xs:element>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="SmartEnergyManagementPsPowerTimeSlotValueListElementsType">
+        <xs:sequence>
+            <xs:element name="value" minOccurs="0">
+                <xs:complexType>
+                    <xs:complexContent>
+                        <xs:restriction base="ns_p:PowerTimeSlotValueDataElementsType">
+                            <xs:sequence>
+                                <xs:element name="valueType" minOccurs="0" type="ns_p:ElementTagType"/>
+                                <xs:element name="value" minOccurs="0" type="ns_p:ScaledNumberElementsType"/>
+                            </xs:sequence>
+                        </xs:restriction>
+                    </xs:complexContent>
+                </xs:complexType>
+            </xs:element>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="SmartEnergyManagementPsDataElementsType">
+        <xs:sequence>
+            <xs:element name="nodeScheduleInformation" minOccurs="0">
+                <xs:complexType>
+                    <xs:complexContent>
+                        <xs:restriction base="ns_p:PowerSequenceNodeScheduleInformationDataElementsType">
+                            <xs:sequence>
+                                <xs:element name="nodeRemoteControllable" minOccurs="0" type="ns_p:ElementTagType"/>
+                                <xs:element name="supportsSingleSlotSchedulingOnly" minOccurs="0" type="ns_p:ElementTagType"/>
+                                <xs:element name="alternativesCount" minOccurs="0" type="ns_p:ElementTagType"/>
+                                <xs:element name="totalSequencesCountMax" minOccurs="0" type="ns_p:ElementTagType"/>
+                                <xs:element name="supportsReselection" minOccurs="0" type="ns_p:ElementTagType"/>
+                            </xs:sequence>
+                        </xs:restriction>
+                    </xs:complexContent>
+                </xs:complexType>
+            </xs:element>
+            <xs:element name="alternatives" minOccurs="0" type="ns_p:SmartEnergyManagementPsAlternativesElementsType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="smartEnergyManagementPsDataElements" type="ns_p:SmartEnergyManagementPsDataElementsType"/>
+    <xs:complexType name="SmartEnergyManagementPsDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="alternativesRelation">
+                <xs:complexType>
+                    <xs:complexContent>
+                        <xs:restriction base="ns_p:PowerSequenceAlternativesRelationListDataSelectorsType">
+                            <xs:sequence>
+                                <xs:element minOccurs="0" name="alternativesId" type="ns_p:AlternativesIdType"/>
+                            </xs:sequence>
+                        </xs:restriction>
+                    </xs:complexContent>
+                </xs:complexType>
+            </xs:element>
+            <xs:element minOccurs="0" name="powerSequenceDescription">
+                <xs:complexType>
+                    <xs:complexContent>
+                        <xs:restriction base="ns_p:PowerSequenceDescriptionListDataSelectorsType">
+                            <xs:sequence>
+                                <xs:element minOccurs="0" name="sequenceId" type="ns_p:PowerSequenceIdType"/>
+                            </xs:sequence>
+                        </xs:restriction>
+                    </xs:complexContent>
+                </xs:complexType>
+            </xs:element>
+            <xs:element minOccurs="0" name="powerTimeSlotSchedule">
+                <xs:complexType>
+                    <xs:complexContent>
+                        <xs:restriction base="ns_p:PowerTimeSlotScheduleListDataSelectorsType">
+                            <xs:sequence>
+                                <xs:element minOccurs="0" name="slotNumber" type="ns_p:PowerTimeSlotNumberType"/>
+                            </xs:sequence>
+                        </xs:restriction>
+                    </xs:complexContent>
+                </xs:complexType>
+            </xs:element>
+            <xs:element minOccurs="0" name="powerTimeSlotValue">
+                <xs:complexType>
+                    <xs:complexContent>
+                        <xs:restriction base="ns_p:PowerTimeSlotValueListDataSelectorsType">
+                            <xs:sequence>
+                                <xs:element minOccurs="0" name="valueType" type="ns_p:PowerTimeSlotValueTypeType"/>
+                            </xs:sequence>
+                        </xs:restriction>
+                    </xs:complexContent>
+                </xs:complexType>
+            </xs:element>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="smartEnergyManagementPsDataSelectors" type="ns_p:SmartEnergyManagementPsDataSelectorsType"/>
+    <xs:complexType name="SmartEnergyManagementPsPriceDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" name="price">
+                <xs:complexType>
+                    <xs:complexContent>
+                        <xs:restriction base="ns_p:PowerSequencePriceDataType">
+                            <xs:sequence>
+                                <xs:element minOccurs="0" name="sequenceId" type="ns_p:PowerSequenceIdType"/>
+                                <xs:element minOccurs="0" name="price" type="ns_p:ScaledNumberType"/>
+                                <xs:element minOccurs="0" name="currency" type="ns_p:CurrencyType"/>
+                            </xs:sequence>
+                        </xs:restriction>
+                    </xs:complexContent>
+                </xs:complexType>
+            </xs:element>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="smartEnergyManagementPsPriceData" type="ns_p:SmartEnergyManagementPsPriceDataType"/>
+    <xs:complexType name="SmartEnergyManagementPsPriceDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="price">
+                <xs:complexType>
+                    <xs:complexContent>
+                        <xs:restriction base="ns_p:PowerSequencePriceDataElementsType">
+                            <xs:sequence>
+                                <xs:element minOccurs="0" name="sequenceId" type="ns_p:ElementTagType"/>
+                                <xs:element minOccurs="0" name="price" type="ns_p:ScaledNumberElementsType"/>
+                                <xs:element minOccurs="0" name="currency" type="ns_p:ElementTagType"/>
+                            </xs:sequence>
+                        </xs:restriction>
+                    </xs:complexContent>
+                </xs:complexType>
+            </xs:element>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="smartEnergyManagementPsPriceDataElements" type="ns_p:SmartEnergyManagementPsPriceDataElementsType"/>
+    <xs:complexType name="SmartEnergyManagementPsPriceDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="price">
+                <xs:complexType>
+                    <xs:complexContent>
+                        <xs:restriction base="ns_p:PowerSequencePriceListDataSelectorsType">
+                            <xs:sequence>
+                                <xs:element minOccurs="0" name="sequenceId" type="ns_p:PowerSequenceIdType"/>
+                            </xs:sequence>
+                        </xs:restriction>
+                    </xs:complexContent>
+                </xs:complexType>
+            </xs:element>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="smartEnergyManagementPsPriceDataSelectors" type="ns_p:SmartEnergyManagementPsPriceDataSelectorsType"/>
+    <xs:complexType name="SmartEnergyManagementPsConfigurationRequestCallType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="scheduleConfigurationRequest">
+                <xs:complexType>
+                    <xs:complexContent>
+                        <xs:restriction base="ns_p:PowerSequenceScheduleConfigurationRequestCallType">
+                            <xs:sequence>
+                                <xs:element minOccurs="0" name="sequenceId" type="ns_p:PowerSequenceIdType"/>
+                            </xs:sequence>
+                        </xs:restriction>
+                    </xs:complexContent>
+                </xs:complexType>
+            </xs:element>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="smartEnergyManagementPsConfigurationRequestCall" type="ns_p:SmartEnergyManagementPsConfigurationRequestCallType"/>
+    <xs:complexType name="SmartEnergyManagementPsConfigurationRequestCallElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="scheduleConfigurationRequest">
+                <xs:complexType>
+                    <xs:complexContent>
+                        <xs:restriction base="ns_p:PowerSequenceScheduleConfigurationRequestCallElementsType">
+                            <xs:sequence>
+                                <xs:element minOccurs="0" name="sequenceId" type="ns_p:ElementTagType"/>
+                            </xs:sequence>
+                        </xs:restriction>
+                    </xs:complexContent>
+                </xs:complexType>
+            </xs:element>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="smartEnergyManagementPsConfigurationRequestCallElements" type="ns_p:SmartEnergyManagementPsConfigurationRequestCallElementsType"/>
+    <xs:complexType name="SmartEnergyManagementPsPriceCalculationRequestCallType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="priceCalculationRequest">
+                <xs:complexType>
+                    <xs:complexContent>
+                        <xs:restriction base="ns_p:PowerSequencePriceCalculationRequestCallType">
+                            <xs:sequence>
+                                <xs:element minOccurs="0" name="sequenceId" type="ns_p:PowerSequenceIdType"/>
+                            </xs:sequence>
+                        </xs:restriction>
+                    </xs:complexContent>
+                </xs:complexType>
+            </xs:element>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="smartEnergyManagementPsPriceCalculationRequestCall" type="ns_p:SmartEnergyManagementPsPriceCalculationRequestCallType"/>
+    <xs:complexType name="SmartEnergyManagementPsPriceCalculationRequestCallElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="priceCalculationRequest">
+                <xs:complexType>
+                    <xs:complexContent>
+                        <xs:restriction base="ns_p:PowerSequencePriceCalculationRequestCallElementsType">
+                            <xs:sequence>
+                                <xs:element minOccurs="0" name="sequenceId" type="ns_p:ElementTagType"/>
+                            </xs:sequence>
+                        </xs:restriction>
+                    </xs:complexContent>
+                </xs:complexType>
+            </xs:element>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="smartEnergyManagementPsPriceCalculationRequestCallElements" type="ns_p:SmartEnergyManagementPsPriceCalculationRequestCallElementsType"/>
+</xs:schema>

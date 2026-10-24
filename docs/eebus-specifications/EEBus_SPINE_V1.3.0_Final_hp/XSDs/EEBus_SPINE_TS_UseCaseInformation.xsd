@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Smart Premises Interoperable Neutral-Message Exchange (SPINE)
+    Version 1.3.0 (final)
+    2023-08-31
+    Copyright (c) 2023 EEBus Initiative e.V.  All Rights Reserved.
+    Source: https://www.eebus.org/en/specifications/
+-->
+<xs:schema xmlns:ns_p="http://docs.eebus.org/spine/xsd/v1" xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://docs.eebus.org/spine/xsd/v1" version="1.3.0"
+    blockDefault="#all" elementFormDefault="qualified">
+    <xs:annotation>
+        <xs:documentation>EEBus SPINE Specification schema. Copyright 2023 EEBus Initiative e.V.  All rights reserved.</xs:documentation>
+    </xs:annotation>
+    <xs:include schemaLocation="EEBus_SPINE_TS_CommonDataTypes.xsd"/>
+    <xs:include schemaLocation="EEBus_SPINE_TS_Version.xsd"/>
+    <xs:simpleType name="UseCaseActorType">
+        <xs:union memberTypes="ns_p:UseCaseActorEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="UseCaseActorEnumType">
+        <xs:restriction base="xs:string"/>
+    </xs:simpleType>
+    <xs:simpleType name="UseCaseNameType">
+        <xs:union memberTypes="ns_p:UseCaseNameEnumType ns_p:EnumExtendType"/>
+    </xs:simpleType>
+    <xs:simpleType name="UseCaseNameEnumType">
+        <xs:restriction base="xs:string"/>
+    </xs:simpleType>
+    <xs:simpleType name="UseCaseScenarioSupportType">
+        <xs:restriction base="xs:unsignedInt"/>
+    </xs:simpleType>
+    <xs:complexType name="UseCaseSupportType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="useCaseName" type="ns_p:UseCaseNameType"/>
+            <xs:element minOccurs="0" name="useCaseVersion" type="ns_p:SpecificationVersionType"/>
+            <xs:element minOccurs="0" name="useCaseAvailable" type="xs:boolean"/>
+            <xs:element maxOccurs="unbounded" minOccurs="0" name="scenarioSupport" type="ns_p:UseCaseScenarioSupportType"/>
+            <xs:element minOccurs="0" name="useCaseDocumentSubRevision" type="xs:string"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="UseCaseSupportElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="useCaseName" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="useCaseVersion" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="useCaseAvailable" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="scenarioSupport" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="useCaseDocumentSubRevision" type="ns_p:ElementTagType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="UseCaseSupportSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="useCaseName" type="ns_p:UseCaseNameType"/>
+            <xs:element minOccurs="0" name="useCaseVersion" type="ns_p:SpecificationVersionType"/>
+            <xs:element minOccurs="0" name="scenarioSupport" type="ns_p:UseCaseScenarioSupportType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:complexType name="UseCaseInformationDataType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="address" type="ns_p:FeatureAddressType"/>
+            <xs:element minOccurs="0" name="actor" type="ns_p:UseCaseActorType"/>
+            <xs:element maxOccurs="unbounded" minOccurs="0" name="useCaseSupport" type="ns_p:UseCaseSupportType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="useCaseInformationData" type="ns_p:UseCaseInformationDataType"/>
+    <xs:complexType name="UseCaseInformationDataElementsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="address" type="ns_p:FeatureAddressElementsType"/>
+            <xs:element minOccurs="0" name="actor" type="ns_p:ElementTagType"/>
+            <xs:element minOccurs="0" name="useCaseSupport" type="ns_p:UseCaseSupportElementsType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="useCaseInformationDataElements" type="ns_p:UseCaseInformationDataElementsType"/>
+    <xs:complexType name="UseCaseInformationListDataType">
+        <xs:sequence>
+            <xs:element maxOccurs="unbounded" minOccurs="0" ref="ns_p:useCaseInformationData"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="useCaseInformationListData" type="ns_p:UseCaseInformationListDataType"/>
+    <xs:complexType name="UseCaseInformationListDataSelectorsType">
+        <xs:sequence>
+            <xs:element minOccurs="0" name="address" type="ns_p:FeatureAddressType"/>
+            <xs:element minOccurs="0" name="actor" type="ns_p:UseCaseActorType"/>
+            <xs:element minOccurs="0" name="useCaseSupport" type="ns_p:UseCaseSupportSelectorsType"/>
+        </xs:sequence>
+    </xs:complexType>
+    <xs:element name="useCaseInformationListDataSelectors" type="ns_p:UseCaseInformationListDataSelectorsType"/>
+</xs:schema>

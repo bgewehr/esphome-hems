@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Smart Premises Interoperable Neutral-Message Exchange (SPINE)
+    Version 1.3.0 (final)
+    2023-08-31
+    Copyright (c) 2023 EEBus Initiative e.V.  All Rights Reserved.
+    Source: https://www.eebus.org/en/specifications/
+-->
+<xs:schema xmlns:ns_p="http://docs.eebus.org/spine/xsd/v1" xmlns:xs="http://www.w3.org/2001/XMLSchema"
+    targetNamespace="http://docs.eebus.org/spine/xsd/v1" version="1.3.0" blockDefault="#all" elementFormDefault="qualified">
+    <xs:annotation>
+        <xs:documentation>EEBus SPINE Specification schema. Copyright 2023 EEBus Initiative e.V.  All rights reserved.</xs:documentation>
+    </xs:annotation>
+    <xs:include schemaLocation="EEBus_SPINE_TS_SupplyCondition.xsd"/>
+    <xs:group name="group_supplyCondition">
+        <xs:sequence>
+            <xs:group ref="ns_p:supplyCondition"/>
+            <xs:group ref="ns_p:supplyConditionDescription"/>
+            <xs:group ref="ns_p:supplyConditionThresholdRelation"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="supplyCondition">
+        <xs:sequence>
+            <xs:element ref="ns_p:supplyConditionListData"/>
+            <xs:element ref="ns_p:supplyConditionListDataSelectors"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="supplyConditionDescription">
+        <xs:sequence>
+            <xs:element ref="ns_p:supplyConditionDescriptionListData"/>
+            <xs:element ref="ns_p:supplyConditionDescriptionListDataSelectors"/>
+        </xs:sequence>
+    </xs:group>
+    <xs:group name="supplyConditionThresholdRelation">
+        <xs:sequence>
+            <xs:element ref="ns_p:supplyConditionThresholdRelationListData"/>
+            <xs:element ref="ns_p:supplyConditionThresholdRelationListDataSelectors"/>
+        </xs:sequence>
+    </xs:group>
+</xs:schema>
