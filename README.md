@@ -273,7 +273,7 @@ esphome -s firmware_build_path build/esphome-hems upload esphome-hems.yaml --dev
 | Errors with a different ESPHome release | Reproduce with ESPHome 2026.5.3 before investigating version compatibility. Include the version, board, configuration and first compiler error in a report; remove credentials. |
 | Windows application-control error / WinError 4551 | `Get-Command esphome.exe` may resolve correctly while Windows blocks the unsigned launcher. Check Code Integrity events and Smart App Control with the administrator. PATH edits and PowerShell `RemoteSigned` do not resolve that policy decision. The explicit Docker workflow uses the official Linux image independently of the Windows launcher. |
 
-### Web log formatting
+### Local Web UI formatting
 
 The full configuration uses `web_log_format` with ESPHome 2026.5.3's local
 web server v3. Its build hook adds the `/0.js` script reference to the generated
@@ -281,12 +281,21 @@ compressed page, because `local: true` otherwise ignores the `js_include`
 reference in the generated page shell. Only generated build files are patched.
 The script removes embedded ANSI style codes from displayed log tags and
 messages; severity colors, thread names, and firmware log output are preserved.
+Entity labels omit the leading `ESPHome HEMS` in the local display only and
+wrap instead of truncating long names. Existing icons are preserved; missing
+icons receive a semantic local icon or a fallback matching the entity domain.
+The original entity names, IDs, HA icon metadata and API action URLs remain
+unchanged. The script changes rendered name cells and local icons, not the
+entity objects used by ESPHome or Home Assistant.
 An unexpected upstream header format fails the build instead of silently
 omitting the correction. Recheck this integration when upgrading ESPHome.
 
-Run `node tests/web_log_format_test.cjs` for the formatting regression test.
+Run `node tests/web_log_format_test.cjs` for formatting, local name/icon,
+API identity and repeat-update regression tests.
 Append the generated source directory (for example `C:/temp/esphome-hems/src`)
 to also verify the embedded page and JavaScript resource after a build.
+Changes take effect after updating the firmware; injecting the script into an
+open browser page is only a temporary preview and disappears on reload.
 
 ### Local validation tasks
 

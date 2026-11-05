@@ -1,6 +1,12 @@
 # Bosch-Waermepumpe: OSSHPCF / SEMP
 
-Stand: 2026-10-19. Lokaler Build ersetzt keine Hardwareabnahme.
+Stand: 2026-11-05. Lokaler Build ersetzt keine Hardwareabnahme.
+
+Die unten beschriebene neue Angebotsdiagnose ist lokal im SEMP-Hosttest
+geprueft und per Docker-Clean-Build/OTA installiert. Live-Buildzeit:
+`Nov 5 2026 11:31:11`. EG1 ist verbunden und zeigt `OSSHPCF (lesend)`.
+Damit ist die Firmwareinstallation bestaetigt, nicht die Verarbeitung
+eines realen Bosch-Flexibilitaetsangebots.
 
 ## Ziel und Status
 
@@ -308,8 +314,12 @@ weiterhin weder implementiert noch belegt.
 ## Standardisierter Datenvertrag
 
 Das in OpenEEBus vorhandene SPINE-Modell beschreibt OSSHPCF nicht als freien
-Leistungssollwert. Die Waermepumpe bietet ausfuehrbare Alternativen und
-Sequenzen an; das HEMS waehlt eine von der Waermepumpe freigegebene Sequenz.
+Leistungssollwert. Massgeblich ist die OSSHPCF TS 1.0.0: Die Waermepumpe
+bietet einen optionalen Zusatzprozess an, den das HEMS einplanen kann.
+Ein normaler Heiz- oder Warmwasserlauf ist nicht automatisch ein solches
+Angebot. Null Alternativen sind bei fehlendem optionalen oder eingeplanten
+Prozess zulaessig; die Knoteninformationen bleiben erforderlich
+([OHPCF-003], Abschnitt 2.5, Tabelle 11 auf Seite 42).
 
 ### Daten der Waermepumpe
 
@@ -322,14 +332,49 @@ Sequenzen an; das HEMS waehlt eine von der Waermepumpe freigegebene Sequenz.
   - `totalSequencesCountMax`
   - `supportsReselection`
 - `alternatives`
-  - Relation zwischen `alternativesId` und den angebotenen `sequenceId`s
-  - Beschreibung und Zustand jeder Sequenz
-  - Start-/Endzeit und zulaessige Zeitfenster
-  - optionale Zeit-Slots mit Dauer und Aktivierungszustand
-  - Leistungs- oder Energiewerte je Slot, z. B. `power`, `powerMin`,
-    `powerMax`, `powerExpectedValue`, `energy` oder entsprechende Grenzen
-  - Betriebsunterbrechungs-, Dauer- und Wiederaufnahmebedingungen
-  - Praeferenzen wie `greenest` oder `cheapest`
+  - maximal eine Alternative und eine Sequenz, mit `alternativesId` / `sequenceId`
+  - Zustand `inactive` fuer ein noch nicht eingeplantes Angebot; nach Aktivierung
+    `scheduled`, `running`, `paused`, `completed` oder `invalid`
+  - zulaessiges Start-/Endzeitfenster und gegebenenfalls eingeplante Startzeit
+  - genau ein Leistungs-Slot; seine Gesamtdauer ist unbekannt (`defaultDuration`
+    wird fuer dieses Profil nicht gesetzt)
+  - `power` als gute Naeherung und/oder `powerMax` als Obergrenze, in W;
+    `number * 10^scale`, fehlendes `scale` bedeutet 0
+  - Stop-/Pause-Optionen, Mindestlaufzeit und Mindestpause; mindestens eine
+    Unterbrechungsoption muss angeboten werden
+
+Alle Zeiten sind nach Abschnitt 3.1.8.2 auf Seite 32 relativ zum
+Uebertragungszeitpunkt des jeweiligen Telegramms. Absolute Kalenderzeiten
+sind in diesem Use Case nicht vorgesehen. Bei zusammengefuehrten Teilmeldungen
+duerfen unveraenderte Zeitfelder nicht einfach auf die neueste Nachricht
+umbezogen werden. Weitere Felder des generischen SPINE-SEMP-Modells sind nicht
+allein durch ihr Vorhandensein Bestandteil dieses OSSHPCF-Vertrags.
+
+### Lesende Angebotsdiagnose
+
+Der Decoder ergaenzt die bestehenden Roh-/Merge-Zeilen um `offer:`:
+
+- `none`: vollstaendige Knoteninformationen, null Alternativen und null Payload-Eintraege.
+- `incomplete`: benoetigte Knoten-, Sequenz-, Slot-, Zeitfenster- oder Leistungsdaten fehlen.
+- `announced`, `scheduled`, `running`, `paused`: identifizierter Einzelprozess mit
+  relativen Zeitangaben und auswertbaren Leistungsdaten.
+- `completed` bzw. `withdrawn`: expliziter Abschluss oder `state=invalid`;
+  hier muessen alte Slot-/Zeitfensterdaten nicht mehr vorhanden sein.
+- `unsupported`: zum Beispiel mehrere Prozesse, unbekannter Zustand,
+  absolute Zeiten, andere Leistungseinheit oder nicht auswertbare Leistungswerte.
+
+`offer.power:` trennt `estimate` und `upper_bound`; eine fehlende Obergrenze
+bleibt `?` und wird nicht aus `power` erfunden. `operating_limits:` zeigt die
+tatsaechlichen Pause-/Stop-Freigaben und Mindestzeiten; fehlende Werte bleiben `?`.
+Ein fehlendes `powerUnit` wird beim Client als W interpretiert.
+
+Die Roh-Teilmeldung kann `incomplete` sein, waehrend der zusammengefuehrte
+Snapshot einen Prozess beschreibt. Fuer die Zustandsinterpretation den
+Merge-Kanal beruecksichtigen. Diese Diagnose prueft nur den dekodierten
+Snapshot, keine vollstaendige Normkonformitaet, ID-Konsistenz, Zeitfensterreihenfolge,
+Fernsteuerberechtigung oder Alter/Geltungsdauer. `control=disabled` bleibt
+gesetzt; kein Planer, kein Zeitablauf-Watchdog und kein Schreibpfad werden aktiviert.
+Null Payloads bleiben als `SEMP data: null` sichtbar und beweisen kein fehlendes Angebot.
 
 Vor jeder Steuerung muessen mindestens folgende Freigaben gelten:
 
@@ -344,9 +389,23 @@ Messdaten und Uhrzeit sind aktuell
 
 ### Steuerdaten des HEMS
 
-Die standardisierte Auswahl erfolgt mit
-`smartEnergyManagementPsConfigurationRequestCall`. Der eingebettete
-`scheduleConfigurationRequest` enthaelt eine `sequenceId`.
+Szenario 2 verwendet einen partiellen `write` auf
+`smartEnergyManagementPsData`, selektiert ueber `sequenceId`
+(Tabellen 8/9 auf Seite 39, Abschnitt 3.4.2 auf Seiten 52-53):
+
+- `schedule.startTime` plant den angebotenen Prozess ein. Vor seinem Start
+  kann die Startzeit erneut gesetzt werden.
+- `state=invalid` bricht ab; `state=paused` pausiert einen laufenden Prozess;
+  `state=running` setzt einen pausierten Prozess fort, soweit erlaubt.
+
+OpenEEBus verwendet dafuer bereits `SmartEnergyManagementPsClientWritePartial`.
+Der frueher hier geplante `smartEnergyManagementPsConfigurationRequestCall`
+ist ein generischer SEMP-Call, nicht der spezifizierte OSSHPCF-Steuerpfad.
+
+Reines Monitoring soll nach Abschnitt 3.4.1.1 ohne Binding erfolgen
+(`SHOULD NOT`). Zum Steuern ist Binding erforderlich, mit nur einem
+Schreibpartner. Unser bestehendes automatisches Binding bleibt unveraendert;
+eine Umstellung muss moegliche andere Steuerpartner und Ownership beruecksichtigen.
 
 Damit gilt fuer die erste Implementierung:
 
@@ -358,10 +417,10 @@ Damit gilt fuer die erste Implementierung:
   anschliessende SEMP-Zustandsmeldung muss die erwartete Sequenz bzw. den
   erwarteten Zustand bestaetigen.
 
-Optional existiert ein
-`smartEnergyManagementPsPriceCalculationRequestCall`. Dieser uebergibt eine
-`sequenceId` und eine potentielle Startzeit. Ob die Bosch-Waermepumpe diese
-Funktion anbietet und welche Preissemantik sie erwartet, ist noch unbekannt.
+Das generische SPINE-Modell enthaelt auch
+`smartEnergyManagementPsPriceCalculationRequestCall`. Dieser ist keine
+Voraussetzung oder zugesicherte Funktion des hier spezifizierten OSSHPCF-Profils.
+Eine Bosch-Unterstuetzung ist nicht nachgewiesen.
 
 ## Bosch-spezifisch noch unbekannt
 
@@ -373,11 +432,11 @@ und Zustandswechsel, um folgende Eigenschaften zu belegen:
 
 - sequenzbezogene Remote-Control-Freigaben,
 - Bedeutung tatsaechlich angebotener Alternativen und Sequenzen,
-- Einheit, Vorzeichen und Skalierung der Leistungs-/Energiewerte,
-- absolute oder relative Zeitangaben und deren Bezugszeitpunkt,
-- Mindest-/Maximaldauer sowie optionale und verpflichtende Slots,
+- reale Leistungswerte und Einhaltung der normativen W-/Skalierungsvorgaben,
+- reale relative Zeitfenster und Einhaltung des Telegramm-Zeitbezugs,
+- Mindestlaufzeit, Mindestpause und tatsaechlich erlaubte Unterbrechungen,
 - Verhalten bei laufendem Verdichter, Warmwasserbereitung und Heizbetrieb,
-- Unterstuetzung von Neuauswahl und Preisberechnung,
+- Anlagen-/Gateway-Einstellungen und thermische Bedingungen fuer optionale Zusatzlaeufe,
 - Antwort auf eine Sequenzauswahl und nachfolgende State-Transitions,
 - Verhalten bei gleichzeitig aktivem LPC-Limit, Disconnect oder Neustart.
 
@@ -397,6 +456,7 @@ folgenden Zustaenden benoetigt:
 | Raumheizung, Verdichter laeuft | Unterbrechbarkeit und Restlaufzeit |
 | Warmwasserbereitung angefordert | eigene Sequenz bzw. strengere Constraints |
 | Warmwasserbereitung laeuft | Pflicht-Slots und Resume-Verhalten |
+| Optionaler Zusatzlauf moeglich, thermische Aufnahmemoeglichkeit vorhanden | OSSHPCF-Angebot statt nur normalen Anlagenlauf nachweisen |
 | hoher PV-Ueberschuss | Aenderung von Empfehlungen oder Alternativen |
 | LPC aktiv | Zusammenspiel von Flexibilitaet und Leistungsobergrenze |
 | Disconnect/Reconnect | Gueltigkeit und Neuaussendung alter Sequenz-IDs |
@@ -508,7 +568,8 @@ abgelaufenes oder nicht fernsteuerbares Angebot und sendet keine Requests.
 ### Phase 4: Explizit freigeschaltete Sequenzauswahl
 
 - **OHP-40:** Request-Transport und Transaktionszustand fuer
-  `smartEnergyManagementPsConfigurationRequestCall` implementieren. Pro
+  partielle `smartEnergyManagementPsData`-Writes mit `sequenceId` und
+  `schedule.startTime` bzw. `state` implementieren. Pro
   Angebot wird hoechstens ein Request gesendet; RESULT, aktualisierter
   SEMP-State und Timeout werden als requested / acknowledged / measured
   getrennt verfolgt.

@@ -108,7 +108,7 @@ std::string format_scaled_number(const ScaledNumberType *value) {
     snprintf(buffer, sizeof(buffer), "%lld x 10^%d", static_cast<long long>(*value->number),
              static_cast<int>(*value->scale));
   else
-    snprintf(buffer, sizeof(buffer), "%lld x 10^?", static_cast<long long>(*value->number));
+    snprintf(buffer, sizeof(buffer), "%lld x 10^0", static_cast<long long>(*value->number));
   return buffer;
 }
 
@@ -117,6 +117,122 @@ template<typename T> const char *number_or_unknown(const T *value, char *buffer,
     return "?";
   snprintf(buffer, size, "%llu", static_cast<unsigned long long>(*value));
   return buffer;
+}
+
+void decode_offer(SempDecodeResult &result, const SmartEnergyManagementPsDataType *data) {
+  const auto *node = data->node_schedule_information;
+  if (node == nullptr || node->node_remote_controllable == nullptr ||
+      node->supports_single_slot_scheduling_only == nullptr || node->alternatives_count == nullptr ||
+      node->total_sequences_count_max == nullptr || node->supports_reselection == nullptr) {
+    append_line(result, "offer: status=incomplete reason=missing-node-information");
+    return;
+  }
+  if (data->alternatives_size == 0 && *node->alternatives_count == 0) {
+    append_line(result, "offer: status=none reason=no-optional-process");
+    return;
+  }
+  if (data->alternatives == nullptr || data->alternatives_size == 0) {
+    append_line(result, "offer: status=incomplete reason=missing-alternatives");
+    return;
+  }
+  if (data->alternatives_size != 1 || *node->alternatives_count > 1) {
+    append_line(result, "offer: status=unsupported reason=multiple-processes");
+    return;
+  }
+  const auto *alternative = data->alternatives[0];
+  if (*node->alternatives_count != 1 || alternative == nullptr || alternative->relation == nullptr ||
+      alternative->relation->alternatives_id == nullptr || alternative->power_sequence == nullptr ||
+      alternative->power_sequence_size != 1 || alternative->power_sequence[0] == nullptr) {
+    append_line(result, "offer: status=incomplete reason=missing-single-sequence");
+    return;
+  }
+  const auto *sequence = alternative->power_sequence[0];
+  const auto *description = sequence->description;
+  const auto *state = sequence->state;
+  if (description == nullptr || description->sequence_id == nullptr || state == nullptr || state->state == nullptr) {
+    append_line(result, "offer: status=incomplete reason=missing-sequence-state");
+    return;
+  }
+  const char *status = sequence_state_name(state->state);
+  switch (*state->state) {
+    case kPowerSequenceStateTypeInactive: status = "announced"; break;
+    case kPowerSequenceStateTypeInvalid: status = "withdrawn"; break;
+    case kPowerSequenceStateTypeCompleted: break;
+    case kPowerSequenceStateTypeScheduled: break;
+    case kPowerSequenceStateTypeRunning: break;
+    case kPowerSequenceStateTypePaused: break;
+    default:
+      append_line(result, "offer: status=unsupported reason=unknown-process-state");
+      return;
+  }
+  char id[24];
+  if (*state->state == kPowerSequenceStateTypeInvalid || *state->state == kPowerSequenceStateTypeCompleted) {
+    append_line(result, "offer: status=%s id=%s control=disabled", status,
+                number_or_unknown(description->sequence_id, id, sizeof(id)));
+    return;
+  }
+  const auto *constraints = sequence->schedule_constraints;
+  if (constraints == nullptr || constraints->earliest_start_time == nullptr || constraints->latest_end_time == nullptr) {
+    append_line(result, "offer: status=incomplete reason=missing-relative-window");
+    return;
+  }
+  const auto relative_or_absent = [](const AbsoluteOrRelativeTimeType *time) {
+    return time == nullptr || time->type == kAbsoluteOrRelativeTimeTypeDuration;
+  };
+  if (!relative_or_absent(constraints->earliest_start_time) || !relative_or_absent(constraints->latest_start_time) ||
+      !relative_or_absent(constraints->earliest_end_time) || !relative_or_absent(constraints->latest_end_time) ||
+      (sequence->schedule != nullptr && (!relative_or_absent(sequence->schedule->start_time) ||
+                                        !relative_or_absent(sequence->schedule->end_time)))) {
+    append_line(result, "offer: status=unsupported reason=non-relative-time");
+    return;
+  }
+  if (sequence->power_time_slot_size != 1 || sequence->power_time_slot == nullptr ||
+      sequence->power_time_slot[0] == nullptr || sequence->power_time_slot[0]->schedule == nullptr ||
+      sequence->power_time_slot[0]->schedule->slot_number == nullptr) {
+    append_line(result, "offer: status=incomplete reason=missing-single-slot");
+    return;
+  }
+  const auto *slot = sequence->power_time_slot[0];
+  const auto *period = slot->schedule->time_period;
+  const auto *slot_constraints = slot->schedule_constraints;
+  if ((period != nullptr && (!relative_or_absent(period->start_time) || !relative_or_absent(period->end_time))) ||
+      (slot_constraints != nullptr && (!relative_or_absent(slot_constraints->earliest_start_time) ||
+                                      !relative_or_absent(slot_constraints->latest_end_time)))) {
+    append_line(result, "offer: status=unsupported reason=non-relative-time");
+    return;
+  }
+  if (description->power_unit != nullptr && *description->power_unit != kUnitOfMeasurementTypeW) {
+    append_line(result, "offer: status=unsupported reason=non-watt-power");
+    return;
+  }
+  const auto *values = slot->value_list;
+  const ScaledNumberType *estimate = nullptr;
+  const ScaledNumberType *upper_bound = nullptr;
+  if (values == nullptr || values->value == nullptr || values->value_size == 0 || values->value_size > 2) {
+    append_line(result, "offer: status=incomplete reason=missing-power-values");
+    return;
+  }
+  for (size_t index = 0; index < values->value_size; ++index) {
+    const auto *value = values->value[index];
+    if (value == nullptr || value->value_type == nullptr || value->value == nullptr || value->value->number == nullptr) {
+      append_line(result, "offer: status=incomplete reason=missing-power-value");
+      return;
+    }
+    if (*value->value->number < 0 ||
+        (*value->value_type != kPowerTimeSlotValueTypeTypePower && *value->value_type != kPowerTimeSlotValueTypeTypePowerMax) ||
+        (*value->value_type == kPowerTimeSlotValueTypeTypePower && estimate != nullptr) ||
+        (*value->value_type == kPowerTimeSlotValueTypeTypePowerMax && upper_bound != nullptr)) {
+      append_line(result, "offer: status=unsupported reason=invalid-power-value");
+      return;
+    }
+    if (*value->value_type == kPowerTimeSlotValueTypeTypePower) estimate = value->value;
+    else upper_bound = value->value;
+  }
+  append_line(result, "offer: status=%s id=%s remote=%s time_basis=relative control=disabled", status,
+              number_or_unknown(description->sequence_id, id, sizeof(id)),
+              bool_value(state->sequence_remote_controllable));
+  append_line(result, "offer.power: estimate=%s upper_bound=%s unit=W", format_scaled_number(estimate).c_str(),
+              format_scaled_number(upper_bound).c_str());
 }
 
 void decode_slot(SempDecodeResult &result, const SmartEnergyManagementPsPowerTimeSlotType *slot,
@@ -240,6 +356,14 @@ void decode_sequence(SempDecodeResult &result, const SmartEnergyManagementPsPowe
                 sequence->operating_constraints_interrupt ? "present" : "absent",
                 sequence->operating_constraints_duration ? "present" : "absent",
                 sequence->operating_constraints_resume_implication ? "present" : "absent");
+          const auto *interrupt = sequence->operating_constraints_interrupt;
+          const auto *duration = sequence->operating_constraints_duration;
+          append_line(result, "alt[%u].seq[%u].operating_limits: pausable=%s stoppable=%s active_min=%s pause_min=%s",
+                static_cast<unsigned>(alternative_index), static_cast<unsigned>(sequence_index),
+                interrupt ? bool_value(interrupt->is_pausable) : "?",
+                interrupt ? bool_value(interrupt->is_stoppable) : "?",
+                format_duration(duration ? duration->active_duration_min : nullptr).c_str(),
+                format_duration(duration ? duration->pause_duration_min : nullptr).c_str());
   }
 
   size_t slot_count = sequence->power_time_slot_size;
@@ -307,6 +431,7 @@ SempDecodeResult decode_semp_data(const SmartEnergyManagementPsDataType *data) {
               static_cast<unsigned>(result.alternatives), static_cast<unsigned>(result.sequences),
               static_cast<unsigned>(result.slots), static_cast<unsigned>(result.values),
               result.truncated ? "true" : "false");
+  decode_offer(result, data);
   return result;
 }
 

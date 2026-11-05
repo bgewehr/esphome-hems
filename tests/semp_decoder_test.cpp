@@ -212,6 +212,25 @@ void test_partial_payload() {
   require(!result.truncated, "small partial payload is not truncated");
 }
 
+  void test_offer_absence() {
+    const bool enabled = true;
+    const bool disabled = false;
+    uint32_t alternatives_count = 0;
+    const uint32_t sequences_max = 1;
+    PowerSequenceNodeScheduleInformationDataType node{
+        &enabled, &enabled, &alternatives_count, &sequences_max, &disabled};
+    SmartEnergyManagementPsDataType data{&node, nullptr, 0};
+    require(contains(decode_semp_data(&data), "offer: status=none reason=no-optional-process"),
+      "complete zero-alternative snapshot explicitly has no optional process");
+    node.node_remote_controllable = nullptr;
+    require(contains(decode_semp_data(&data), "offer: status=incomplete reason=missing-node-information"),
+      "missing node information cannot prove absence of an offer");
+    node.node_remote_controllable = &enabled;
+    alternatives_count = 1;
+    require(contains(decode_semp_data(&data), "offer: status=incomplete reason=missing-alternatives"),
+      "announced alternative without payload remains incomplete");
+  }
+
 void test_complete_and_unknown_payload() {
   const bool enabled = true;
   const bool disabled = false;
@@ -279,6 +298,126 @@ void test_complete_and_unknown_payload() {
   require(!contains(result, "serial"), "decoder output contains no serial number");
 }
 
+  void test_ohpcf_process_diagnosis() {
+    const bool enabled = true;
+    const bool disabled = false;
+    const uint32_t count = 1;
+    const PowerSequenceNodeScheduleInformationDataType node{&enabled, &enabled, &count, &count, &disabled};
+    const AlternativesIdType alternative_id = 7;
+    const PowerSequenceIdType sequence_id = 42;
+    const PowerSequenceIdType *sequence_ids[] = {&sequence_id};
+    const SmartEnergyManagementPsAlternativesRelationType relation{&alternative_id, sequence_ids, 1};
+    PowerSequenceDescriptionDataType description{};
+    description.sequence_id = &sequence_id;
+    PowerSequenceStateType process_state = kPowerSequenceStateTypeInactive;
+    PowerSequenceStateDataType state{};
+    state.state = &process_state;
+    state.sequence_remote_controllable = &enabled;
+    AbsoluteOrRelativeTimeType earliest{};
+    earliest.type = kAbsoluteOrRelativeTimeTypeDuration;
+    AbsoluteOrRelativeTimeType latest = earliest;
+    latest.duration.minutes = 10;
+    PowerSequenceScheduleConstraintsDataType constraints{};
+    constraints.earliest_start_time = &earliest;
+    constraints.latest_end_time = &latest;
+    OperatingConstraintsInterruptDataType interrupt{};
+    interrupt.is_pausable = &enabled;
+    interrupt.is_stoppable = &disabled;
+    DurationType active_min{};
+    active_min.minutes = 5;
+    DurationType pause_min{};
+    pause_min.minutes = 1;
+    OperatingConstraintsDurationDataType duration{};
+    duration.active_duration_min = &active_min;
+    duration.pause_duration_min = &pause_min;
+    const PowerTimeSlotNumberType slot_number = 1;
+    PowerTimeSlotScheduleDataType slot_schedule{};
+    slot_schedule.slot_number = &slot_number;
+    PowerTimeSlotValueTypeType value_type = kPowerTimeSlotValueTypeTypePower;
+    NumberType number = 2300;
+    const ScaledNumberType scaled{&number, nullptr};
+    const PowerTimeSlotValueDataType value{&sequence_id, &slot_number, &value_type, &scaled};
+    const PowerTimeSlotValueDataType *values[] = {&value};
+    const SmartEnergyManagementPsPowerTimeSlotValueListType value_list{values, 1};
+    SmartEnergyManagementPsPowerTimeSlotType slot{};
+    slot.schedule = &slot_schedule;
+    slot.value_list = &value_list;
+    const SmartEnergyManagementPsPowerTimeSlotType *slots[] = {&slot};
+    SmartEnergyManagementPsPowerSequenceType sequence{};
+    sequence.description = &description;
+    sequence.state = &state;
+    sequence.schedule_constraints = &constraints;
+    sequence.operating_constraints_interrupt = &interrupt;
+    sequence.operating_constraints_duration = &duration;
+    sequence.power_time_slot = slots;
+    sequence.power_time_slot_size = 1;
+    const SmartEnergyManagementPsPowerSequenceType *sequences[] = {&sequence};
+    const SmartEnergyManagementPsAlternativesType alternative{&relation, sequences, 1};
+    const SmartEnergyManagementPsAlternativesType *alternatives[] = {&alternative};
+    const SmartEnergyManagementPsDataType data{&node, alternatives, 1};
+
+    auto result = decode_semp_data(&data);
+    require(contains(result, "offer: status=announced id=42 remote=true time_basis=relative control=disabled"),
+      "inactive single-slot process is an announced optional process, not a control permission");
+    require(contains(result, "offer.power: estimate=2300 x 10^0 upper_bound=? unit=W"),
+      "power without scale defaults to zero and never becomes an upper bound");
+    require(contains(result, "pausable=true stoppable=false active_min=P0Y0M0DT0H5M0.000S pause_min=P0Y0M0DT0H1M0.000S"),
+      "actual interruption options and minimum durations are visible");
+    value_type = kPowerTimeSlotValueTypeTypePowerMax;
+    require(contains(decode_semp_data(&data), "offer.power: estimate=? upper_bound=2300 x 10^0 unit=W"),
+      "powerMax is retained as an upper bound, not a power approximation");
+    for (const auto next_state : {kPowerSequenceStateTypeScheduled, kPowerSequenceStateTypeRunning,
+          kPowerSequenceStateTypePaused, kPowerSequenceStateTypeCompleted}) {
+      process_state = next_state;
+      const char *expected = next_state == kPowerSequenceStateTypeScheduled ? "status=scheduled" :
+           next_state == kPowerSequenceStateTypeRunning ? "status=running" :
+           next_state == kPowerSequenceStateTypePaused ? "status=paused" : "status=completed";
+      require(contains(decode_semp_data(&data), std::string("offer: ") + expected), "process states are distinguished");
+    }
+    process_state = kPowerSequenceStateTypeInactive;
+    earliest.type = kAbsoluteOrRelativeTimeTypeDateTime;
+    require(contains(decode_semp_data(&data), "status=unsupported reason=non-relative-time"),
+      "absolute calendar times do not masquerade as OSSHPCF-relative windows");
+    earliest.type = kAbsoluteOrRelativeTimeTypeDuration;
+    earliest.duration.seconds = -5;
+    require(contains(decode_semp_data(&data), "earliest_start=P0Y0M0DT0H0M-5.000S"),
+      "negative relative offsets retain their sign in raw diagnosis");
+      AbsoluteOrRelativeTimeType absolute{};
+      absolute.type = kAbsoluteOrRelativeTimeTypeDateTime;
+      const TimePeriodType period{&absolute, nullptr};
+      slot_schedule.time_period = &period;
+      require(contains(decode_semp_data(&data), "status=unsupported reason=non-relative-time"),
+        "absolute slot times are also identified");
+      slot_schedule.time_period = nullptr;
+      number = -1;
+      require(contains(decode_semp_data(&data), "status=unsupported reason=invalid-power-value"),
+        "negative consumption power is not accepted");
+      number = 2300;
+      value_type = kPowerTimeSlotValueTypeTypeEnergy;
+      require(contains(decode_semp_data(&data), "status=unsupported reason=invalid-power-value"),
+        "energy values do not replace the required power value");
+      value_type = kPowerTimeSlotValueTypeTypePower;
+      values[0] = nullptr;
+      require(contains(decode_semp_data(&data), "status=incomplete reason=missing-power-value"),
+        "null power entries remain incomplete");
+      values[0] = &value;
+      const UnitOfMeasurementType wrong_unit = 99;
+      description.power_unit = &wrong_unit;
+      require(contains(decode_semp_data(&data), "status=unsupported reason=non-watt-power"),
+        "unknown power units are not interpreted as watts");
+      description.power_unit = nullptr;
+    sequence.schedule_constraints = nullptr;
+    require(contains(decode_semp_data(&data), "status=incomplete reason=missing-relative-window"),
+      "missing timing constraints do not produce a complete announced process");
+    process_state = kPowerSequenceStateTypeInvalid;
+    sequence.power_time_slot = nullptr;
+    require(contains(decode_semp_data(&data), "offer: status=withdrawn id=42 control=disabled"),
+      "explicit withdrawal is recognized even without old constraints or slots");
+    process_state = 99;
+    require(contains(decode_semp_data(&data), "status=unsupported reason=unknown-process-state"),
+      "unknown process states cannot be accepted as known offers");
+  }
+
 void test_bounded_payload() {
   const SmartEnergyManagementPsAlternativesType *alternatives[33]{};
   const SmartEnergyManagementPsDataType data{nullptr, alternatives, 33};
@@ -297,7 +436,9 @@ int main() {
   test_message_classifiers_and_registration_matching();
   test_null_and_empty_payloads();
   test_partial_payload();
+  test_offer_absence();
   test_complete_and_unknown_payload();
+  test_ohpcf_process_diagnosis();
   test_bounded_payload();
   std::cout << "SEMP decoder tests passed\n";
   return EXIT_SUCCESS;
