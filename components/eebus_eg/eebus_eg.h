@@ -302,6 +302,8 @@ extern "C" {
 
 /* ---- MaMpc listener vtable ---- */
 
+static bool EgL_FromPairedDevice(EebusEgComponent* self, const EntityAddressType* addr);
+
 static void MpcL_Destruct(MaMpcListenerObject*) {}
 
 static void MpcL_OnRemoteMuAdded(MaMpcListenerObject* o, const EntityAddressType* addr) {
@@ -344,8 +346,9 @@ static void MpcL_OnMeasurementReceive(
 {
   if (!val) return;
   auto* self = reinterpret_cast<EebusEgComponent::MpcListener*>(o)->self;
-  if (!self->is_connected()) return;  /* drop measurements from unaccepted SHIP sessions */
+  if (!EgL_FromPairedDevice(self, entity_addr)) return;
   float v = (float)val->value * powf(10.0f, (float)val->scale);
+  if (!std::isfinite(v)) return;
   const char* name = MuMpcMeasurementGetName(name_id);
   /* Log raw ScaledValue (value * 10^scale) so diagnostics survive float truncation */
   ESP_LOGV("eebus_eg", "MPC measurement [id=%d]: %s = %lld * 10^%d = %.3f W (from: %s)",

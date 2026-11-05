@@ -30,6 +30,10 @@ not a standalone installation example. Use `eebus_cs` to receive limits from a
 CLS gateway and `eebus_eg` to send limits to a heat pump or another device.
 The OpenEEBus library fork is a dependency, not the ESPHome entry point.
 
+The [EEBUS standards cross-check](docs/eebus-norm-abgleich.md) maps the saved
+specifications to our components, implemented corrections and remaining
+conformance gaps. It is not a certification or a complete standards test.
+
 The reference hardware is **Waveshare ESP32-S3-POE-ETH-8DI-8RO**, with **16 MB
 flash and 8 MB octal PSRAM**, using **ESP-IDF**. CI compiles with **ESPHome
 2026.5.3** and Python 3.13. Newer ESPHome versions, including 2026.9.1, and other

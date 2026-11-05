@@ -664,6 +664,10 @@ void EebusEgComponent::start_heartbeat_test() {
 }
 
 void EebusEgComponent::set_limit(float watts) {
+  if (!std::isfinite(watts) || watts < 0.0f) {
+    ESP_LOGW(TAG, "Invalid LPC power limit rejected");
+    return;
+  }
   if (!connected_ || !have_remote_entity_ || !eg_lpc_) {
     ESP_LOGW(TAG, "set_limit(%.0f W) — %s not connected", watts, instance_name_.c_str());
     return;
@@ -679,6 +683,7 @@ void EebusEgComponent::set_limit(float watts) {
 
   LoadLimit limit;
   memset(&limit, 0, sizeof(limit));
+  limit.delete_duration = true;
 
   if (watts <= 0.0f) {
     limit.value.value = 99999; /* placeholder — value is ignored when is_active=false */

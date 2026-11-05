@@ -15,13 +15,15 @@
  *        user confirms via button → register_remote_ski(ski, true).
  *   4. Handshake completes (kSmeStateApproved / kDataExchange).
  *   5. LPC limits arrive via CsLpListenerInterface → triggers fire.
- *   6. Heartbeat watchdog: apply failsafe if heartbeat lost > 60 s.
+ *   6. Heartbeat watchdog: apply failsafe after 120 s without a heartbeat.
  */
 
 #pragma once
 
 #include <string>
 #include <vector>
+
+#include "lpc_state.h"
 
 #include "esphome/core/component.h"
 #include "esphome/core/automation.h"
@@ -39,6 +41,7 @@ extern "C" {
 #include "src/ship/api/ship_node_reader_interface.h"
 #include "src/ship/model/types.h"
 #include "src/use_case/api/cs_lp_listener_interface.h"
+#include "src/use_case/api/cs_lpc_approver_interface.h"
 #include "src/use_case/actor/cs/lpc/cs_lpc.h"
 #include "src/use_case/model/load_limit_types.h"
 #include "src/use_case/model/scaled_value.h"
@@ -90,7 +93,7 @@ class EebusCsComponent : public Component {
   void set_device_brand(const std::string& b) { device_brand_     = b; }
   void set_device_type(const std::string& t)  { device_type_      = t; }
   void set_device_model(const std::string& m) { device_model_     = m; }
-  void set_failsafe_limit_w(float w)          { failsafe_limit_w_ = w; }
+  void set_failsafe_limit_w(float w)          { failsafe_limit_w_ = w; lpc_state_.set_failsafe(w); }
   void set_active_use_cases_text_sensor(text_sensor::TextSensor* sensor) {
     active_use_cases_text_sensor_ = sensor;
   }
@@ -157,8 +160,10 @@ class EebusCsComponent : public Component {
   void on_ship_id_update(const char* ski, const char* ship_id);
   bool is_waiting_for_trust_allowed(const char* ski);
 
-  void on_power_limit_receive(float limit_w, bool is_active);
+  void on_power_limit_receive(float limit_w, bool is_active, const DurationType* duration = nullptr);
   void on_failsafe_limit_receive(float limit_w);
+  void on_write_approval(const char* ski, MsgCounterType counter, const ScaledValue* value,
+                         const DurationType* duration, bool configuration);
   void on_heartbeat_receive(uint64_t counter);
   void on_remote_use_case(int actor, int uc_name_id, const char* uc_str, const char* actor_str);
   void publish_use_cases_();
@@ -175,6 +180,7 @@ class EebusCsComponent : public Component {
   void save_trusted_ski_(const std::string& ski);
   std::string load_trusted_ski_();
   void update_pairing_state_(const std::string& state);
+  void apply_lpc_state_();
 
   /* Config */
   uint16_t    ship_port_        {4712};
@@ -195,7 +201,7 @@ class EebusCsComponent : public Component {
   bool        limit_active_        {false};
   float       current_limit_w_     {0.0f};
   bool        heartbeat_lost_      {false};
-  uint32_t    last_heartbeat_ms_   {0};
+  LpcState    lpc_state_           {};
   bool        pairing_mode_active_ {false}; /* true only while explicit pairing window is open */
   uint32_t    pairing_deadline_ms_ {0};     /* absolute millis() deadline for pairing window */
   bool        service_started_     {false}; /* EEBUS_SERVICE_START has been called */
@@ -228,6 +234,10 @@ class EebusCsComponent : public Component {
     CsLpListenerObject obj;   /* must be first */
     EebusCsComponent* self;
   } cs_lp_listener_{};
+  struct CsLpcApprover {
+    CsLpcApproverObject obj;
+    EebusCsComponent* self;
+  } cs_lpc_approver_{};
 };
 
 /* -------------------------------------------------------------------------
@@ -241,13 +251,13 @@ static void LpcListenerDestruct(CsLpListenerObject*) {}
 static void LpcListenerOnPowerLimitReceive(
     CsLpListenerObject* self,
     const ScaledValue*  power_limit,
-    const DurationType* /*duration*/,
+    const DurationType* duration,
     bool                is_active)
 {
   if (!power_limit) return;
   auto* l = reinterpret_cast<EebusCsComponent::CsLpListener*>(self);
   float w = (float)power_limit->value * powf(10.0f, (float)power_limit->scale);
-  l->self->on_power_limit_receive(w, is_active);
+  l->self->on_power_limit_receive(w, is_active, duration);
 }
 
 static void LpcListenerOnFailsafePowerLimitReceive(
@@ -276,6 +286,26 @@ static const CsLpListenerInterface kLpcListenerMethods = {
   .on_failsafe_power_limit_receive = LpcListenerOnFailsafePowerLimitReceive,
   .on_failsafe_duration_receive    = LpcListenerOnFailsafeDurationReceive,
   .on_heartbeat_receive            = LpcListenerOnHeartbeatReceive,
+};
+
+static const CsLpcApproverInterface kLpcApproverMethods = {
+  .destruct = [](CsLpcApproverObject*) {},
+  .on_power_limit_approval_requested = [](CsLpcApproverObject* object, const char* ski,
+      MsgCounterType counter, const ScaledValue* value, const DurationType* duration, bool) {
+    reinterpret_cast<EebusCsComponent::CsLpcApprover*>(object)->self->on_write_approval(
+        ski, counter, value, duration, false);
+  },
+  .on_failsafe_value_approval_requested = [](CsLpcApproverObject* object, const char* ski,
+      MsgCounterType counter, const ScaledValue* value) {
+    reinterpret_cast<EebusCsComponent::CsLpcApprover*>(object)->self->on_write_approval(
+        ski, counter, value, nullptr, true);
+  },
+  .on_failsafe_duration_approval_requested = [](CsLpcApproverObject* object, const char* ski,
+      MsgCounterType counter, const DurationType* duration) {
+    reinterpret_cast<EebusCsComponent::CsLpcApprover*>(object)->self->on_write_approval(
+        ski, counter, nullptr, duration, true);
+  },
+  .on_approval_request_expired = [](CsLpcApproverObject*, const char*, MsgCounterType) {},
 };
 
 }  // extern "C"

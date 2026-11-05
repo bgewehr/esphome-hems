@@ -185,22 +185,8 @@ void EebusCsComponent::loop() {
     publish_use_cases_();
   }
 
-  /* Heartbeat watchdog: spec requires CS to enter failsafe on EG heartbeat loss,
-   * regardless of whether a limit is currently active. Guard on paired SKI so
-   * we don't fire before any EG has connected. */
-  if (!paired_remote_ski_.empty() && !heartbeat_lost_ && last_heartbeat_ms_ > 0) {
-    if ((now - last_heartbeat_ms_) > kHeartbeatTimeoutSeconds * 1000u) {
-      ESP_LOGW(TAG, "Heartbeat lost — applying failsafe %.0f W", failsafe_limit_w_);
-      heartbeat_lost_ = true;
-      update_pairing_state_("Failsafe aktiv");
-      /* Apply limit directly — on_power_limit_receive would clear heartbeat_lost_. */
-      /* Always fire triggers so WP receives the updated failsafe value, even if
-       * a normal limit was already active (mirrors on_power_limit_receive's update branch). */
-      current_limit_w_ = failsafe_limit_w_;
-      limit_active_ = true;
-      for (auto* t : limit_active_triggers_) t->trigger(failsafe_limit_w_);
-    }
-  }
+  lpc_state_.tick(now);
+  apply_lpc_state_();
 
   /* Pairing window timeout */
   if (pairing_mode_active_ && (int32_t)(now - pairing_deadline_ms_) >= 0) {
@@ -276,19 +262,9 @@ void EebusCsComponent::on_remote_ski_disconnected(const char* ski) {
   publish_use_cases_();
   /* pairing_mode_active_ stays — allow reconnect within the window */
 
-  if (heartbeat_lost_) {
-    /* Failsafe is active — keep the limit running across the SHIP disconnect.
-     * The EG must explicitly send isLimitActive=false after reconnecting. */
-    ESP_LOGW(TAG, "SHIP disconnect while failsafe active — keeping %.0f W limit", failsafe_limit_w_);
-    update_pairing_state_("Failsafe — Steuerbox getrennt");
-  } else if (limit_active_) {
-    limit_active_ = false; current_limit_w_ = 0.0f;
-    for (auto* t : limit_cleared_triggers_) t->trigger();
-  }
-  if (!heartbeat_lost_) {
-    last_heartbeat_ms_ = 0; /* prevent stale timestamp after reconnect */
-    update_pairing_state_("Inaktiv");
-  }
+  lpc_state_.tick(millis());
+  apply_lpc_state_();
+  update_pairing_state_(heartbeat_lost_ ? "Failsafe - Steuerbox getrennt" : "Steuerbox getrennt");
 }
 
 void EebusCsComponent::on_ship_state_update(const char* ski, SmeState state) {
@@ -310,10 +286,8 @@ void EebusCsComponent::on_ship_state_update(const char* ski, SmeState state) {
     pending_remote_ski_.clear();  // always clear on DataExchange, even on reconnect
     connected_ = true;
     publish_use_cases_();
-    /* Reset heartbeat timer on every DataExchange — gives the EG a fresh 60 s
-     * window before the watchdog fires, even if the device ran for a long time
-     * before this connection. */
-    last_heartbeat_ms_ = millis();
+    lpc_state_.begin(millis());
+    apply_lpc_state_();
   } else if (state == kSmeHelloStateAbort || state == kSmeHelloStateRejected ||
              state == kSmeStateError) {
     if (pending_remote_ski_ == ski) pending_remote_ski_.clear();
@@ -389,13 +363,9 @@ void EebusCsComponent::forget_pairing(const std::string& ski) {
     nvs_erase_key(h, NVS_KEY_TSKI); nvs_commit(h); nvs_close(h);
   }
   /* No Steuerbox relationship → clear any active failsafe or limit immediately. */
-  heartbeat_lost_    = false;
-  last_heartbeat_ms_ = 0;
-  if (limit_active_) {
-    limit_active_    = false;
-    current_limit_w_ = 0.0f;
-    for (auto* t : limit_cleared_triggers_) t->trigger();
-  }
+  lpc_state_.reset();
+  lpc_state_.set_failsafe(failsafe_limit_w_);
+  apply_lpc_state_();
   update_pairing_state_("Inaktiv");
 }
 
@@ -403,33 +373,69 @@ void EebusCsComponent::forget_pairing(const std::string& ski) {
  * LPC listener callbacks
  * ====================================================================== */
 
-void EebusCsComponent::on_power_limit_receive(float limit_w, bool is_active) {
-  ESP_LOGI(TAG, "CS LPC: %.0f W active=%s", limit_w, is_active ? "yes" : "no");
-  bool was_failsafe  = heartbeat_lost_;
-  current_limit_w_   = limit_w;
-  heartbeat_lost_    = false;
-  last_heartbeat_ms_ = millis();
+static bool lpc_duration_ms(const DurationType* duration, uint32_t& milliseconds) {
+  milliseconds = 0;
+  if (!duration) return true;
+  if (duration->years != 0 || duration->months != 0 || !EebusDurationIsValid(duration)) return false;
+  const int64_t total = EebusDurationToSeconds(duration) * 1000 + duration->milliseconds;
+  if (total < 0 || total > UINT32_MAX) return false;
+  milliseconds = static_cast<uint32_t>(total);
+  return true;
+}
 
-  if (is_active && !limit_active_) {
-    limit_active_ = true;
-    for (auto* t : limit_active_triggers_) t->trigger(limit_w);
-  } else if (!is_active && limit_active_) {
-    limit_active_ = false; current_limit_w_ = 0.0f;
-    if (was_failsafe) ESP_LOGW(TAG, "CS failsafe ended — EG reconnected and released limit");
-    for (auto* t : limit_cleared_triggers_) t->trigger();
-  } else if (is_active) {
-    for (auto* t : limit_active_triggers_) t->trigger(limit_w);
+void EebusCsComponent::on_write_approval(const char* ski, MsgCounterType counter,
+    const ScaledValue* value, const DurationType* duration, bool configuration) {
+  lpc_state_.tick(millis());
+  uint32_t duration_ms;
+  const float watts = value ? static_cast<float>(value->value) * powf(10.0f, value->scale) : 0.0f;
+  const bool allowed = ski && paired_remote_ski_ == ski && std::isfinite(watts) && watts >= 0 &&
+      lpc_duration_ms(duration, duration_ms) &&
+      (configuration ? lpc_state_.accepts_configuration() : lpc_state_.accepts_limit(millis())) &&
+      (!configuration || !duration || LpcState::valid_failsafe_duration(duration_ms));
+  if (allowed) {
+    CsLpApproveWrite(cs_lpc_, ski, counter);
+  } else {
+    const ErrorType error = { .error_number = kErrorNumberTypeCommandRejected,
+                             .description = "LPC state, heartbeat or value validation failed" };
+    CsLpDenyWrite(cs_lpc_, ski, counter, &error);
+  }
+  apply_lpc_state_();
+}
+
+void EebusCsComponent::on_power_limit_receive(float limit_w, bool is_active, const DurationType* duration) {
+  ESP_LOGI(TAG, "CS LPC: %.0f W active=%s", limit_w, is_active ? "yes" : "no");
+  uint32_t duration_ms;
+  if (!lpc_duration_ms(duration, duration_ms) ||
+      !lpc_state_.limit(limit_w, is_active, millis(), duration_ms, duration != nullptr)) {
+    ESP_LOGW(TAG, "CS LPC limit rejected by heartbeat/state validation");
+  }
+  apply_lpc_state_();
+}
+
+void EebusCsComponent::apply_lpc_state_() {
+  const bool active = lpc_state_.active();
+  const float watts = lpc_state_.watts();
+  heartbeat_lost_ = lpc_state_.state() == LpcState::State::FAILSAFE;
+  if (active == limit_active_ && watts == current_limit_w_) return;
+  limit_active_ = active;
+  current_limit_w_ = watts;
+  if (heartbeat_lost_) update_pairing_state_("Failsafe aktiv");
+  if (active) {
+    for (auto* trigger : limit_active_triggers_) trigger->trigger(watts);
+  } else {
+    for (auto* trigger : limit_cleared_triggers_) trigger->trigger();
   }
 }
 
 void EebusCsComponent::on_failsafe_limit_receive(float limit_w) {
   ESP_LOGW(TAG, "CS failsafe limit from EG: %.0f W", limit_w);
   failsafe_limit_w_ = limit_w;
+  lpc_state_.set_failsafe(limit_w);
+  apply_lpc_state_();
 }
 
 void EebusCsComponent::on_heartbeat_receive(uint64_t counter) {
-  last_heartbeat_ms_ = millis();
-  heartbeat_lost_    = false;
+  lpc_state_.heartbeat(millis());
   ESP_LOGV(TAG, "Heartbeat %" PRIu64, counter);
 }
 
@@ -624,6 +630,17 @@ bool EebusCsComponent::start_eebus_service_(
       CS_LP_LISTENER_OBJECT(&cs_lp_listener_));
   if (!cs_lpc_) { ESP_LOGE(TAG, "CsLpcUseCaseCreate failed"); return false; }
 
+  cs_lpc_approver_.obj.interface_ = &kLpcApproverMethods;
+  cs_lpc_approver_.self = this;
+  CsLpSetWriteApprover(cs_lpc_, CS_LPC_APPROVER_OBJECT(&cs_lpc_approver_));
+  const ScaledValue initial_failsafe = { .value = static_cast<int64_t>(failsafe_limit_w_), .scale = 0 };
+  const DurationType initial_duration = { .hours = 2 };
+  if (CsLpcSetFailsafeConsumptionActivePowerLimit(cs_lpc_, &initial_failsafe, true) != kEebusErrorOk ||
+      CsLpcSetFailsafeDurationMinimum(cs_lpc_, &initial_duration, true) != kEebusErrorOk) {
+    ESP_LOGE(TAG, "Failed to initialize LPC failsafe configuration");
+    return false;
+  }
+
   DEVICE_LOCAL_ADD_ENTITY(device_local, local_entity_);
 
   EVENTS_SUBSCRIBE(
@@ -632,7 +649,7 @@ bool EebusCsComponent::start_eebus_service_(
       lpc_spine_event_handler,
       this);
 
-  last_heartbeat_ms_ = millis();
+  lpc_state_.set_failsafe(failsafe_limit_w_);
   return true;
 }
 
