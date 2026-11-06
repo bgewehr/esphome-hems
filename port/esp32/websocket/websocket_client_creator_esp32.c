@@ -50,3 +50,16 @@ WebsocketCreatorObject* WebsocketClientCreatorCreate(
       TLS_CERTIFICATE_GET_PRIVATE_KEY_SIZE(tls_cert),
       NULL, 0);
 }
+
+WebsocketCreatorObject* WebsocketClientCreatorCreateWithFingerprint(
+        const char* uri,
+        const TlsCertificateObject* tls_cert,
+        const char* remote_ski,
+        const char* remote_fingerprint)
+{
+    if ((remote_fingerprint != NULL) && (remote_fingerprint[0] != '\0')) {
+        return NULL;
+    }
+
+    return WebsocketClientCreatorCreate(uri, tls_cert, remote_ski);
+}
